@@ -1,5 +1,5 @@
 [project]
-name = "ai-api-qa-assistant"
+name = "api-qa-intelligence"
 version = "0.1.0"
 description = "AI-assisted, risk-aware API QA scenario generation and failure analysis."
 readme = "README.md"

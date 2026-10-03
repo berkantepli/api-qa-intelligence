@@ -1,6 +1,6 @@
-# AI API QA Assistant
+# API QA Intelligence
 
-An AI-assisted API quality platform that turns an OpenAPI description into thoughtful, risk-aware tests, runs selected checks, and explains failures in a QA context.
+An AI-powered API quality intelligence platform that turns an OpenAPI description into thoughtful, risk-aware tests, runs selected checks, and explains failures in a QA context.
 
 This project is **not a Postman replacement**. Its focus is helping teams decide what to test, see meaningful coverage gaps, and understand what a failure may mean.
 
