@@ -62,8 +62,7 @@ function App() {
   const [page, setPage] = useState(() => {
     try {
       const apis = JSON.parse(localStorage.getItem("api-qa-intelligence-saved-apis") || "[]");
-      const activeId = localStorage.getItem("api-qa-intelligence-active-api");
-      return activeId && apis.some((api) => api.id === activeId) ? "overview" : apis.length ? "specs" : "import";
+      return apis.length ? "specs" : "import";
     } catch { return "import"; }
   });
   const [runHistory, setRunHistory] = useState(() => {
