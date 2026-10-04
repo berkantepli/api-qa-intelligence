@@ -1,0 +1,206 @@
+import base64
+import binascii
+import json
+import time
+from typing import Any, Literal
+from urllib.parse import unquote
+
+import httpx
+from fastapi import APIRouter, HTTPException, status
+from pydantic import AnyHttpUrl, BaseModel, Field, field_validator
+
+from app.domain.network import ensure_safe_target_host
+
+
+router = APIRouter(prefix="/api/v1/runs", tags=["Scenario execution"])
+MAX_RESPONSE_SIZE_BYTES = 250_000
+MAX_DISPLAY_BODY_CHARS = 10_000
+MAX_UPLOAD_SIZE_BYTES = 10_000_000
+BLOCKED_HEADERS = {"host", "content-length", "transfer-encoding"}
+
+
+class ScenarioFileUpload(BaseModel):
+    filename: str = Field(min_length=1, max_length=255)
+    content_type: str = Field(default="application/octet-stream", max_length=150)
+    content_base64: str = Field(max_length=14_000_000)
+
+
+class ScenarioExecutionRequest(BaseModel):
+    base_url: AnyHttpUrl
+    method: str
+    path: str
+    query_params: dict[str, str] = Field(default_factory=dict)
+    form_body: bool = False
+    headers: dict[str, str] = Field(default_factory=dict)
+    form_fields: dict[str, str] = Field(default_factory=dict)
+    file_uploads: dict[str, list[ScenarioFileUpload]] = Field(default_factory=dict)
+    json_body: Any = None
+    expected_status_codes: list[int] = Field(default_factory=lambda: [200], min_length=1, max_length=10)
+
+    @field_validator("method")
+    @classmethod
+    def normalize_method(cls, value: str) -> str:
+        method = value.upper()
+        if method not in {"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"}:
+            raise ValueError("Use a supported HTTP method.")
+        return method
+
+    @field_validator("path")
+    @classmethod
+    def validate_path(cls, value: str) -> str:
+        if not value.startswith("/") or value.startswith("//") or "?" in value or "#" in value:
+            raise ValueError("Path must be an absolute API path such as /users/123.")
+        if any(segment == ".." for segment in unquote(value).split("/")):
+            raise ValueError("Path cannot contain parent-directory segments.")
+        return value
+
+    @field_validator("expected_status_codes")
+    @classmethod
+    def validate_status_codes(cls, values: list[int]) -> list[int]:
+        if any(code < 100 or code > 599 for code in values):
+            raise ValueError("Expected status codes must be between 100 and 599.")
+        return values
+
+    @field_validator("headers")
+    @classmethod
+    def validate_headers(cls, values: dict[str, str]) -> dict[str, str]:
+        blocked = [name for name in values if name.lower() in BLOCKED_HEADERS]
+        if blocked:
+            raise ValueError(f"These headers cannot be overridden: {', '.join(blocked)}.")
+        return values
+
+
+class ScenarioExecutionResult(BaseModel):
+    result: Literal["PASS", "FAIL", "ERROR"]
+    method: str
+    path: str
+    response_status: int | None = None
+    expected_status_codes: list[int]
+    duration_ms: int
+    response_body: str = ""
+    response_truncated: bool = False
+    error: str | None = None
+
+
+class ScenarioBatchRequest(BaseModel):
+    scenarios: list[ScenarioExecutionRequest] = Field(min_length=1, max_length=20)
+
+
+class ScenarioBatchResult(BaseModel):
+    total: int
+    passed: int
+    failed: int
+    errors: int
+    results: list[ScenarioExecutionResult]
+
+
+@router.post("/execute", response_model=ScenarioExecutionResult)
+async def execute_scenario(payload: ScenarioExecutionRequest) -> ScenarioExecutionResult:
+    return await _execute_scenario(payload)
+
+
+@router.post("/execute-batch", response_model=ScenarioBatchResult)
+async def execute_scenario_batch(payload: ScenarioBatchRequest) -> ScenarioBatchResult:
+    results = [await _execute_scenario(scenario) for scenario in payload.scenarios]
+    return ScenarioBatchResult(
+        total=len(results),
+        passed=sum(result.result == "PASS" for result in results),
+        failed=sum(result.result == "FAIL" for result in results),
+        errors=sum(result.result == "ERROR" for result in results),
+        results=results,
+    )
+
+
+async def _execute_scenario(payload: ScenarioExecutionRequest) -> ScenarioExecutionResult:
+    base = httpx.URL(str(payload.base_url))
+    if base.username or base.password:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Target URLs with embedded credentials are not supported; use a request header instead.",
+        )
+    if base.path not in ("", "/") or base.query or base.fragment:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Base URL must contain only the scheme and host, for example http://127.0.0.1:8000.",
+        )
+    ensure_safe_target_host(base.host, base.port or (443 if base.scheme == "https" else 80))
+
+    target = base.copy_with(path=payload.path, query=None)
+    files = []
+    for field_name, uploads in payload.file_uploads.items():
+        for upload in uploads:
+            try:
+                content = base64.b64decode(upload.content_base64, validate=True)
+            except (binascii.Error, ValueError) as error:
+                raise HTTPException(status_code=422, detail=f"The uploaded file for '{field_name}' is invalid.") from error
+            if len(content) > MAX_UPLOAD_SIZE_BYTES:
+                raise HTTPException(status_code=413, detail="Each uploaded file must be 10 MB or smaller.")
+            files.append((field_name, (upload.filename, content, upload.content_type)))
+
+    started = time.perf_counter()
+    try:
+        headers = dict(payload.headers)
+        request_body: dict[str, Any] = {
+            "params": payload.query_params,
+            "headers": headers,
+        }
+        if payload.form_body or payload.form_fields or files:
+            headers = {name: value for name, value in headers.items() if name.lower() != "content-type"}
+            request_body["headers"] = headers
+            request_body["data"] = payload.form_fields or None
+            request_body["files"] = files or None
+        else:
+            request_body["json"] = payload.json_body
+        async with httpx.AsyncClient(timeout=httpx.Timeout(15, connect=5), follow_redirects=False) as client:
+            async with client.stream(
+                payload.method,
+                target,
+                **request_body,
+            ) as response:
+                response_content = bytearray()
+                truncated = False
+                async for chunk in response.aiter_bytes():
+                    remaining = MAX_RESPONSE_SIZE_BYTES - len(response_content)
+                    response_content.extend(chunk[:remaining])
+                    if len(chunk) > remaining:
+                        truncated = True
+                        break
+                duration_ms = round((time.perf_counter() - started) * 1000)
+                body = _display_response_body(bytes(response_content), response.headers.get("content-type", ""))
+                return ScenarioExecutionResult(
+                    result="PASS" if response.status_code in payload.expected_status_codes else "FAIL",
+                    method=payload.method,
+                    path=payload.path,
+                    response_status=response.status_code,
+                    expected_status_codes=payload.expected_status_codes,
+                    duration_ms=duration_ms,
+                    response_body=body[:MAX_DISPLAY_BODY_CHARS],
+                    response_truncated=truncated or len(body) > MAX_DISPLAY_BODY_CHARS,
+                )
+    except httpx.TimeoutException:
+        return _execution_error(payload, started, "The API did not respond before the 15 second timeout.")
+    except httpx.RequestError:
+        return _execution_error(payload, started, "The request could not reach the target API.")
+
+
+def _execution_error(
+    payload: ScenarioExecutionRequest, started: float, message: str
+) -> ScenarioExecutionResult:
+    return ScenarioExecutionResult(
+        result="ERROR",
+        method=payload.method,
+        path=payload.path,
+        expected_status_codes=payload.expected_status_codes,
+        duration_ms=round((time.perf_counter() - started) * 1000),
+        error=message,
+    )
+
+
+def _display_response_body(contents: bytes, content_type: str) -> str:
+    text = contents.decode("utf-8", errors="replace")
+    if "json" in content_type.lower():
+        try:
+            return json.dumps(json.loads(text), ensure_ascii=False, indent=2)
+        except json.JSONDecodeError:
+            pass
+    return text
