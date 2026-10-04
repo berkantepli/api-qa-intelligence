@@ -24,10 +24,10 @@ OpenAPI / Swagger → API understanding → QA scenarios → selected test execu
 - **Backend:** Python, FastAPI, Pydantic
 - **HTTP execution:** HTTPX
 - **Test and validation foundation:** Pytest and JSON Schema
-- **AI:** provider-independent adapter, added after deterministic parsing and execution foundations
+- **AI:** local Ollama adapter with a configurable model; additional providers can be added later
 - **Frontend:** React / Next.js, considered after the backend workflow is validated
 
-The backend imports an OpenAPI 3.x JSON/YAML file or URL and returns a readable operation overview with deterministic baseline QA scenario suggestions and JSON request examples when it can safely derive them. It can execute one check or a selected batch, compare response statuses with expected codes, and record redacted request/response evidence in Run history. AI-assisted analysis will follow as a separate step.
+The backend imports an OpenAPI 3.x JSON/YAML file or URL and returns a readable operation overview with deterministic baseline QA scenario suggestions and JSON request examples when it can safely derive them. It can execute one check or a selected batch, compare response statuses with expected codes, and record redacted request/response evidence in Run history. Failed checks can be sent on demand to a local Ollama model for advisory analysis; deterministic results remain authoritative.
 
 ## Initial repository layout
 
@@ -98,6 +98,10 @@ Only call APIs you own or are authorized to test. Execution does not happen duri
 
 For a selected set of checks, use `POST /api/v1/runs/execute-batch` with a `scenarios` array containing the same fields as the single-check request. The response includes a PASS/FAIL/ERROR summary and per-check request/response evidence. Sensitive header and body values are redacted, and uploaded file contents are not included in the evidence. JSON examples are only generated when the contract provides enough information; path parameters and non-JSON request bodies still need a manual example.
 
+### Local AI failure analysis
+
+Install and run Ollama with a local model. The default model is `qwen3-vl:8b-instruct`, and the default Ollama URL is `http://127.0.0.1:11434`. Override them with `OLLAMA_MODEL` and `OLLAMA_BASE_URL` before starting the backend. In Run history, choose **Analyze with local AI** on a failed check to send that check’s redacted evidence to Ollama. Analysis is optional and advisory; the app does not send API credentials or make another request to the target API for analysis. Review test evidence before sharing it with any model, since non-credential personal or confidential values may still be present.
+
 ## Roadmap
 
 See [docs/MVP_ROADMAP.md](docs/MVP_ROADMAP.md) for the staged plan and product boundaries.
@@ -111,7 +115,7 @@ See [docs/MVP_ROADMAP.md](docs/MVP_ROADMAP.md) for the staged plan and product b
 
 ## Project status
 
-Early implementation. The backend can import and summarize an OpenAPI 3.x file or URL, suggest contract-based scenarios, and execute individual or batched explicit HTTP checks. A product UI and AI-assisted generation and failure analysis are next.
+Early MVP. The app can import and summarize an OpenAPI 3.x file or URL, suggest contract-based scenarios, execute selected checks, retain redacted run evidence, and optionally analyze failed checks with a local Ollama model. AI-generated scenario suggestions, coverage/risk summaries, and broader provider support remain future work.
 
 ## License
 

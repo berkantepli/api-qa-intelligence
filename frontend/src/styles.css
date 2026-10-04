@@ -161,6 +161,20 @@ h1, h2, h3, p { margin-top: 0; }
 .history-response { margin-top: 10px; color: var(--muted); font-size: 10px; }
 .history-response summary { width: fit-content; cursor: pointer; color: var(--accent); font-weight: 600; }
 .history-response pre { max-height: 220px; overflow: auto; margin: 8px 0 0; padding: 11px; border: 1px solid var(--line); border-radius: 7px; background: var(--bg); color: var(--text); font-size: 10px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
+.failure-analysis-action { display: grid; justify-items: start; gap: 7px; margin-top: 12px; }
+.failure-analysis-action .secondary-button { display: inline-flex; align-items: center; gap: 7px; min-height: 34px; }
+.failure-analysis-action > span { color: var(--muted); font-size: 9px; line-height: 1.5; }
+.failure-analysis { display: grid; gap: 11px; margin-top: 13px; padding: 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--text); font-size: 10px; line-height: 1.55; }
+.failure-analysis-title { display: flex; align-items: center; gap: 7px; color: var(--accent); }
+.failure-analysis-title strong { color: var(--text); font-size: 11px; }
+.failure-analysis-title span { padding: 2px 6px; border-radius: 4px; background: var(--accent-soft); color: var(--accent); font-size: 8px; font-weight: 700; }
+.failure-analysis p { margin: 0; }
+.failure-analysis > div > strong { font-size: 10px; }
+.failure-analysis ul { display: grid; gap: 7px; margin: 6px 0 0; padding-left: 17px; }
+.failure-analysis li b,
+.failure-analysis li span { display: block; }
+.failure-analysis li span,
+.failure-analysis small { color: var(--muted); font-size: 9px; }
 .history-empty { display: grid; justify-items: center; gap: 11px; margin-top: 28px; padding: 48px 20px; border: 1px dashed var(--line); border-radius: 10px; color: var(--muted); text-align: center; }
 .history-empty strong { color: var(--text); font-size: 14px; }
 .history-empty span { font-size: 11px; }

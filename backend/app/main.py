@@ -5,6 +5,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.api.specs import router as specs_router
 from app.api.runs import router as runs_router
+from app.api.failure_analysis import router as failure_analysis_router
 
 
 app = FastAPI(
@@ -21,6 +22,7 @@ async def health() -> dict[str, str]:
 
 app.include_router(specs_router)
 app.include_router(runs_router)
+app.include_router(failure_analysis_router)
 
 
 frontend_dist = Path(__file__).resolve().parents[2] / "frontend" / "dist"

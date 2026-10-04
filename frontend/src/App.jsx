@@ -103,6 +103,7 @@ function App() {
     catch { return []; }
   });
   const [expandedRunId, setExpandedRunId] = useState(null);
+  const [analysisState, setAnalysisState] = useState({});
   const [sourceMode, setSourceMode] = useState("url");
   const [specUrl, setSpecUrl] = useState("");
   const [file, setFile] = useState(null);
@@ -372,6 +373,31 @@ function App() {
     }
   }
 
+  async function analyzeFailure(runId, resultIndex, result) {
+    const key = `${runId}:${resultIndex}`;
+    setAnalysisState((current) => ({ ...current, [key]: { loading: true, error: "" } }));
+    try {
+      const response = await fetch("/api/v1/runs/analyze-failure", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...result, result: "FAIL", scenario_title: result.title || `Check ${resultIndex + 1}` }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.detail || "AI analysis could not be completed.");
+      setRunHistory((current) => {
+        const updated = current.map((run) => run.id === runId
+          ? { ...run, results: run.results.map((item, index) => index === resultIndex ? { ...item, analysis: payload } : item) }
+          : run);
+        localStorage.setItem("api-qa-intelligence-run-history", JSON.stringify(updated));
+        return updated;
+      });
+    } catch (caught) {
+      setAnalysisState((current) => ({ ...current, [key]: { loading: false, error: caught.message || "AI analysis could not be completed." } }));
+      return;
+    }
+    setAnalysisState((current) => ({ ...current, [key]: { loading: false, error: "" } }));
+  }
+
   function requestRun() {
     if (!operation || !inputsReady || selectedCount === 0 || running) return;
     if (isDataChangingMethod) {
@@ -491,6 +517,9 @@ function App() {
                   {result.error && <p className="history-error">{result.error}</p>}
                   {(result.request_url || result.request_headers || result.request_body) && <details className="history-response"><summary>Request evidence</summary><pre>{JSON.stringify({ url: result.request_url, headers: result.request_headers, body: result.request_body || undefined }, null, 2)}</pre></details>}
                   {(result.response_status || result.response_headers || result.response_body) && <details className="history-response"><summary>Response evidence</summary><pre>{JSON.stringify({ status: result.response_status, headers: result.response_headers, body: result.response_body || undefined, truncated: result.response_truncated || undefined }, null, 2)}</pre></details>}
+                  {result.result === "FAIL" && !result.analysis && <div className="failure-analysis-action"><button className="secondary-button" type="button" disabled={analysisState[`${run.id}:${index}`]?.loading} onClick={() => analyzeFailure(run.id, index, result)}><Icon name="spark" size={14} />{analysisState[`${run.id}:${index}`]?.loading ? "Analyzing with local AI…" : "Analyze with local AI"}</button><span>Credential-like values are redacted. Clicking sends this check’s evidence to your configured Ollama model.</span></div>}
+                  {analysisState[`${run.id}:${index}`]?.error && <p className="history-error">{analysisState[`${run.id}:${index}`].error}</p>}
+                  {result.analysis && <div className="failure-analysis"><div className="failure-analysis-title"><Icon name="spark" size={15} /><strong>AI failure analysis</strong><span>Advisory</span></div><p>{result.analysis.summary}</p>{result.analysis.likely_causes?.length > 0 && <div><strong>Possible causes</strong><ul>{result.analysis.likely_causes.map((cause, causeIndex) => <li key={causeIndex}><b>{cause.cause}</b><span>{cause.evidence} · Confidence: {cause.confidence}</span></li>)}</ul></div>}{result.analysis.next_steps?.length > 0 && <div><strong>Suggested next steps</strong><ul>{result.analysis.next_steps.map((step, stepIndex) => <li key={stepIndex}>{step}</li>)}</ul></div>}<small>{result.analysis.limitations}</small></div>}
                 </section>)}</div>}
               </article>;
             })}</div> : <div className="history-empty"><Icon name="clock" size={25} /><strong>No runs yet</strong><span>Run selected checks from an API overview and they will appear here.</span><button className="secondary-button" onClick={resetWorkspace}>Go to API specs</button></div>}

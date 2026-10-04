@@ -37,10 +37,11 @@ Help a QA engineer go from an API contract to reviewed, executable test scenario
 
 ### 4. AI-assisted QA analysis
 
-- Add an interchangeable AI provider adapter.
-- Use AI to propose additional scenarios and explain failures from recorded evidence.
-- Keep deterministic test outcomes authoritative; label AI analysis as advisory.
-- Never send secrets or API traffic to a model by default.
+- [x] Add an Ollama adapter with configurable URL/model settings.
+- [ ] Use AI to propose additional scenarios.
+- [x] Explain failed checks from recorded evidence on explicit user request.
+- [x] Keep deterministic test outcomes authoritative and label AI analysis as advisory.
+- [x] Keep model calls opt-in, redact credential-like values, and never send API traffic to a model.
 
 ### 5. Usable interface and expansion
 
