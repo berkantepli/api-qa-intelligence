@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 
-const DEFAULT_SPEC_URL = "http://127.0.0.1:8000/openapi.json";
 const API_BASE_URL = "http://127.0.0.1:8000";
 
 const categoryLabels = {
@@ -73,7 +72,7 @@ function App() {
   });
   const [expandedRunId, setExpandedRunId] = useState(null);
   const [sourceMode, setSourceMode] = useState("url");
-  const [specUrl, setSpecUrl] = useState(DEFAULT_SPEC_URL);
+  const [specUrl, setSpecUrl] = useState("");
   const [file, setFile] = useState(null);
   const [overview, setOverview] = useState(() => {
     try {
@@ -348,6 +347,9 @@ function App() {
   function openImportPage() {
     setError("");
     setNotice("");
+    setSpecUrl("");
+    setFile(null);
+    setSourceMode("url");
     setPage("import");
   }
 
@@ -449,7 +451,7 @@ function App() {
                 <button type="button" role="tab" aria-selected={sourceMode === "file"} className={sourceMode === "file" ? "selected" : ""} onClick={() => setSourceMode("file")}><Icon name="upload" size={16} /> Upload file</button>
               </div>
               {sourceMode === "url" ? (
-                <label className="field-wrap"><span className="field-label">OpenAPI URL</span><span className="input-with-icon"><Icon name="link" size={17} /><input autoComplete="url" type="url" value={specUrl} onChange={(event) => setSpecUrl(event.target.value)} placeholder="https://api.example.com/openapi.json" required /></span><span className="field-hint">For your local API, try http://127.0.0.1:8000/openapi.json</span></label>
+                <label className="field-wrap"><span className="field-label">OpenAPI URL</span><span className="input-with-icon"><Icon name="link" size={17} /><input autoComplete="url" type="url" value={specUrl} onChange={(event) => setSpecUrl(event.target.value)} placeholder="https://api.example.com/openapi.json" required /></span></label>
               ) : (
                 <label className="upload-box"><span className="upload-icon"><Icon name="upload" size={21} /></span><strong>{file ? file.name : "Choose an OpenAPI file"}</strong><small>JSON or YAML · OpenAPI 3.x</small><input type="file" accept=".json,.yaml,.yml,application/json,text/yaml" onChange={(event) => setFile(event.target.files?.[0] || null)} required /></label>
               )}
