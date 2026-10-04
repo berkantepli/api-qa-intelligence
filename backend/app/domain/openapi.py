@@ -42,6 +42,7 @@ class QaScenario(BaseModel):
     title: str
     rationale: str
     review_required: bool = False
+    source: str = "contract"
     request_example: ScenarioRequestExample | None = None
 
 

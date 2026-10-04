@@ -38,7 +38,7 @@ Help a QA engineer go from an API contract to reviewed, executable test scenario
 ### 4. AI-assisted QA analysis
 
 - [x] Add an Ollama adapter with configurable URL/model settings.
-- [ ] Use AI to propose additional scenarios.
+- [x] Let a user explicitly request up to three additional AI scenario ideas for one operation; keep them review-only and non-executable.
 - [x] Explain failed checks from recorded evidence on explicit user request.
 - [x] Keep deterministic test outcomes authoritative and label AI analysis as advisory.
 - [x] Keep model calls opt-in, redact credential-like values, and never send API traffic to a model.

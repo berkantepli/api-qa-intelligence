@@ -27,7 +27,7 @@ OpenAPI / Swagger → API understanding → QA scenarios → selected test execu
 - **AI:** local Ollama adapter with a configurable model; additional providers can be added later
 - **Frontend:** React / Next.js, considered after the backend workflow is validated
 
-The backend imports an OpenAPI 3.x JSON/YAML file or URL and returns a readable operation overview with deterministic baseline QA scenario suggestions and JSON request examples when it can safely derive them. It can execute one check or a selected batch, compare response statuses with expected codes, and record redacted request/response evidence in Run history. Failed checks can be sent on demand to a local Ollama model for advisory analysis; deterministic results remain authoritative.
+The backend imports an OpenAPI 3.x JSON/YAML file or URL and returns a readable operation overview with deterministic baseline QA scenario suggestions and JSON request examples when it can safely derive them. It can execute one check or a selected batch, compare response statuses with expected codes, and record redacted request/response evidence in Run history. On request, Ollama can suggest extra review-only ideas for a selected endpoint or provide advisory analysis of a failed check; deterministic results remain authoritative.
 
 ## Initial repository layout
 
@@ -98,9 +98,9 @@ Only call APIs you own or are authorized to test. Execution does not happen duri
 
 For a selected set of checks, use `POST /api/v1/runs/execute-batch` with a `scenarios` array containing the same fields as the single-check request. The response includes a PASS/FAIL/ERROR summary and per-check request/response evidence. Sensitive header and body values are redacted, and uploaded file contents are not included in the evidence. JSON examples are only generated when the contract provides enough information; path parameters and non-JSON request bodies still need a manual example.
 
-### Local AI failure analysis
+### Optional AI features
 
-Install and run Ollama with a local model. The default model is `qwen3-vl:8b-instruct`, and the default Ollama URL is `http://127.0.0.1:11434`. Override them with `OLLAMA_MODEL` and `OLLAMA_BASE_URL` before starting the backend. In Run history, choose **Analyze with local AI** on a failed check to send that check’s redacted evidence to Ollama. Analysis is optional and advisory; the app does not send API credentials or make another request to the target API for analysis. Review test evidence before sharing it with any model, since non-credential personal or confidential values may still be present.
+Install and run Ollama with a model. The default model is `qwen3-vl:8b-instruct`, and the default Ollama URL is `http://127.0.0.1:11434`. Override them with `OLLAMA_MODEL` and `OLLAMA_BASE_URL` before starting the backend. In an API overview, choose **Suggest scenarios** to send the selected endpoint’s contract details (operation, parameters, and body field names/types) to the configured model. The model receives no example values, credentials, target URL, or API traffic. Suggestions are review-only and are not runnable. In Run history, choose **Analyze with AI** on a failed check to send that check’s redacted evidence for optional, advisory analysis. Read the on-screen disclosure before requesting either AI feature.
 
 ## Roadmap
 
@@ -115,7 +115,7 @@ See [docs/MVP_ROADMAP.md](docs/MVP_ROADMAP.md) for the staged plan and product b
 
 ## Project status
 
-Early MVP. The app can import and summarize an OpenAPI 3.x file or URL, suggest contract-based scenarios, execute selected checks, retain redacted run evidence, and optionally analyze failed checks with a local Ollama model. AI-generated scenario suggestions, coverage/risk summaries, and broader provider support remain future work.
+Early MVP. The app can import and summarize an OpenAPI 3.x file or URL, suggest contract-based scenarios, request additional review-only AI scenario ideas, execute selected checks, retain redacted run evidence, and optionally analyze failed checks. Coverage/risk summaries and broader provider support remain future work.
 
 ## License
 
