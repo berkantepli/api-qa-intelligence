@@ -62,6 +62,7 @@ class ApiOverview(BaseModel):
     title: str
     version: str
     openapi_version: str
+    servers: list[str] = Field(default_factory=list)
     operation_count: int
     operations: list[ApiOperation]
 
@@ -97,6 +98,13 @@ def summarize_openapi(document: Any) -> ApiOverview:
     if not isinstance(paths, Mapping):
         raise OpenApiDocumentError("The OpenAPI document must include a 'paths' object.")
 
+    servers = document.get("servers", [])
+    server_urls = [
+        server["url"].strip()
+        for server in servers
+        if isinstance(server, Mapping) and isinstance(server.get("url"), str) and server["url"].strip()
+    ] if isinstance(servers, list) else []
+
     operations: list[ApiOperation] = []
     global_security = document.get("security", [])
     for path, path_item in paths.items():
@@ -128,6 +136,7 @@ def summarize_openapi(document: Any) -> ApiOverview:
         title=title.strip(),
         version=version.strip(),
         openapi_version=openapi_version,
+        servers=server_urls,
         operation_count=len(operations),
         operations=operations,
     )

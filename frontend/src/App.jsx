@@ -15,6 +15,30 @@ function firstRunnableOperationIndex(apiOverview) {
   return index >= 0 ? index : 0;
 }
 
+function resolveApiTarget(api) {
+  if (!api) return "";
+  let sourceUrl;
+  try { sourceUrl = new URL(api.source); } catch { sourceUrl = null; }
+  const declaredServer = api.overview?.servers?.[0];
+  if (declaredServer) {
+    try { return new URL(declaredServer, sourceUrl || undefined).href.replace(/\/$/, ""); }
+    catch { return ""; }
+  }
+  if (sourceUrl) {
+    const savedTarget = api.targetUrl || "";
+    let savedOrigin = "";
+    try { savedOrigin = new URL(savedTarget).origin; } catch { /* saved value is not a URL */ }
+    const defaultOrigin = new URL(API_BASE_URL).origin;
+    if (savedTarget && !(savedOrigin === defaultOrigin && sourceUrl.origin !== defaultOrigin)) return savedTarget;
+    const specPath = sourceUrl.pathname.toLowerCase();
+    const inferred = specPath.endsWith("/openapi.json") ? new URL(".", sourceUrl).href : `${sourceUrl.origin}/`;
+    return inferred.replace(/\/$/, "");
+  }
+  const savedTarget = api.targetUrl || "";
+  try { return new URL(savedTarget).origin === new URL(API_BASE_URL).origin ? "" : savedTarget; }
+  catch { return ""; }
+}
+
 function getRawBodyValue(inputs = {}, fallback) {
   if (Object.hasOwn(inputs, "body:__raw")) return inputs["body:__raw"];
   return fallback == null ? "" : JSON.stringify(fallback, null, 2);
@@ -95,7 +119,7 @@ function App() {
     try {
       const apis = JSON.parse(localStorage.getItem("api-qa-intelligence-saved-apis") || "[]");
       const activeId = localStorage.getItem("api-qa-intelligence-active-api");
-      return apis.find((api) => api.id === activeId)?.targetUrl || API_BASE_URL;
+      return resolveApiTarget(apis.find((api) => api.id === activeId)) || API_BASE_URL;
     } catch { return API_BASE_URL; }
   });
   const [connectionStatus, setConnectionStatus] = useState("checking");
@@ -200,7 +224,8 @@ function App() {
       if (!response.ok) throw new Error(payload.detail || "The specification could not be imported.");
       const source = sourceMode === "url" ? specUrl : file.name;
       const id = `${payload.title || "API"}::${source}`;
-      const savedApi = { id, title: payload.title || "Imported API", source, importedAt: new Date().toISOString(), overview: payload, targetUrl };
+      const importedTargetUrl = resolveApiTarget({ source, overview: payload });
+      const savedApi = { id, title: payload.title || "Imported API", source, importedAt: new Date().toISOString(), overview: payload, targetUrl: importedTargetUrl };
       setSavedApis((current) => {
         const updated = [savedApi, ...current.filter((api) => api.id !== id)];
         localStorage.setItem("api-qa-intelligence-saved-apis", JSON.stringify(updated));
@@ -209,6 +234,7 @@ function App() {
       setActiveApiId(id);
       localStorage.setItem("api-qa-intelligence-active-api", id);
       setOverview(payload);
+      setTargetUrl(importedTargetUrl);
       setPage("overview");
       setSelectedOperation(firstRunnableOperationIndex(payload));
       setSelectedScenarios([]);
@@ -334,7 +360,15 @@ function App() {
 
   function openSavedApi(api) {
     setOverview(api.overview);
-    setTargetUrl(api.targetUrl || API_BASE_URL);
+    const resolvedTargetUrl = resolveApiTarget(api);
+    setTargetUrl(resolvedTargetUrl);
+    if (resolvedTargetUrl !== (api.targetUrl || "")) {
+      setSavedApis((current) => {
+        const updated = current.map((item) => item.id === api.id ? { ...item, targetUrl: resolvedTargetUrl } : item);
+        localStorage.setItem("api-qa-intelligence-saved-apis", JSON.stringify(updated));
+        return updated;
+      });
+    }
     setActiveApiId(api.id);
     localStorage.setItem("api-qa-intelligence-active-api", api.id);
     setSelectedOperation(firstRunnableOperationIndex(api.overview));
