@@ -16,7 +16,7 @@ OpenAPI / Swagger → API understanding → QA scenarios → selected test execu
 - Inspect operations, parameters, request bodies, and response schemas.
 - Generate editable happy-path, negative, boundary, validation, and security-minded scenarios.
 - Let a user select scenarios and execute them against an explicitly configured base URL.
-- Show each result as **PASS**, **FAIL**, or **ERROR**, with response details useful for diagnosis.
+- Show each result as **PASS**, **FAIL**, or **ERROR**, with request/response evidence in browser-local Run history.
 - Explain failed checks with evidence from the test result; AI analysis is advisory and does not change the result.
 
 ## Planned technology
@@ -27,7 +27,7 @@ OpenAPI / Swagger → API understanding → QA scenarios → selected test execu
 - **AI:** provider-independent adapter, added after deterministic parsing and execution foundations
 - **Frontend:** React / Next.js, considered after the backend workflow is validated
 
-The backend imports an OpenAPI 3.x JSON/YAML file or URL and returns a readable operation overview with deterministic baseline QA scenario suggestions and JSON request examples when it can safely derive them. It can execute one check or a selected batch and compare response statuses with expected codes. AI-assisted analysis will follow as a separate step.
+The backend imports an OpenAPI 3.x JSON/YAML file or URL and returns a readable operation overview with deterministic baseline QA scenario suggestions and JSON request examples when it can safely derive them. It can execute one check or a selected batch, compare response statuses with expected codes, and record redacted request/response evidence in Run history. AI-assisted analysis will follow as a separate step.
 
 ## Initial repository layout
 
@@ -96,7 +96,7 @@ To run one explicit check, use `POST /api/v1/runs/execute`. Provide a base URL, 
 
 Only call APIs you own or are authorized to test. Execution does not happen during import, and redirects are not followed.
 
-For a selected set of checks, use `POST /api/v1/runs/execute-batch` with a `scenarios` array containing the same fields as the single-check request. The response includes a PASS/FAIL/ERROR summary. JSON examples are only generated when the contract provides enough information; path parameters and non-JSON request bodies still need a manual example.
+For a selected set of checks, use `POST /api/v1/runs/execute-batch` with a `scenarios` array containing the same fields as the single-check request. The response includes a PASS/FAIL/ERROR summary and per-check request/response evidence. Sensitive header and body values are redacted, and uploaded file contents are not included in the evidence. JSON examples are only generated when the contract provides enough information; path parameters and non-JSON request bodies still need a manual example.
 
 ## Roadmap
 

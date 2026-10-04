@@ -32,7 +32,7 @@ Help a QA engineer go from an API contract to reviewed, executable test scenario
 - [x] Run a single HTTP check with a bounded timeout and response size; do not follow redirects.
 - [x] Report PASS/FAIL from the expected status code, or ERROR when the API cannot be reached.
 - [x] Execute a user-selected batch of checks and summarize the results.
-- Record complete request/response evidence for each selected check.
+- [x] Record request/response evidence for each selected check, with secrets redacted and uploaded file contents excluded.
 - Avoid arbitrary code execution from generated test content.
 
 ### 4. AI-assisted QA analysis

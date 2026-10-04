@@ -489,7 +489,8 @@ function App() {
                 {expanded && <div className="history-details">{run.results.map((result, index) => <section className="history-result" key={`${result.title || "check"}-${index}`}>
                   <div className="history-result-heading"><span className={`history-status status-${String(result.result || "error").toLowerCase()}`}>{result.result || "ERROR"}</span><strong>{result.title || `Check ${index + 1}`}</strong>{result.response_status && <span>HTTP {result.response_status}</span>}{result.duration_ms != null && <span>{result.duration_ms} ms</span>}</div>
                   {result.error && <p className="history-error">{result.error}</p>}
-                  {result.response_body && <details className="history-response"><summary>Response body</summary><pre>{typeof result.response_body === "string" ? result.response_body : JSON.stringify(result.response_body, null, 2)}</pre></details>}
+                  {(result.request_url || result.request_headers || result.request_body) && <details className="history-response"><summary>Request evidence</summary><pre>{JSON.stringify({ url: result.request_url, headers: result.request_headers, body: result.request_body || undefined }, null, 2)}</pre></details>}
+                  {(result.response_status || result.response_headers || result.response_body) && <details className="history-response"><summary>Response evidence</summary><pre>{JSON.stringify({ status: result.response_status, headers: result.response_headers, body: result.response_body || undefined, truncated: result.response_truncated || undefined }, null, 2)}</pre></details>}
                 </section>)}</div>}
               </article>;
             })}</div> : <div className="history-empty"><Icon name="clock" size={25} /><strong>No runs yet</strong><span>Run selected checks from an API overview and they will appear here.</span><button className="secondary-button" onClick={resetWorkspace}>Go to API specs</button></div>}
