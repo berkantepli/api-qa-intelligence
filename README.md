@@ -112,3 +112,7 @@ See [docs/MVP_ROADMAP.md](docs/MVP_ROADMAP.md) for the staged plan and product b
 ## Project status
 
 Early implementation. The backend can import and summarize an OpenAPI 3.x file or URL, suggest contract-based scenarios, and execute individual or batched explicit HTTP checks. A product UI and AI-assisted generation and failure analysis are next.
+
+## License
+
+Personal learning and portfolio project.
