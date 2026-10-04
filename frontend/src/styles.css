@@ -257,6 +257,13 @@ h1, h2, h3, p { margin-top: 0; }
 .run-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 17px; border-top: 1px solid #eff0f4; background: #fdfdff; }
 .run-footer > span { color: #898c99; font-size: 9px; }
 .run-footer .primary-button { min-height: 34px; padding: 0 11px; font-size: 10px; }
+.mutation-badge { display: inline-flex; align-items: center; margin-left: 7px; padding: 3px 6px; border-radius: 4px; background: #fff2e0; color: #98601b; font-size: 8px; font-weight: 700; letter-spacing: 0; }
+.execution-confirmation { display: grid; gap: 11px; margin: 0 12px 12px; padding: 13px; border: 1px solid #eacb9d; border-radius: 8px; background: #fff9ef; }
+.execution-confirmation strong { color: #80531c; font-size: 11px; }
+.execution-confirmation p { margin: 4px 0 0; color: #765f40; font-size: 10px; line-height: 1.55; overflow-wrap: anywhere; }
+.execution-confirmation-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.execution-confirmation-actions .primary-button,
+.execution-confirmation-actions .secondary-button { min-height: 32px; font-size: 10px; }
 .run-error { margin: 10px 13px 13px; }
 .empty-state { padding: 30px 15px; color: #898c99; font-size: 11px; text-align: center; }
 
@@ -368,6 +375,10 @@ h1, h2, h3, p { margin-top: 0; }
 :root[data-theme="dark"] .result-heading small,
 :root[data-theme="dark"] .empty-state { color: #9ba4b2; }
 :root[data-theme="dark"] .run-footer { background: #14171d; }
+:root[data-theme="dark"] .mutation-badge { background: #3b2e1d; color: #f1c477; }
+:root[data-theme="dark"] .execution-confirmation { border-color: #69512e; background: #292319; }
+:root[data-theme="dark"] .execution-confirmation strong { color: #f1c477; }
+:root[data-theme="dark"] .execution-confirmation p { color: #d4c09e; }
 :root[data-theme="dark"] .success-alert { border-color: #28543e; background: #14231b; color: #86d8aa; }
 :root[data-theme="dark"] .error-alert { border-color: #593139; background: #281a1e; color: #f08e97; }
 :root[data-theme="dark"] .workflow-step > span { color: #bac2ce; }

@@ -11,7 +11,16 @@ const categoryLabels = {
 };
 
 function firstRunnableOperationIndex(apiOverview) {
-  const index = apiOverview?.operations?.findIndex((operation) => operation.scenarios?.some((scenario) => scenario.request_example)) ?? -1;
+  const operations = apiOverview?.operations ?? [];
+  const safeMethods = new Set(["GET", "HEAD", "OPTIONS"]);
+  const hasRunnableCheck = (operation) => operation.scenarios?.some((scenario) => scenario.request_example);
+  const readySafeIndex = operations.findIndex((operation) => safeMethods.has(operation.method)
+    && hasRunnableCheck(operation)
+    && (operation.parameters ?? []).every((parameter) => !parameter.required || parameter.example != null));
+  if (readySafeIndex >= 0) return readySafeIndex;
+  const safeIndex = operations.findIndex((operation) => safeMethods.has(operation.method) && hasRunnableCheck(operation));
+  if (safeIndex >= 0) return safeIndex;
+  const index = operations.findIndex(hasRunnableCheck);
   return index >= 0 ? index : 0;
 }
 
@@ -112,6 +121,7 @@ function App() {
     } catch { return 0; }
   });
   const [selectedScenarios, setSelectedScenarios] = useState([]);
+  const [showExecutionConfirmation, setShowExecutionConfirmation] = useState(false);
   const [results, setResults] = useState({});
   const [requestInputs, setRequestInputs] = useState({});
   const [requestFiles, setRequestFiles] = useState({});
@@ -130,6 +140,7 @@ function App() {
   const [notice, setNotice] = useState("");
 
   const operation = overview?.operations?.[selectedOperation];
+  const isDataChangingMethod = ["POST", "PUT", "PATCH", "DELETE"].includes(operation?.method);
   const operationKey = operation ? `${operation.method} ${operation.path}` : "";
   const operationInputs = requestInputs[operationKey] ?? {};
   const parameters = operation?.parameters ?? [];
@@ -238,6 +249,7 @@ function App() {
       setPage("overview");
       setSelectedOperation(firstRunnableOperationIndex(payload));
       setSelectedScenarios([]);
+      setShowExecutionConfirmation(false);
       setResults({});
       setNotice(`Imported ${payload.operation_count} operations. Review the suggested scenarios below.`);
     } catch (caught) {
@@ -250,10 +262,12 @@ function App() {
   function selectOperation(index) {
     setSelectedOperation(index);
     setSelectedScenarios([]);
+    setShowExecutionConfirmation(false);
     setResults({});
   }
 
   function toggleScenario(index) {
+    setShowExecutionConfirmation(false);
     setSelectedScenarios((current) => current.includes(index)
       ? current.filter((item) => item !== index)
       : [...current, index]);
@@ -358,6 +372,20 @@ function App() {
     }
   }
 
+  function requestRun() {
+    if (!operation || !inputsReady || selectedCount === 0 || running) return;
+    if (isDataChangingMethod) {
+      setShowExecutionConfirmation(true);
+      return;
+    }
+    runSelected();
+  }
+
+  function confirmRun() {
+    setShowExecutionConfirmation(false);
+    runSelected();
+  }
+
   function openSavedApi(api) {
     setOverview(api.overview);
     const resolvedTargetUrl = resolveApiTarget(api);
@@ -373,6 +401,7 @@ function App() {
     localStorage.setItem("api-qa-intelligence-active-api", api.id);
     setSelectedOperation(firstRunnableOperationIndex(api.overview));
     setSelectedScenarios([]);
+    setShowExecutionConfirmation(false);
     setResults({});
     setPage("overview");
   }
@@ -394,6 +423,7 @@ function App() {
     setPage(savedApis.length ? "specs" : "import");
     setOverview(null);
     setSelectedScenarios([]);
+    setShowExecutionConfirmation(false);
     setResults({});
     setError("");
     setNotice("");
@@ -524,7 +554,7 @@ function App() {
                 </div>
               </section>
               <section className="panel scenario-panel">
-                <div className="panel-header scenario-header"><div><div className="panel-kicker"><Icon name="spark" size={15} /> RUNNABLE CHECKS</div><h2>{operation?.method} <span>{operation?.path}</span></h2><p>These checks include a complete request and can be executed now.</p></div></div>
+                <div className="panel-header scenario-header"><div><div className="panel-kicker"><Icon name="spark" size={15} /> RUNNABLE CHECKS {isDataChangingMethod && <span className="mutation-badge">May change data</span>}</div><h2>{operation?.method} <span>{operation?.path}</span></h2><p>These checks include a complete request and can be executed now.</p></div></div>
                 <label className="target-field"><span>Target API base URL</span><input value={targetUrl} onChange={(event) => updateTargetUrl(event.target.value)} placeholder="http://127.0.0.1:8000" /></label>
                 {(operationParameters.length > 0 || bodyFields.length > 0 || needsRawJsonBody) && <div className="request-inputs">
                   <div className="request-inputs-heading"><strong>Request details</strong><span>Fill in required values from your test environment.</span></div>
@@ -557,7 +587,11 @@ function App() {
                   })}
                   {!inputsReady ? <div className="empty-state">Complete the required request details above to prepare these checks.</div> : availableScenarios.length === 0 && <div className="empty-state">No executable checks are available for this endpoint yet. Choose another endpoint with a complete request example.</div>}
                 </div>
-                <div className="run-footer"><span>{inputsReady ? `${availableScenarios.length} ${availableScenarios.length === 1 ? "check" : "checks"} ready to run` : "Complete required request details first"}</span><button className="primary-button" disabled={!inputsReady || selectedCount === 0 || running} onClick={runSelected}>{running ? <><span className="spinner" /> Running…</> : <><Icon name="run" size={15} /> Run selected{selectedCount ? ` (${selectedCount})` : ""}</>}</button></div>
+                {showExecutionConfirmation && <div className="execution-confirmation" role="alert">
+                  <div><strong>This request may change data.</strong><p>You are about to run {selectedCount} {operation.method} {operation.path} check{selectedCount === 1 ? "" : "s"} against {targetUrl}. This can create, update, or delete data in the target API.</p></div>
+                  <div className="execution-confirmation-actions"><button className="secondary-button" type="button" onClick={() => setShowExecutionConfirmation(false)}>Cancel</button><button className="primary-button" type="button" onClick={confirmRun}>Confirm and run</button></div>
+                </div>}
+                <div className="run-footer"><span>{inputsReady ? `${availableScenarios.length} ${availableScenarios.length === 1 ? "check" : "checks"} ready to run` : "Complete required request details first"}</span><button className="primary-button" disabled={!inputsReady || selectedCount === 0 || running} onClick={requestRun}>{running ? <><span className="spinner" /> Running…</> : <><Icon name="run" size={15} /> Run selected{selectedCount ? ` (${selectedCount})` : ""}</>}</button></div>
                 {error && <div className="alert error-alert run-error" role="alert"><Icon name="close" size={17} />{error}</div>}
               </section>
             </div>
