@@ -393,7 +393,7 @@ function App() {
 
       <main className="main-area">
         <header className="topbar">
-          {savedApis.length ? <div className="api-context">
+          {savedApis.length && page !== "import" ? <div className="api-context">
             <label className="api-context-picker"><span>ACTIVE API</span><select aria-label="Active API" value={activeApiId} onChange={(event) => {
               const selectedApi = savedApis.find((api) => api.id === event.target.value);
               if (selectedApi) openSavedApi(selectedApi);
