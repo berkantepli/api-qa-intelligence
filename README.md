@@ -16,7 +16,7 @@ OpenAPI / Swagger → API understanding → QA scenarios → selected test execu
 - Inspect operations, parameters, request bodies, and response schemas.
 - Generate editable happy-path, negative, boundary, validation, and security-minded scenarios.
 - Let a user select scenarios and execute them against an explicitly configured base URL.
-- Show each result as **PASS** or **FAIL**, with request/response details useful for diagnosis.
+- Show each result as **PASS**, **FAIL**, or **ERROR**, with response details useful for diagnosis.
 - Explain failed checks with evidence from the test result; AI analysis is advisory and does not change the result.
 
 ## Planned technology
@@ -27,17 +27,20 @@ OpenAPI / Swagger → API understanding → QA scenarios → selected test execu
 - **AI:** provider-independent adapter, added after deterministic parsing and execution foundations
 - **Frontend:** React / Next.js, considered after the backend workflow is validated
 
-The first milestone is a small backend-led MVP. A web UI, accounts, hosted multi-user execution, CI/CD integrations, and advanced scoring are later decisions.
+The backend imports an OpenAPI 3.x JSON/YAML file or URL and returns a readable operation overview with deterministic baseline QA scenario suggestions and JSON request examples when it can safely derive them. It can execute one check or a selected batch and compare response statuses with expected codes. AI-assisted analysis will follow as a separate step.
 
 ## Initial repository layout
 
 ```text
 .
-├── README.md
-├── .gitignore
+├── backend/
+│   └── app/
+│       ├── api/
+│       └── domain/
+├── docs/
+│   └── MVP_ROADMAP.md
 ├── pyproject.toml
-└── docs/
-    └── MVP_ROADMAP.md
+└── README.md
 ```
 
 As implementation begins, the intended application structure is:
@@ -54,7 +57,46 @@ backend/
 
 ## Getting started
 
-The application is not implemented yet. Setup and run instructions will be added with the first working milestone.
+From the repository root:
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -e ".[dev]"
+uvicorn app.main:app --app-dir backend --reload --port 8001
+```
+
+The API QA Intelligence docs are available at `http://127.0.0.1:8001/docs`. Import a file with `POST /api/v1/specs/import` using the multipart field name `file`, or import your target API’s OpenAPI URL with `POST /api/v1/specs/import-url` and `{"url":"http://127.0.0.1:8000/openapi.json"}`. Both import methods return the API title, version, operations, and baseline scenario suggestions; importing a spec does not call its API operations.
+
+### Web interface
+
+Build the frontend once, then run the backend:
+
+```bash
+cd frontend
+npm install
+npm run build
+cd ..
+source .venv/bin/activate
+uvicorn app.main:app --app-dir backend --reload --port 8001
+```
+
+Open `http://127.0.0.1:8001` for the API QA Intelligence interface and API. The backend serves the built frontend from `frontend/dist`.
+
+To run one explicit check, use `POST /api/v1/runs/execute`. Provide a base URL, method, path, optional query parameters, headers or JSON body, and expected status codes. For example:
+
+```json
+{
+  "base_url": "http://127.0.0.1:8000",
+  "method": "GET",
+  "path": "/health",
+  "expected_status_codes": [200]
+}
+```
+
+Only call APIs you own or are authorized to test. Execution does not happen during import, and redirects are not followed.
+
+For a selected set of checks, use `POST /api/v1/runs/execute-batch` with a `scenarios` array containing the same fields as the single-check request. The response includes a PASS/FAIL/ERROR summary. JSON examples are only generated when the contract provides enough information; path parameters and non-JSON request bodies still need a manual example.
 
 ## Roadmap
 
@@ -69,4 +111,4 @@ See [docs/MVP_ROADMAP.md](docs/MVP_ROADMAP.md) for the staged plan and product b
 
 ## Project status
 
-Early planning. This repository establishes the product direction and MVP scope; implementation comes next.
+Early implementation. The backend can import and summarize an OpenAPI 3.x file or URL, suggest contract-based scenarios, and execute individual or batched explicit HTTP checks. A product UI and AI-assisted generation and failure analysis are next.

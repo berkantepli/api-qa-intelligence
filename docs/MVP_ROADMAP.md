@@ -21,15 +21,18 @@ Help a QA engineer go from an API contract to reviewed, executable test scenario
 
 ### 2. Deterministic scenario generation
 
-- Generate baseline happy-path, required-field, invalid-value, and boundary scenarios from the contract.
-- Keep each scenario editable and show why it was suggested.
-- Distinguish contract-derived checks from assumptions that need review.
+- [x] Generate initial happy-path, required-field, invalid-value, boundary, and authentication-minded suggestions from imported contract details.
+- [x] Include a rationale and mark suggestions that need review.
+- [x] Include executable request examples when the path and JSON contract provide enough detail.
+- Keep scenarios editable in the product interface.
 
 ### 3. Controlled execution
 
-- Require explicit target base URL and user selection before execution.
-- Execute a selected scenario set with HTTPX and bounded timeouts.
-- Record request/response evidence and report each check as PASS or FAIL.
+- [x] Require an explicit target base URL and request details for a single check.
+- [x] Run a single HTTP check with a bounded timeout and response size; do not follow redirects.
+- [x] Report PASS/FAIL from the expected status code, or ERROR when the API cannot be reached.
+- [x] Execute a user-selected batch of checks and summarize the results.
+- Record complete request/response evidence for each selected check.
 - Avoid arbitrary code execution from generated test content.
 
 ### 4. AI-assisted QA analysis
