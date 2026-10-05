@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
+import ScenarioDraftEditor from "./ScenarioDraftEditor.jsx";
+import { buildEditedScenario, createDraft, isEditedScenario, statusCodeSuggestions, validateDraft } from "./scenarioDraft.js";
 
 const DEFAULT_TARGET_URL = "http://127.0.0.1:8000";
 const STORAGE_KEYS = {
@@ -132,6 +134,8 @@ function App() {
   const [file, setFile] = useState(null);
   const [selectedOperation, setSelectedOperation] = useState(() => firstRunnableOperationIndex(overview));
   const [selectedScenarios, setSelectedScenarios] = useState([]);
+  // The one AI idea or edited check currently open in the editor: { scenarioIndex, draft }.
+  const [editingDraft, setEditingDraft] = useState(null);
   const [showExecutionConfirmation, setShowExecutionConfirmation] = useState(false);
   const [results, setResults] = useState({});
   const [requestInputs, setRequestInputs] = useState({});
@@ -147,7 +151,9 @@ function App() {
   const operation = overview?.operations?.[selectedOperation];
   const isDataChangingMethod = ["POST", "PUT", "PATCH", "DELETE"].includes(operation?.method);
   const operationKey = operation ? `${operation.method} ${operation.path}` : "";
-  const aiScenarioIdeas = operation?.scenarios?.filter((scenario) => scenario.source === "ai") ?? [];
+  const operationScenarios = operation?.scenarios ?? [];
+  const aiScenarioIdeas = operationScenarios.map((scenario, scenarioIndex) => ({ scenario, scenarioIndex })).filter(({ scenario }) => scenario.source === "ai");
+  const contractScenarios = operationScenarios.filter((scenario) => !isEditedScenario(scenario));
   const scenarioIdeaStatus = scenarioIdeaState[`${activeApiId}:${operationKey}`] ?? {};
   const operationInputs = requestInputs[operationKey] ?? {};
   const parameters = operation?.parameters ?? [];
@@ -160,11 +166,12 @@ function App() {
   const bodyFields = operation?.request_body_fields ?? [];
   const isFormBody = /^(multipart\/form-data|application\/x-www-form-urlencoded)/i.test(operation?.request_body_content_type || "");
   const fileFields = bodyFields.filter((field) => field.is_file);
-  const validBodyTemplate = operation?.scenarios?.find((scenario) => scenario.category === "happy_path" && scenario.request_example?.json_body != null)?.request_example?.json_body
-    ?? operation?.scenarios?.find((scenario) => scenario.request_example?.json_body != null)?.request_example?.json_body
+  const sendsJsonBody = Boolean(operation?.request_body_content_type) && !isFormBody;
+  const rawJsonFallback = contractScenarios.find((scenario) => scenario.request_example?.json_body != null)?.request_example?.json_body;
+  const validBodyTemplate = contractScenarios.find((scenario) => scenario.category === "happy_path" && scenario.request_example?.json_body != null)?.request_example?.json_body
+    ?? rawJsonFallback
     ?? {};
   const needsRawJsonBody = Boolean(operation?.request_body_required && !isFormBody && bodyFields.length === 0);
-  const rawJsonFallback = operation?.scenarios?.find((scenario) => scenario.request_example?.json_body != null)?.request_example?.json_body;
   const rawJsonBodyValue = getRawBodyValue(requestInputs[operationKey], rawJsonFallback);
   const rawJsonBodyIsValid = Boolean(rawJsonBodyValue.trim()) && isValidJson(rawJsonBodyValue);
   const getInputValue = (key, fallback = "") => Object.hasOwn(operationInputs, key) ? operationInputs[key] : fallback;
@@ -180,8 +187,12 @@ function App() {
   const bodyReady = (!needsRawJsonBody || rawJsonBodyIsValid)
     && !(operation?.request_body_required && !isFormBody && bodyFields.some((field) => field.required && !getBodyFieldValue(field).trim()));
   const inputsReady = !requiredParametersMissing && !requiredBodyFieldsMissing && !invalidStructuredBodyValue && bodyReady;
-  const scenarioTemplates = operation?.scenarios?.filter((scenario) => scenario.request_example) ?? [];
+  const scenarioTemplates = operationScenarios
+    .map((scenario, scenarioIndex) => ({ ...scenario, scenarioIndex }))
+    .filter((scenario) => scenario.request_example);
   const availableScenarios = inputsReady ? scenarioTemplates : [];
+  const draftContext = { operation, parameters: operationParameters, bodyFields, sendsJsonBody, isFormBody };
+  const draftProblems = editingDraft ? validateDraft(editingDraft.draft, draftContext) : [];
   const selectedCount = selectedScenarios.length;
   const methods = useMemo(() => new Set((overview?.operations ?? []).map((item) => item.method)), [overview]);
 
@@ -217,6 +228,52 @@ function App() {
     setSelectedScenarios([]);
     setShowExecutionConfirmation(false);
     setResults({});
+    setEditingDraft(null);
+  }
+
+  function updateOperationScenarios(updateScenarios) {
+    updateSavedApi(activeApiId, {
+      overview: {
+        ...overview,
+        operations: overview.operations.map((item, index) => index === selectedOperation
+          ? { ...item, scenarios: updateScenarios(item.scenarios) }
+          : item),
+      },
+    });
+  }
+
+  // The body the user has prepared in the request details, used as the starting point for a draft.
+  function currentJsonBody() {
+    if (!sendsJsonBody) return null;
+    if (needsRawJsonBody) return rawJsonBodyIsValid ? JSON.parse(rawJsonBodyValue) : rawJsonFallback ?? null;
+    if (!validBodyTemplate || typeof validBodyTemplate !== "object" || Array.isArray(validBodyTemplate)) return validBodyTemplate;
+    const body = { ...validBodyTemplate };
+    for (const field of bodyFields) {
+      const value = getBodyFieldValue(field);
+      if (field.is_file || !value.trim()) continue;
+      try { body[field.name] = JSON.parse(value); }
+      catch { body[field.name] = value; }
+    }
+    return body;
+  }
+
+  function openDraftEditor(scenarioIndex) {
+    const scenario = operationScenarios[scenarioIndex];
+    const initialFormFields = Object.fromEntries(bodyFields.filter((field) => !field.is_file).map((field) => [field.name, getBodyFieldValue(field)]));
+    setShowExecutionConfirmation(false);
+    setEditingDraft({ scenarioIndex, draft: createDraft(scenario, { ...draftContext, initialJsonBody: currentJsonBody(), initialFormFields }) });
+  }
+
+  function saveDraft() {
+    if (!editingDraft || draftProblems.length) return;
+    const check = buildEditedScenario(editingDraft.draft, draftContext);
+    updateOperationScenarios((scenarios) => scenarios.map((scenario, index) => index === editingDraft.scenarioIndex ? check : scenario));
+    resetRunState();
+  }
+
+  function removeEditedCheck(scenarioIndex) {
+    updateOperationScenarios((scenarios) => scenarios.filter((_, index) => index !== scenarioIndex));
+    resetRunState();
   }
 
   function updateTargetUrl(value) {
@@ -269,14 +326,9 @@ function App() {
     setScenarioIdeaState((current) => ({ ...current, [key]: { loading: true, error: "" } }));
     try {
       const payload = await postJson("/api/v1/specs/scenario-ideas", { operation }, "AI scenario suggestions could not be generated.");
-      updateSavedApi(activeApiId, {
-        overview: {
-          ...overview,
-          operations: overview.operations.map((item) => `${item.method} ${item.path}` === operationKey
-            ? { ...item, scenarios: [...item.scenarios.filter((scenario) => scenario.source !== "ai"), ...(payload.scenarios ?? [])] }
-            : item),
-        },
-      });
+      // Saved edited checks stay; only unconverted ideas are replaced.
+      updateOperationScenarios((scenarios) => [...scenarios.filter((scenario) => scenario.source !== "ai"), ...(payload.scenarios ?? [])]);
+      resetRunState();
       setScenarioIdeaState((current) => ({ ...current, [key]: { loading: false, error: "" } }));
     } catch (caught) {
       setScenarioIdeaState((current) => ({ ...current, [key]: { loading: false, error: caught.message || "AI scenario suggestions could not be generated." } }));
@@ -315,14 +367,16 @@ function App() {
         const scenario = availableScenarios[index];
         const example = scenario.request_example;
         if (!example) continue;
+        const isEditedCheck = isEditedScenario(scenario);
         const omittedParameters = new Set((example.omitted_parameters ?? []).map((parameter) => `${parameter.location}:${parameter.name}`));
-        const path = operation.path.replace(/\{([^}]+)\}/g, (_, name) => omittedParameters.has(`path:${name}`) ? "" : encodeURIComponent(getParameterValue({ location: "path", name })));
+        const parameterValue = (parameter) => example.parameter_values?.[`${parameter.location}:${parameter.name}`] ?? getParameterValue(parameter);
+        const path = operation.path.replace(/\{([^}]+)\}/g, (_, name) => omittedParameters.has(`path:${name}`) ? "" : encodeURIComponent(parameterValue({ location: "path", name })));
         const queryParams = { ...example.query_params };
         const headers = {};
         const cookieValues = [];
         for (const parameter of operationParameters) {
           if (omittedParameters.has(`${parameter.location}:${parameter.name}`)) continue;
-          const value = getParameterValue(parameter).trim();
+          const value = parameterValue(parameter).trim();
           if (!value) continue;
           if (parameter.location === "query") queryParams[parameter.name] = value;
           if (parameter.location === "header") headers[parameter.name] = value;
@@ -330,14 +384,17 @@ function App() {
         }
         if (cookieValues.length) headers.Cookie = cookieValues.join("; ");
         const formFields = { ...example.form_fields };
-        const jsonBody = needsRawJsonBody
+        // Edited AI checks send the body exactly as the user wrote it in the editor.
+        const jsonBody = isEditedCheck
+          ? example.json_body ?? null
+          : needsRawJsonBody
           ? JSON.parse(rawJsonBodyValue)
           : example.json_body && typeof example.json_body === "object" && !Array.isArray(example.json_body)
             ? { ...example.json_body }
             : example.json_body ?? (bodyFields.length ? {} : null);
         for (const field of bodyFields) {
           const value = getBodyFieldValue(field);
-          if (field.is_file) continue;
+          if (field.is_file || isEditedCheck) continue;
           if (isFormBody) formFields[field.name] = value;
           else if (jsonBody && typeof jsonBody === "object" && Object.hasOwn(jsonBody, field.name)) {
             const validValue = validBodyTemplate?.[field.name];
@@ -365,11 +422,22 @@ function App() {
         }
         const result = await postJson(
           "/api/v1/runs/execute",
-          { ...example, path, query_params: queryParams, headers, form_fields: formFields, file_uploads: fileUploads, json_body: jsonBody, base_url: targetUrl },
+          {
+            method: example.method,
+            path,
+            query_params: queryParams,
+            headers,
+            form_body: example.form_body,
+            form_fields: formFields,
+            file_uploads: fileUploads,
+            json_body: jsonBody,
+            expected_status_codes: example.expected_status_codes,
+            base_url: targetUrl,
+          },
           "The check could not be executed.",
         );
         nextResults[index] = result;
-        completed.push({ title: scenario.title, category: scenario.category, ...result });
+        completed.push({ title: scenario.title, category: scenario.category, source: scenario.source, ...result });
         setResults({ ...nextResults });
       }
       if (completed.length) {
@@ -439,6 +507,20 @@ function App() {
     setPage("specs");
   }
 
+  const draftEditor = editingDraft && <ScenarioDraftEditor
+    draft={editingDraft.draft}
+    problems={draftProblems}
+    parameters={operationParameters}
+    sendsJsonBody={sendsJsonBody}
+    isFormBody={isFormBody}
+    statusSuggestions={statusCodeSuggestions(operationScenarios)}
+    isDataChangingMethod={isDataChangingMethod}
+    saveLabel={isEditedScenario(operationScenarios[editingDraft.scenarioIndex]) ? "Save changes" : "Save as check"}
+    onChange={(draft) => setEditingDraft((current) => ({ ...current, draft }))}
+    onCancel={() => setEditingDraft(null)}
+    onSave={saveDraft}
+  />;
+
   return (
     <div className="app-shell">
       <aside className="sidebar">
@@ -499,7 +581,7 @@ function App() {
                 {expanded && <div className="history-details">{run.results.map((result, index) => {
                   const analysis = analysisState[`${run.id}:${index}`] ?? {};
                   return <section className="history-result" key={`${result.title || "check"}-${index}`}>
-                  <div className="history-result-heading"><span className={`history-status status-${String(result.result || "error").toLowerCase()}`}>{result.result || "ERROR"}</span><strong>{result.title || `Check ${index + 1}`}</strong>{result.response_status && <span>HTTP {result.response_status}</span>}{result.duration_ms != null && <span>{result.duration_ms} ms</span>}</div>
+                  <div className="history-result-heading"><span className={`history-status status-${String(result.result || "error").toLowerCase()}`}>{result.result || "ERROR"}</span><strong>{result.title || `Check ${index + 1}`}</strong>{isEditedScenario(result) && <span className="edited-pill">AI idea · edited</span>}{result.response_status && <span>HTTP {result.response_status}</span>}{result.duration_ms != null && <span>{result.duration_ms} ms</span>}</div>
                   {result.error && <p className="history-error">{result.error}</p>}
                   {(result.request_url || result.request_headers || result.request_body) && <details className="history-response"><summary>Request evidence</summary><pre>{JSON.stringify({ url: result.request_url, headers: result.request_headers, body: result.request_body || undefined }, null, 2)}</pre></details>}
                   {(result.response_status || result.response_headers || result.response_body) && <details className="history-response"><summary>Response evidence</summary><pre>{JSON.stringify({ status: result.response_status, headers: result.response_headers, body: result.response_body || undefined, truncated: result.response_truncated || undefined }, null, 2)}</pre></details>}
@@ -598,7 +680,11 @@ function App() {
                           <input type="checkbox" checked={checked} disabled={running} onChange={() => toggleScenario(index)} />
                           <span className="custom-check"><Icon name="check" size={13} /></span>
                         </label>
-                        <div className="scenario-content"><div className="scenario-title-row"><span className={`category-pill category-${scenario.category}`}>{categoryLabels[scenario.category] || scenario.category}</span></div><h3>{scenario.title}</h3><p>{scenario.rationale}</p>{result && <div className={`result-box result-${result.result.toLowerCase()}`}><div className="result-heading"><strong>{result.result}</strong>{result.response_status && <span>HTTP {result.response_status}</span>}<small>{result.duration_ms} ms</small></div>{result.error && <p>{result.error}</p>}{result.response_body && <details><summary>Response details</summary><pre>{result.response_body}</pre></details>}</div>}</div>
+                        <div className="scenario-content"><div className="scenario-title-row"><span className={`category-pill category-${scenario.category}`}>{categoryLabels[scenario.category] || scenario.category}</span>{isEditedScenario(scenario) && <span className="edited-pill">AI idea · edited</span>}</div><h3>{scenario.title}</h3><p>{scenario.rationale}</p>
+                        {isEditedScenario(scenario) && <p className="edited-check-summary">Expects HTTP {scenario.request_example.expected_status_codes.join(", ")}{scenario.request_example.omitted_parameters?.length ? ` · omits ${scenario.request_example.omitted_parameters.map((parameter) => parameter.name).join(", ")}` : ""}</p>}
+                        {isEditedScenario(scenario) && editingDraft?.scenarioIndex !== scenario.scenarioIndex && <div className="card-actions"><button className="text-button" type="button" disabled={running} onClick={() => openDraftEditor(scenario.scenarioIndex)}>Edit</button><button className="text-button danger" type="button" disabled={running} onClick={() => removeEditedCheck(scenario.scenarioIndex)}>Remove</button></div>}
+                        {editingDraft?.scenarioIndex === scenario.scenarioIndex && draftEditor}
+                        {result && <div className={`result-box result-${result.result.toLowerCase()}`}><div className="result-heading"><strong>{result.result}</strong>{result.response_status && <span>HTTP {result.response_status}</span>}<small>{result.duration_ms} ms</small></div>{result.error && <p>{result.error}</p>}{result.response_body && <details><summary>Response details</summary><pre>{result.response_body}</pre></details>}</div>}</div>
                       </article>
                     );
                   })}
@@ -608,7 +694,13 @@ function App() {
                   <div className="ai-suggestions-heading"><div><div className="panel-kicker"><Icon name="spark" size={14} /> AI SUGGESTIONS</div><p>Ideas based on this endpoint’s contract. Review them before turning them into checks.</p></div><button className="secondary-button" type="button" disabled={scenarioIdeaStatus.loading} onClick={generateScenarioIdeas}>{scenarioIdeaStatus.loading ? <><span className="spinner" /> Thinking…</> : <><Icon name="spark" size={14} /> {aiScenarioIdeas.length ? "Refresh suggestions" : "Suggest scenarios"}</>}</button></div>
                   <small className="ai-suggestions-note">Sends endpoint details to your configured AI model. No credentials or API requests are sent.</small>
                   {scenarioIdeaStatus.error && <div className="alert error-alert" role="alert">{scenarioIdeaStatus.error}</div>}
-                  {aiScenarioIdeas.length ? <div className="ai-suggestions-list">{aiScenarioIdeas.map((scenario, index) => <article className="ai-suggestion-card" key={`${scenario.title}-${index}`}><div className="scenario-title-row"><span className={`category-pill category-${scenario.category}`}>{categoryLabels[scenario.category] || scenario.category}</span><span className="review-pill">Review · not runnable</span></div><h3>{scenario.title}</h3><p>{scenario.rationale}</p></article>)}</div> : <div className="ai-suggestions-empty">No AI ideas yet. Generate suggestions when you want a second QA perspective.</div>}
+                  {aiScenarioIdeas.length ? <div className="ai-suggestions-list">{aiScenarioIdeas.map(({ scenario, scenarioIndex }) => <article className="ai-suggestion-card" key={`${scenario.title}-${scenarioIndex}`}>
+                    <div className="scenario-title-row"><span className={`category-pill category-${scenario.category}`}>{categoryLabels[scenario.category] || scenario.category}</span><span className="review-pill">Review · not runnable</span></div>
+                    <h3>{scenario.title}</h3><p>{scenario.rationale}</p>
+                    {editingDraft?.scenarioIndex === scenarioIndex
+                      ? draftEditor
+                      : <div className="card-actions"><button className="text-button" type="button" disabled={running} onClick={() => openDraftEditor(scenarioIndex)}>Convert to check</button></div>}
+                  </article>)}</div> : <div className="ai-suggestions-empty">No AI ideas yet. Generate suggestions when you want a second QA perspective.</div>}
                 </section>
                 {showExecutionConfirmation && <div className="execution-confirmation" role="alert">
                   <div><strong>This request may change data.</strong><p>You are about to run {selectedCount} {operation.method} {operation.path} check{selectedCount === 1 ? "" : "s"} against {targetUrl}. This can create, update, or delete data in the target API.</p></div>
