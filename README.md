@@ -89,6 +89,15 @@ For a selected set of checks, use `POST /api/v1/runs/execute-batch` with a `scen
 
 Install and run Ollama with a model. The default model is `qwen3-vl:8b-instruct`, and the default Ollama URL is `http://127.0.0.1:11434`. Override them with `OLLAMA_MODEL` and `OLLAMA_BASE_URL` before starting the backend. In an API overview, choose **Suggest scenarios** to send the selected endpoint’s contract details (operation, parameters, and body field names/types) to the configured model. The model receives no example values, credentials, target URL, or API traffic. Suggestions are review-only and are not runnable. In Run history, choose **Analyze with AI** on a failed check to send that check’s redacted evidence for optional, advisory analysis. Read the on-screen disclosure before requesting either AI feature.
 
+## Running tests
+
+```bash
+source .venv/bin/activate
+pytest
+```
+
+The backend tests replace outbound HTTP calls with an in-memory transport, so they never contact a target API or Ollama.
+
 ## Roadmap
 
 See [docs/MVP_ROADMAP.md](docs/MVP_ROADMAP.md) for the staged plan and product boundaries.
