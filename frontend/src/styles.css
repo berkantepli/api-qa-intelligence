@@ -364,7 +364,7 @@ h1, h2, h3, p { margin-top: 0; }
 :root[data-theme="dark"] .stat-note,
 :root[data-theme="dark"] .endpoint-copy small,
 :root[data-theme="dark"] .scenario-count span,
-:root[data-theme="dark"] .run-footer > span,
+:root[data-theme="dark"] .run-footer > span { color: #8d96a5; }
 :root[data-theme="dark"] .panel-header,
 :root[data-theme="dark"] .scenario-header,
 :root[data-theme="dark"] .run-footer,
