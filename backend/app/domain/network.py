@@ -2,7 +2,7 @@ import ipaddress
 import socket
 
 import httpx
-from fastapi import HTTPException, status
+from fastapi import HTTPException
 
 
 def ensure_safe_target_host(url: httpx.URL) -> None:
@@ -20,7 +20,7 @@ def ensure_safe_target_host(url: httpx.URL) -> None:
         if literal_address.is_loopback or literal_address.is_global:
             return
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=422,
             detail="The target URL must use a public host or localhost.",
         )
 
@@ -31,12 +31,12 @@ def ensure_safe_target_host(url: httpx.URL) -> None:
         }
     except (OSError, ValueError) as error:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=422,
             detail="The target URL host could not be resolved.",
         ) from error
 
     if not resolved_addresses or any(not address.is_global for address in resolved_addresses):
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=422,
             detail="The target URL must use a public host or localhost.",
         )

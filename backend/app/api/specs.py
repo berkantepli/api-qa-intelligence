@@ -16,7 +16,7 @@ async def import_specification(file: UploadFile = File(...)) -> ApiOverview:
     contents = await file.read(MAX_SPEC_SIZE_BYTES + 1)
     if len(contents) > MAX_SPEC_SIZE_BYTES:
         raise HTTPException(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            status_code=413,
             detail="The specification must be smaller than 2 MB.",
         )
 
@@ -28,7 +28,7 @@ async def import_specification_from_url(payload: SpecUrlRequest) -> ApiOverview:
     url = httpx.URL(str(payload.url))
     if url.username or url.password:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=422,
             detail="OpenAPI URLs with embedded credentials are not supported.",
         )
 
@@ -43,7 +43,7 @@ async def import_specification_from_url(payload: SpecUrlRequest) -> ApiOverview:
                     contents.extend(chunk)
                     if len(contents) > MAX_SPEC_SIZE_BYTES:
                         raise HTTPException(
-                            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                            status_code=413,
                             detail="The specification must be smaller than 2 MB.",
                         )
     except HTTPException:
@@ -77,5 +77,5 @@ def _parse_specification(contents: bytes, filename: str) -> ApiOverview:
     try:
         return summarize_openapi(document)
     except OpenApiDocumentError as error:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(error)) from error
+        raise HTTPException(status_code=422, detail=str(error)) from error
 

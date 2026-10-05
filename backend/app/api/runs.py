@@ -6,7 +6,7 @@ from typing import Any, Literal
 from urllib.parse import unquote, urlencode
 
 import httpx
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException
 from pydantic import AnyHttpUrl, BaseModel, Field, field_validator
 
 from app.domain.evidence import redact_headers, redact_text, redact_value, sanitize_url
@@ -123,12 +123,12 @@ async def _execute_scenario(payload: ScenarioExecutionRequest) -> ScenarioExecut
     base = httpx.URL(str(payload.base_url))
     if base.username or base.password:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=422,
             detail="Target URLs with embedded credentials are not supported; use a request header instead.",
         )
     if base.path not in ("", "/") or base.query or base.fragment:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=422,
             detail="Base URL must contain only the scheme and host, for example http://127.0.0.1:8000.",
         )
     ensure_safe_target_host(base)
