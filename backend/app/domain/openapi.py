@@ -457,19 +457,23 @@ def _resolve_schema(
         )
         resolved.update({key: value for key, value in schema.items() if key != "$ref"})
         schema = resolved
+        seen = seen | {reference}
+
+    def resolve_nested(value: Mapping[str, Any]) -> Mapping[str, Any]:
+        # A circular reference resolves to {}; keep it instead of falling back to the raw $ref.
+        nested = _resolve_schema(value, document, seen)
+        return value if nested is None else nested
 
     result = dict(schema)
     properties = schema.get("properties")
     if isinstance(properties, Mapping):
         result["properties"] = {
-            name: _resolve_schema(value, document, seen) or value
-            if isinstance(value, Mapping)
-            else value
+            name: resolve_nested(value) if isinstance(value, Mapping) else value
             for name, value in properties.items()
         }
     items = schema.get("items")
     if isinstance(items, Mapping):
-        result["items"] = _resolve_schema(items, document, seen) or items
+        result["items"] = resolve_nested(items)
     return result
 
 
