@@ -1,6 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 
-const API_BASE_URL = "http://127.0.0.1:8000";
+const DEFAULT_TARGET_URL = "http://127.0.0.1:8000";
+const STORAGE_KEYS = {
+  theme: "api-qa-intelligence-theme",
+  savedApis: "api-qa-intelligence-saved-apis",
+  activeApi: "api-qa-intelligence-active-api",
+  runHistory: "api-qa-intelligence-run-history",
+};
 
 const categoryLabels = {
   happy_path: "Happy path",
@@ -10,10 +16,39 @@ const categoryLabels = {
   security_minded: "Security-minded",
 };
 
+function readStoredJson(key, fallback) {
+  try { return JSON.parse(localStorage.getItem(key)) ?? fallback; }
+  catch { return fallback; }
+}
+
+function isValidJson(value) {
+  try { JSON.parse(value); return true; }
+  catch { return false; }
+}
+
+async function postJson(url, body, fallbackMessage) {
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  return readJsonResponse(response, fallbackMessage);
+}
+
+async function readJsonResponse(response, fallbackMessage) {
+  const payload = await response.json();
+  if (!response.ok) throw new Error(payload.detail || fallbackMessage);
+  return payload;
+}
+
+function runnableCheckCount(operation) {
+  return operation.scenarios?.filter((scenario) => scenario.request_example).length ?? 0;
+}
+
 function firstRunnableOperationIndex(apiOverview) {
   const operations = apiOverview?.operations ?? [];
   const safeMethods = new Set(["GET", "HEAD", "OPTIONS"]);
-  const hasRunnableCheck = (operation) => operation.scenarios?.some((scenario) => scenario.request_example);
+  const hasRunnableCheck = (operation) => runnableCheckCount(operation) > 0;
   const readySafeIndex = operations.findIndex((operation) => safeMethods.has(operation.method)
     && hasRunnableCheck(operation)
     && (operation.parameters ?? []).every((parameter) => !parameter.required || parameter.example != null));
@@ -37,14 +72,14 @@ function resolveApiTarget(api) {
     const savedTarget = api.targetUrl || "";
     let savedOrigin = "";
     try { savedOrigin = new URL(savedTarget).origin; } catch { /* saved value is not a URL */ }
-    const defaultOrigin = new URL(API_BASE_URL).origin;
+    const defaultOrigin = new URL(DEFAULT_TARGET_URL).origin;
     if (savedTarget && !(savedOrigin === defaultOrigin && sourceUrl.origin !== defaultOrigin)) return savedTarget;
     const specPath = sourceUrl.pathname.toLowerCase();
     const inferred = specPath.endsWith("/openapi.json") ? new URL(".", sourceUrl).href : `${sourceUrl.origin}/`;
     return inferred.replace(/\/$/, "");
   }
   const savedTarget = api.targetUrl || "";
-  try { return new URL(savedTarget).origin === new URL(API_BASE_URL).origin ? "" : savedTarget; }
+  try { return new URL(savedTarget).origin === new URL(DEFAULT_TARGET_URL).origin ? "" : savedTarget; }
   catch { return ""; }
 }
 
@@ -67,10 +102,8 @@ function Icon({ name, size = 18, className }) {
     "aria-hidden": true,
   };
   const paths = {
-    grid: <><rect x="3" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="3" width="7" height="7" rx="1.5" /><rect x="3" y="14" width="7" height="7" rx="1.5" /><rect x="14" y="14" width="7" height="7" rx="1.5" /></>,
     file: <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6M8 13h8M8 17h8" /></>,
     run: <><path d="m8 5 12 7-12 7z" /></>,
-    settings: <><circle cx="12" cy="12" r="3" /><path d="m19.4 15 .1.1 1.4 1.1-1.4 2.4-1.7-.7a8 8 0 0 1-1.7 1L15.8 21h-2.8l-.3-1.9a8 8 0 0 1-1.7-1l-1.7.7-1.4-2.4 1.5-1.2a7 7 0 0 1 0-2l-1.5-1.1 1.4-2.4 1.7.7a8 8 0 0 1 1.7-1L13 5h2.8l.3 1.9a8 8 0 0 1 1.7 1l1.7-.7 1.4 2.4-1.5 1.1a7 7 0 0 1 0 2Z" transform="translate(-1 -1)" /></>,
     upload: <><path d="M12 16V4m0 0L7 9m5-5 5 5" /><path d="M20 16.5v2A1.5 1.5 0 0 1 18.5 20h-13A1.5 1.5 0 0 1 4 18.5v-2" /></>,
     link: <><path d="M10 13a5 5 0 0 0 7.1 0l3-3A5 5 0 0 0 13 2.9l-1.7 1.7" /><path d="M14 11a5 5 0 0 0-7.1 0l-3 3A5 5 0 0 0 11 21.1l1.7-1.7" /></>,
     check: <path d="m5 12 4 4L19 6" />,
@@ -78,7 +111,6 @@ function Icon({ name, size = 18, className }) {
     spark: <><path d="m12 3 1.9 5.8L20 11l-6.1 2.2L12 19l-2-5.8L4 11l6-2.2L12 3Z" /><path d="m19 14 1 2.5 2.5 1-2.5 1L19 21l-1-2.5-2.5-1 2.5-1L19 14Z" /></>,
     chevron: <path d="m9 18 6-6-6-6" />,
     close: <><path d="m18 6-12 12M6 6l12 12" /></>,
-    search: <><circle cx="11" cy="11" r="7" /><path d="m20 20-4-4" /></>,
     arrow: <><path d="M5 12h14" /><path d="m13 6 6 6-6 6" /></>,
     clock: <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></>,
   };
@@ -86,54 +118,25 @@ function Icon({ name, size = 18, className }) {
 }
 
 function App() {
-  const [theme, setTheme] = useState(() => localStorage.getItem("api-qa-intelligence-theme") || "dark");
-  const [savedApis, setSavedApis] = useState(() => {
-    try { return JSON.parse(localStorage.getItem("api-qa-intelligence-saved-apis") || "[]"); }
-    catch { return []; }
-  });
-  const [activeApiId, setActiveApiId] = useState(() => localStorage.getItem("api-qa-intelligence-active-api") || "");
-  const [page, setPage] = useState(() => {
-    try {
-      const apis = JSON.parse(localStorage.getItem("api-qa-intelligence-saved-apis") || "[]");
-      return apis.length ? "specs" : "import";
-    } catch { return "import"; }
-  });
-  const [runHistory, setRunHistory] = useState(() => {
-    try { return JSON.parse(localStorage.getItem("api-qa-intelligence-run-history") || "[]"); }
-    catch { return []; }
-  });
+  const [theme, setTheme] = useState(() => localStorage.getItem(STORAGE_KEYS.theme) || "dark");
+  const [savedApis, setSavedApis] = useState(() => readStoredJson(STORAGE_KEYS.savedApis, []));
+  const [activeApiId, setActiveApiId] = useState(() => localStorage.getItem(STORAGE_KEYS.activeApi) || "");
+  const overview = savedApis.find((api) => api.id === activeApiId)?.overview ?? null;
+  const [page, setPage] = useState(() => savedApis.length ? "specs" : "import");
+  const [runHistory, setRunHistory] = useState(() => readStoredJson(STORAGE_KEYS.runHistory, []));
   const [expandedRunId, setExpandedRunId] = useState(null);
   const [analysisState, setAnalysisState] = useState({});
   const [scenarioIdeaState, setScenarioIdeaState] = useState({});
   const [sourceMode, setSourceMode] = useState("url");
   const [specUrl, setSpecUrl] = useState("");
   const [file, setFile] = useState(null);
-  const [overview, setOverview] = useState(() => {
-    try {
-      const apis = JSON.parse(localStorage.getItem("api-qa-intelligence-saved-apis") || "[]");
-      const activeId = localStorage.getItem("api-qa-intelligence-active-api");
-      return apis.find((api) => api.id === activeId)?.overview || null;
-    } catch { return null; }
-  });
-  const [selectedOperation, setSelectedOperation] = useState(() => {
-    try {
-      const apis = JSON.parse(localStorage.getItem("api-qa-intelligence-saved-apis") || "[]");
-      const activeId = localStorage.getItem("api-qa-intelligence-active-api");
-      return firstRunnableOperationIndex(apis.find((api) => api.id === activeId)?.overview);
-    } catch { return 0; }
-  });
+  const [selectedOperation, setSelectedOperation] = useState(() => firstRunnableOperationIndex(overview));
   const [selectedScenarios, setSelectedScenarios] = useState([]);
   const [showExecutionConfirmation, setShowExecutionConfirmation] = useState(false);
   const [results, setResults] = useState({});
   const [requestInputs, setRequestInputs] = useState({});
   const [requestFiles, setRequestFiles] = useState({});
-  const [targetUrl, setTargetUrl] = useState(() => {
-    try {
-      const apis = JSON.parse(localStorage.getItem("api-qa-intelligence-saved-apis") || "[]");
-      const activeId = localStorage.getItem("api-qa-intelligence-active-api");
-      return resolveApiTarget(apis.find((api) => api.id === activeId)) || API_BASE_URL;
-    } catch { return API_BASE_URL; }
-  });
+  const [targetUrl, setTargetUrl] = useState(() => resolveApiTarget(savedApis.find((api) => api.id === activeApiId)) || DEFAULT_TARGET_URL);
   const [connectionStatus, setConnectionStatus] = useState("checking");
   const [connectionCheckId, setConnectionCheckId] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -163,19 +166,14 @@ function App() {
   const needsRawJsonBody = Boolean(operation?.request_body_required && !isFormBody && bodyFields.length === 0);
   const rawJsonFallback = operation?.scenarios?.find((scenario) => scenario.request_example?.json_body != null)?.request_example?.json_body;
   const rawJsonBodyValue = getRawBodyValue(requestInputs[operationKey], rawJsonFallback);
-  const rawJsonBodyIsValid = (() => {
-    if (!rawJsonBodyValue.trim()) return false;
-    try { JSON.parse(rawJsonBodyValue); return true; }
-    catch { return false; }
-  })();
+  const rawJsonBodyIsValid = Boolean(rawJsonBodyValue.trim()) && isValidJson(rawJsonBodyValue);
   const getInputValue = (key, fallback = "") => Object.hasOwn(operationInputs, key) ? operationInputs[key] : fallback;
   const getParameterValue = (parameter) => getInputValue(`parameter:${parameter.location}:${parameter.name}`, parameter.example == null ? "" : String(parameter.example));
   const getBodyFieldValue = (field) => getInputValue(`body:${field.name}`, field.example == null ? "" : typeof field.example === "object" ? JSON.stringify(field.example) : String(field.example));
   const requiredParametersMissing = operationParameters.some((parameter) => parameter.required && !getParameterValue(parameter).trim());
-  const invalidStructuredBodyValue = bodyFields.some((field) => !field.is_file && ["object", "array"].includes(field.field_type) && getBodyFieldValue(field).trim() && (() => {
-    try { JSON.parse(getBodyFieldValue(field)); return false; }
-    catch { return true; }
-  })());
+  const hasInvalidJsonValue = (field) => !field.is_file && ["object", "array"].includes(field.field_type)
+    && Boolean(getBodyFieldValue(field).trim()) && !isValidJson(getBodyFieldValue(field));
+  const invalidStructuredBodyValue = bodyFields.some(hasInvalidJsonValue);
   const requiredBodyFieldsMissing = operation?.request_body_required && bodyFields.some((field) => field.required && (field.is_file
     ? !(requestFiles[operationKey]?.[field.name]?.length)
     : !getBodyFieldValue(field).trim()));
@@ -189,8 +187,12 @@ function App() {
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
-    localStorage.setItem("api-qa-intelligence-theme", theme);
+    localStorage.setItem(STORAGE_KEYS.theme, theme);
   }, [theme]);
+
+  useEffect(() => { localStorage.setItem(STORAGE_KEYS.savedApis, JSON.stringify(savedApis)); }, [savedApis]);
+  useEffect(() => { localStorage.setItem(STORAGE_KEYS.activeApi, activeApiId); }, [activeApiId]);
+  useEffect(() => { localStorage.setItem(STORAGE_KEYS.runHistory, JSON.stringify(runHistory)); }, [runHistory]);
 
   useEffect(() => {
     if (!activeApiId || !targetUrl.trim()) {
@@ -207,13 +209,19 @@ function App() {
     return () => { window.clearTimeout(timeout); controller.abort(); };
   }, [activeApiId, targetUrl, connectionCheckId]);
 
+  function updateSavedApi(id, changes) {
+    setSavedApis((current) => current.map((api) => api.id === id ? { ...api, ...changes } : api));
+  }
+
+  function resetRunState() {
+    setSelectedScenarios([]);
+    setShowExecutionConfirmation(false);
+    setResults({});
+  }
+
   function updateTargetUrl(value) {
     setTargetUrl(value);
-    setSavedApis((current) => {
-      const updated = current.map((api) => api.id === activeApiId ? { ...api, targetUrl: value } : api);
-      localStorage.setItem("api-qa-intelligence-saved-apis", JSON.stringify(updated));
-      return updated;
-    });
+    updateSavedApi(activeApiId, { targetUrl: value });
   }
 
   async function importSpec(event) {
@@ -222,39 +230,26 @@ function App() {
     setError("");
     setNotice("");
     try {
-      let response;
+      const failureMessage = "The specification could not be imported.";
+      let payload;
       if (sourceMode === "url") {
-        response = await fetch("/api/v1/specs/import-url", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ url: specUrl }),
-        });
+        payload = await postJson("/api/v1/specs/import-url", { url: specUrl }, failureMessage);
       } else {
         if (!file) throw new Error("Choose an OpenAPI JSON or YAML file first.");
         const data = new FormData();
         data.append("file", file);
-        response = await fetch("/api/v1/specs/import", { method: "POST", body: data });
+        payload = await readJsonResponse(await fetch("/api/v1/specs/import", { method: "POST", body: data }), failureMessage);
       }
-      const payload = await response.json();
-      if (!response.ok) throw new Error(payload.detail || "The specification could not be imported.");
       const source = sourceMode === "url" ? specUrl : file.name;
       const id = `${payload.title || "API"}::${source}`;
       const importedTargetUrl = resolveApiTarget({ source, overview: payload });
       const savedApi = { id, title: payload.title || "Imported API", source, importedAt: new Date().toISOString(), overview: payload, targetUrl: importedTargetUrl };
-      setSavedApis((current) => {
-        const updated = [savedApi, ...current.filter((api) => api.id !== id)];
-        localStorage.setItem("api-qa-intelligence-saved-apis", JSON.stringify(updated));
-        return updated;
-      });
+      setSavedApis((current) => [savedApi, ...current.filter((api) => api.id !== id)]);
       setActiveApiId(id);
-      localStorage.setItem("api-qa-intelligence-active-api", id);
-      setOverview(payload);
       setTargetUrl(importedTargetUrl);
       setPage("overview");
       setSelectedOperation(firstRunnableOperationIndex(payload));
-      setSelectedScenarios([]);
-      setShowExecutionConfirmation(false);
-      setResults({});
+      resetRunState();
       setNotice(`Imported ${payload.operation_count} operations. Review the suggested scenarios below.`);
     } catch (caught) {
       setError(caught.message || "Something went wrong while importing the specification.");
@@ -265,9 +260,7 @@ function App() {
 
   function selectOperation(index) {
     setSelectedOperation(index);
-    setSelectedScenarios([]);
-    setShowExecutionConfirmation(false);
-    setResults({});
+    resetRunState();
   }
 
   async function generateScenarioIdeas() {
@@ -275,24 +268,14 @@ function App() {
     const key = `${activeApiId}:${operationKey}`;
     setScenarioIdeaState((current) => ({ ...current, [key]: { loading: true, error: "" } }));
     try {
-      const response = await fetch("/api/v1/specs/scenario-ideas", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ operation }),
-      });
-      const payload = await response.json();
-      if (!response.ok) throw new Error(payload.detail || "AI scenario suggestions could not be generated.");
-      const updated = {
-        ...overview,
-        operations: overview.operations.map((item) => `${item.method} ${item.path}` === operationKey
+      const payload = await postJson("/api/v1/specs/scenario-ideas", { operation }, "AI scenario suggestions could not be generated.");
+      updateSavedApi(activeApiId, {
+        overview: {
+          ...overview,
+          operations: overview.operations.map((item) => `${item.method} ${item.path}` === operationKey
             ? { ...item, scenarios: [...item.scenarios.filter((scenario) => scenario.source !== "ai"), ...(payload.scenarios ?? [])] }
             : item),
-      };
-      setOverview(updated);
-      setSavedApis((apis) => {
-        const saved = apis.map((api) => api.id === activeApiId ? { ...api, overview: updated } : api);
-        localStorage.setItem("api-qa-intelligence-saved-apis", JSON.stringify(saved));
-        return saved;
+        },
       });
       setScenarioIdeaState((current) => ({ ...current, [key]: { loading: false, error: "" } }));
     } catch (caught) {
@@ -380,24 +363,18 @@ function App() {
             return { filename: fileItem.name, content_type: fileItem.type || "application/octet-stream", content_base64: btoa(binary) };
           }));
         }
-        const response = await fetch("/api/v1/runs/execute", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ...example, path, query_params: queryParams, headers, form_fields: formFields, file_uploads: fileUploads, json_body: jsonBody, base_url: targetUrl }),
-        });
-        const result = await response.json();
-        if (!response.ok) throw new Error(result.detail || "The check could not be executed.");
+        const result = await postJson(
+          "/api/v1/runs/execute",
+          { ...example, path, query_params: queryParams, headers, form_fields: formFields, file_uploads: fileUploads, json_body: jsonBody, base_url: targetUrl },
+          "The check could not be executed.",
+        );
         nextResults[index] = result;
         completed.push({ title: scenario.title, category: scenario.category, ...result });
         setResults({ ...nextResults });
       }
       if (completed.length) {
         const entry = { id: Date.now(), api: overview.title, endpoint: `${operation.method} ${operation.path}`, target: targetUrl, createdAt: new Date().toISOString(), results: completed };
-        setRunHistory((current) => {
-          const updated = [entry, ...current];
-          localStorage.setItem("api-qa-intelligence-run-history", JSON.stringify(updated));
-          return updated;
-        });
+        setRunHistory((current) => [entry, ...current]);
       }
     } catch (caught) {
       setError(caught.message || "The checks could not be completed.");
@@ -410,20 +387,14 @@ function App() {
     const key = `${runId}:${resultIndex}`;
     setAnalysisState((current) => ({ ...current, [key]: { loading: true, error: "" } }));
     try {
-      const response = await fetch("/api/v1/runs/analyze-failure", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...result, result: "FAIL", scenario_title: result.title || `Check ${resultIndex + 1}` }),
-      });
-      const payload = await response.json();
-      if (!response.ok) throw new Error(payload.detail || "AI analysis could not be completed.");
-      setRunHistory((current) => {
-        const updated = current.map((run) => run.id === runId
-          ? { ...run, results: run.results.map((item, index) => index === resultIndex ? { ...item, analysis: payload } : item) }
-          : run);
-        localStorage.setItem("api-qa-intelligence-run-history", JSON.stringify(updated));
-        return updated;
-      });
+      const payload = await postJson(
+        "/api/v1/runs/analyze-failure",
+        { ...result, result: "FAIL", scenario_title: result.title || `Check ${resultIndex + 1}` },
+        "AI analysis could not be completed.",
+      );
+      setRunHistory((current) => current.map((run) => run.id === runId
+        ? { ...run, results: run.results.map((item, index) => index === resultIndex ? { ...item, analysis: payload } : item) }
+        : run));
     } catch (caught) {
       setAnalysisState((current) => ({ ...current, [key]: { loading: false, error: caught.message || "AI analysis could not be completed." } }));
       return;
@@ -446,22 +417,12 @@ function App() {
   }
 
   function openSavedApi(api) {
-    setOverview(api.overview);
     const resolvedTargetUrl = resolveApiTarget(api);
     setTargetUrl(resolvedTargetUrl);
-    if (resolvedTargetUrl !== (api.targetUrl || "")) {
-      setSavedApis((current) => {
-        const updated = current.map((item) => item.id === api.id ? { ...item, targetUrl: resolvedTargetUrl } : item);
-        localStorage.setItem("api-qa-intelligence-saved-apis", JSON.stringify(updated));
-        return updated;
-      });
-    }
+    if (resolvedTargetUrl !== (api.targetUrl || "")) updateSavedApi(api.id, { targetUrl: resolvedTargetUrl });
     setActiveApiId(api.id);
-    localStorage.setItem("api-qa-intelligence-active-api", api.id);
     setSelectedOperation(firstRunnableOperationIndex(api.overview));
-    setSelectedScenarios([]);
-    setShowExecutionConfirmation(false);
-    setResults({});
+    resetRunState();
     setPage("overview");
   }
 
@@ -476,16 +437,6 @@ function App() {
 
   function openSpecsPage() {
     setPage("specs");
-  }
-
-  function resetWorkspace() {
-    setPage(savedApis.length ? "specs" : "import");
-    setOverview(null);
-    setSelectedScenarios([]);
-    setShowExecutionConfirmation(false);
-    setResults({});
-    setError("");
-    setNotice("");
   }
 
   return (
@@ -545,17 +496,20 @@ function App() {
                   <div className="history-card-footer"><span>{run.results.length} checks · <i className="history-pass">{passed} passed</i> · <i className="history-fail">{failed} failed</i></span><span className="history-target">Target: {run.target}</span></div>
                   <span className="history-view-label">{expanded ? "Hide details" : "View check details"}</span>
                 </button>
-                {expanded && <div className="history-details">{run.results.map((result, index) => <section className="history-result" key={`${result.title || "check"}-${index}`}>
+                {expanded && <div className="history-details">{run.results.map((result, index) => {
+                  const analysis = analysisState[`${run.id}:${index}`] ?? {};
+                  return <section className="history-result" key={`${result.title || "check"}-${index}`}>
                   <div className="history-result-heading"><span className={`history-status status-${String(result.result || "error").toLowerCase()}`}>{result.result || "ERROR"}</span><strong>{result.title || `Check ${index + 1}`}</strong>{result.response_status && <span>HTTP {result.response_status}</span>}{result.duration_ms != null && <span>{result.duration_ms} ms</span>}</div>
                   {result.error && <p className="history-error">{result.error}</p>}
                   {(result.request_url || result.request_headers || result.request_body) && <details className="history-response"><summary>Request evidence</summary><pre>{JSON.stringify({ url: result.request_url, headers: result.request_headers, body: result.request_body || undefined }, null, 2)}</pre></details>}
                   {(result.response_status || result.response_headers || result.response_body) && <details className="history-response"><summary>Response evidence</summary><pre>{JSON.stringify({ status: result.response_status, headers: result.response_headers, body: result.response_body || undefined, truncated: result.response_truncated || undefined }, null, 2)}</pre></details>}
-                  {result.result === "FAIL" && !result.analysis && <div className="failure-analysis-action"><button className="secondary-button" type="button" disabled={analysisState[`${run.id}:${index}`]?.loading} onClick={() => analyzeFailure(run.id, index, result)}><Icon name="spark" size={14} />{analysisState[`${run.id}:${index}`]?.loading ? "Analyzing with AI…" : "Analyze with AI"}</button><span>Credential-like values are redacted. Clicking sends this check’s evidence to your configured Ollama model.</span></div>}
-                  {analysisState[`${run.id}:${index}`]?.error && <p className="history-error">{analysisState[`${run.id}:${index}`].error}</p>}
+                  {result.result === "FAIL" && !result.analysis && <div className="failure-analysis-action"><button className="secondary-button" type="button" disabled={analysis.loading} onClick={() => analyzeFailure(run.id, index, result)}><Icon name="spark" size={14} />{analysis.loading ? "Analyzing with AI…" : "Analyze with AI"}</button><span>Credential-like values are redacted. Clicking sends this check’s evidence to your configured Ollama model.</span></div>}
+                  {analysis.error && <p className="history-error">{analysis.error}</p>}
                   {result.analysis && <div className="failure-analysis"><div className="failure-analysis-title"><Icon name="spark" size={15} /><strong>AI failure analysis</strong><span>Advisory</span></div><p>{result.analysis.summary}</p>{result.analysis.likely_causes?.length > 0 && <div><strong>Possible causes</strong><ul>{result.analysis.likely_causes.map((cause, causeIndex) => <li key={causeIndex}><b>{cause.cause}</b><span>{cause.evidence} · Confidence: {cause.confidence}</span></li>)}</ul></div>}{result.analysis.next_steps?.length > 0 && <div><strong>Suggested next steps</strong><ul>{result.analysis.next_steps.map((step, stepIndex) => <li key={stepIndex}>{step}</li>)}</ul></div>}<small>{result.analysis.limitations}</small></div>}
-                </section>)}</div>}
+                  </section>;
+                })}</div>}
               </article>;
-            })}</div> : <div className="history-empty"><Icon name="clock" size={25} /><strong>No runs yet</strong><span>Run selected checks from an API overview and they will appear here.</span><button className="secondary-button" onClick={resetWorkspace}>Go to API specs</button></div>}
+            })}</div> : <div className="history-empty"><Icon name="clock" size={25} /><strong>No runs yet</strong><span>Run selected checks from an API overview and they will appear here.</span><button className="secondary-button" onClick={openSpecsPage}>Go to API specs</button></div>}
           </section>
         ) : page === "specs" ? (
           <section className="specs-page">
@@ -601,7 +555,7 @@ function App() {
             <div className="stats-row">
               <div className="stat-card"><span className="stat-label">Endpoints</span><strong>{overview.operation_count}</strong><span className="stat-note">available to review</span></div>
               <div className="stat-card"><span className="stat-label">Methods</span><strong className="method-stat">{[...methods].join(" · ") || "—"}</strong><span className="stat-note">found in this API</span></div>
-              <div className="stat-card"><span className="stat-label">Runnable checks</span><strong>{overview.operations.reduce((sum, item) => sum + item.scenarios.filter((scenario) => scenario.request_example).length, 0)}</strong><span className="stat-note">ready to execute</span></div>
+              <div className="stat-card"><span className="stat-label">Runnable checks</span><strong>{overview.operations.reduce((sum, item) => sum + runnableCheckCount(item), 0)}</strong><span className="stat-note">ready to execute</span></div>
             </div>
             <div className="workspace-grid">
               <section className="panel endpoints-panel">
@@ -611,7 +565,7 @@ function App() {
                     <button key={`${item.method}-${item.path}-${index}`} className={`endpoint-row ${selectedOperation === index ? "selected" : ""}`} onClick={() => selectOperation(index)}>
                       <span className={`method-tag method-${item.method.toLowerCase()}`}>{item.method}</span>
                       <span className="endpoint-copy"><strong>{item.path}</strong><small>{item.summary || item.operation_id || item.tags?.[0] || "API endpoint"}</small></span>
-                      <span className="scenario-count">{item.scenarios.filter((scenario) => scenario.request_example).length}<span>checks</span></span>
+                      <span className="scenario-count">{runnableCheckCount(item)}<span>checks</span></span>
                     </button>
                   ))}
                 </div>
@@ -630,7 +584,7 @@ function App() {
                     <span>{field.name}<small>{field.is_file ? (field.multiple ? "file · multiple" : "file") : `${isFormBody ? "form field" : "request body"}${field.required ? " · required" : " · optional"}`}</small></span>
                     {field.is_file ? <><input type="file" multiple={field.multiple} onChange={(event) => updateRequestFiles(field.name, Array.from(event.target.files ?? []))} /><small className="request-input-help">{requestFiles[operationKey]?.[field.name]?.map((item) => item.name).join(", ") || (field.required ? "Choose a file to run this check." : "Optional file upload.")}</small></> : field.field_type === "object" || field.field_type === "array" ? <textarea rows="3" value={getBodyFieldValue(field)} onChange={(event) => updateRequestInput(`body:${field.name}`, event.target.value)} placeholder={`Enter ${field.name}${field.required ? " (required)" : ""}`} /> : <input type="text" value={getBodyFieldValue(field)} onChange={(event) => updateRequestInput(`body:${field.name}`, event.target.value)} placeholder={field.example == null ? `Enter ${field.name}${field.required ? " (required)" : ""}` : String(field.example)} />}
                     {field.description && <small className="request-input-help">{field.description}</small>}
-                    {!field.is_file && ["object", "array"].includes(field.field_type) && getBodyFieldValue(field).trim() && (() => { try { JSON.parse(getBodyFieldValue(field)); return null; } catch { return <small className="request-input-help request-input-error">Enter valid JSON for this field.</small>; } })()}
+                    {hasInvalidJsonValue(field) && <small className="request-input-help request-input-error">Enter valid JSON for this field.</small>}
                   </label>)}
                   {needsRawJsonBody && <label className="request-input"><span>Request body JSON<small>required</small></span><textarea rows="6" value={rawJsonBodyValue} onChange={(event) => updateRequestInput("body:__raw", event.target.value)} placeholder="Enter a complete JSON request body" />{rawJsonBodyValue.trim() && !rawJsonBodyIsValid && <small className="request-input-help request-input-error">Enter valid JSON before running checks.</small>}</label>}
                 </div>}

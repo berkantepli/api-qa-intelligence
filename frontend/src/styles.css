@@ -46,14 +46,11 @@ button:focus-visible, input:focus-visible { outline: 3px solid rgb(101 88 220 / 
 .nav-link + .nav-link { margin-top: 3px; }
 .nav-link.active { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
 .nav-link svg { flex: 0 0 auto; }
-.nav-soon { margin-left: auto; color: #a0a2ae; font-size: 10px; }
 
 .main-area { min-height: 100vh; margin-left: 232px; }
 .topbar { position: sticky; top: 0; z-index: 1; display: flex; height: 62px; align-items: center; justify-content: space-between; padding: 0 34px; border-bottom: 1px solid var(--line); background: rgb(255 255 255 / 92%); backdrop-filter: blur(10px); }
 .breadcrumbs, .topbar-right { display: flex; align-items: center; gap: 10px; }
 .breadcrumbs { color: #9598a6; font-size: 12px; }
-.breadcrumbs button { max-width: min(34vw, 240px); overflow: hidden; padding: 0; border: 0; background: transparent; color: inherit; font-size: inherit; text-overflow: ellipsis; white-space: nowrap; }
-.breadcrumbs button:hover { color: var(--accent); }
 .breadcrumbs strong { color: #4b4e5b; font-weight: 600; }
 .api-context { display: flex; min-width: 0; align-items: center; gap: 22px; }
 .api-context-picker { display: flex; min-width: 0; flex-direction: column; gap: 2px; }
@@ -71,7 +68,6 @@ button:focus-visible, input:focus-visible { outline: 3px solid rgb(101 88 220 / 
 .connection-checking .connection-dot { background: #d59b35; animation: connection-pulse 1s ease-in-out infinite alternate; }
 @keyframes connection-pulse { to { opacity: .35; } }
 .topbar-right { gap: 15px; }
-.avatar { display: grid; width: 29px; height: 29px; place-items: center; border-radius: 50%; background: #eeedfa; color: #6258b9; font-size: 10px; font-weight: 700; }
 .theme-switch { position: relative; display: flex; width: 44px; height: 24px; flex: 0 0 auto; align-items: center; padding: 2px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface-soft); cursor: pointer; transition: background-color .2s ease, border-color .2s ease; }
 .theme-switch:hover { border-color: var(--muted); }
 .theme-switch-track { position: absolute; inset: 2px; display: flex; align-items: center; justify-content: space-between; padding: 0 4px; color: var(--muted); pointer-events: none; }
@@ -99,7 +95,6 @@ h1, h2, h3, p { margin-top: 0; }
 .input-with-icon input { width: 100%; border: 0; outline: 0; color: #393b47; font-size: 12px; }
 .input-with-icon input:focus-visible { outline: 0; }
 .input-with-icon input::placeholder { color: #a5a7b1; }
-.field-hint { display: block; margin-top: 7px; color: #9698a5; font-size: 11px; }
 .upload-box { display: flex; min-height: 164px; flex-direction: column; align-items: center; justify-content: center; margin-top: 19px; border: 1px dashed #cdd0dc; border-radius: 9px; background: #fdfdff; color: #4b4e5b; cursor: pointer; }
 .upload-box:hover { border-color: #9991e7; background: #fbfaff; }
 .upload-icon { display: grid; width: 36px; height: 36px; place-items: center; margin-bottom: 9px; border-radius: 10px; background: var(--accent-soft); color: var(--accent); }
@@ -260,15 +255,13 @@ h1, h2, h3, p { margin-top: 0; }
 .scenario-select input:focus-visible + .custom-check { outline: 3px solid rgb(101 88 220 / 24%); outline-offset: 2px; }
 .scenario-select.disabled { cursor: not-allowed; opacity: .35; }
 .scenario-title-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
-.category-pill, .review-tag { display: inline-flex; min-height: 18px; align-items: center; padding: 0 6px; border-radius: 4px; background: #f1f2f7; color: #707382; font-size: 8px; font-weight: 600; }
+.category-pill { display: inline-flex; min-height: 18px; align-items: center; padding: 0 6px; border-radius: 4px; background: #f1f2f7; color: #707382; font-size: 8px; font-weight: 600; }
 .category-happy_path { background: #eaf7f1; color: #24835d; }
 .category-negative, .category-invalid_value { background: #fff2eb; color: #b36d36; }
 .category-boundary { background: #eef2ff; color: #5c70b4; }
 .category-security_minded { background: #fff0f1; color: #bb4b56; }
-.review-tag { background: #f5f4ff; color: #756bd0; font-weight: 500; }
 .scenario-content h3 { margin: 7px 0 3px; color: #3b3d48; font-size: 11px; font-weight: 600; }
 .scenario-content > p { margin: 0; color: #858896; font-size: 10px; line-height: 1.55; }
-.not-ready { display: inline-block; margin-top: 6px; color: #a1a2ac; font-size: 9px; }
 .result-box { margin-top: 10px; padding: 9px; border: 1px solid #d8ede2; border-radius: 6px; background: #f7fcf9; }
 .result-fail, .result-error { border-color: #f0d7da; background: #fff8f8; }
 .result-heading { display: flex; align-items: center; gap: 9px; color: #278059; font-size: 9px; }
@@ -346,7 +339,6 @@ h1, h2, h3, p { margin-top: 0; }
 :root[data-theme="dark"] .endpoint-copy small,
 :root[data-theme="dark"] .scenario-count span,
 :root[data-theme="dark"] .run-footer > span,
-:root[data-theme="dark"] .field-hint { color: #8d96a5; }
 :root[data-theme="dark"] .panel-header,
 :root[data-theme="dark"] .scenario-header,
 :root[data-theme="dark"] .run-footer,
@@ -387,8 +379,6 @@ h1, h2, h3, p { margin-top: 0; }
 :root[data-theme="dark"] .category-invalid_value { background: #35271e; color: #e9b184; }
 :root[data-theme="dark"] .category-boundary { background: #202b42; color: #9cb4f2; }
 :root[data-theme="dark"] .category-security_minded { background: #351f24; color: #ef9ba3; }
-:root[data-theme="dark"] .review-tag { background: #292541; color: #b8afff; }
-:root[data-theme="dark"] .not-ready { color: #929baa; }
 :root[data-theme="dark"] .result-box { border-color: #28543e; background: #14231b; }
 :root[data-theme="dark"] .result-heading { color: #71d29f; }
 :root[data-theme="dark"] .result-fail,
@@ -409,7 +399,6 @@ h1, h2, h3, p { margin-top: 0; }
 :root[data-theme="dark"] .error-alert { border-color: #593139; background: #281a1e; color: #f08e97; }
 :root[data-theme="dark"] .workflow-step > span { color: #bac2ce; }
 :root[data-theme="dark"] .workflow-line { background: #323944; }
-:root[data-theme="dark"] .avatar { background: #262b38; color: #aab9f8; }
 
 @media (max-width: 1020px) {
   .workspace-grid { grid-template-columns: minmax(250px, .8fr) minmax(360px, 1.2fr); }
