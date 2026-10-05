@@ -516,7 +516,6 @@ function App() {
           </svg>
           <span>API QA <b>Intelligence</b></span>
         </button>
-        <div className="nav-section-label">WORKSPACE</div>
         <button className={`nav-link ${page === "specs" ? "active" : ""}`} onClick={openSpecsPage}>
           <Icon name="file" /><span>API specs</span>
         </button>
