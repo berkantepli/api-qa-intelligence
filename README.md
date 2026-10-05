@@ -10,7 +10,7 @@ This project is **not a Postman replacement**. Its focus is helping teams decide
 OpenAPI / Swagger → API understanding → QA scenarios → selected test execution → failure analysis
 ```
 
-## Planned MVP
+## MVP scope
 
 - Import an OpenAPI JSON or YAML file.
 - Inspect operations, parameters, request bodies, and response schemas.
@@ -19,40 +19,27 @@ OpenAPI / Swagger → API understanding → QA scenarios → selected test execu
 - Show each result as **PASS**, **FAIL**, or **ERROR**, with request/response evidence in browser-local Run history.
 - Explain failed checks with evidence from the test result; AI analysis is advisory and does not change the result.
 
-## Planned technology
+## Technology
 
 - **Backend:** Python, FastAPI, Pydantic
 - **HTTP execution:** HTTPX
-- **Test and validation foundation:** Pytest and JSON Schema
 - **AI:** local Ollama adapter with a configurable model; additional providers can be added later
-- **Frontend:** React / Next.js, considered after the backend workflow is validated
+- **Frontend:** React with Vite, served by the backend from `frontend/dist`
 
 The backend imports an OpenAPI 3.x JSON/YAML file or URL and returns a readable operation overview with deterministic baseline QA scenario suggestions and JSON request examples when it can safely derive them. It can execute one check or a selected batch, compare response statuses with expected codes, and record redacted request/response evidence in Run history. On request, Ollama can suggest extra review-only ideas for a selected endpoint or provide advisory analysis of a failed check; deterministic results remain authoritative.
 
-## Initial repository layout
+## Repository layout
 
 ```text
 .
-├── backend/
-│   └── app/
-│       ├── api/
-│       └── domain/
-├── docs/
-│   └── MVP_ROADMAP.md
-├── pyproject.toml
-└── README.md
-```
-
-As implementation begins, the intended application structure is:
-
-```text
-backend/
-├── app/
-│   ├── api/          # FastAPI routes
-│   ├── domain/       # API models and QA concepts
-│   ├── services/     # OpenAPI analysis, scenario generation, execution
-│   └── integrations/ # HTTP and AI provider adapters
-└── tests/
+├── backend/app/
+│   ├── api/           # FastAPI routes: spec import, check execution, AI features
+│   ├── domain/        # OpenAPI parsing, scenario generation, evidence redaction, target checks
+│   ├── integrations/  # Ollama adapter
+│   └── main.py
+├── frontend/src/      # React interface
+├── docs/MVP_ROADMAP.md
+└── pyproject.toml
 ```
 
 ## Getting started

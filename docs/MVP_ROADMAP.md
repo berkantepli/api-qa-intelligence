@@ -45,7 +45,7 @@ Help a QA engineer go from an API contract to reviewed, executable test scenario
 
 ### 5. Usable interface and expansion
 
-- Add a focused UI after the backend workflow is stable.
+- [x] Add a focused UI for importing specs, running selected checks, and reviewing run history.
 - Consider coverage/risk summaries, duplicate-scenario detection, saved projects, and CI output.
 - Revisit authentication and hosted execution only if deployment becomes an explicit goal.
 
