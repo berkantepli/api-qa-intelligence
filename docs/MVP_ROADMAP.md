@@ -24,7 +24,7 @@ Help a QA engineer go from an API contract to reviewed, executable test scenario
 - [x] Generate initial happy-path, required-field, invalid-value, boundary, and authentication-minded suggestions from imported contract details.
 - [x] Include a rationale and mark suggestions that need review.
 - [x] Include executable request examples when the path and JSON contract provide enough detail.
-- Keep scenarios editable in the product interface.
+- [x] Let users turn AI scenario ideas into edited, runnable checks only after confirming the expected status and request details.
 
 ### 3. Controlled execution
 
