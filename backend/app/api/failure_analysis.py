@@ -6,7 +6,6 @@ from pydantic import BaseModel, Field
 from app.domain.evidence import redact_headers, redact_text, sanitize_url
 from app.integrations.ollama import AIProviderUnavailable, FailureAnalysis, analyze_failure
 
-
 router = APIRouter(prefix="/api/v1/runs", tags=["QA analysis"])
 
 

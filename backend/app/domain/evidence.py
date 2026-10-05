@@ -3,7 +3,6 @@ import re
 from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
-
 SENSITIVE_KEY = re.compile(
     r"authorization|authentication|(?:^|[^a-z])auth(?:$|[^a-z])|cookie|token|secret|"
     r"password|credential|api[-_]?key",

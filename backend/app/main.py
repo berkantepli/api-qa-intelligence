@@ -3,11 +3,10 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
-from app.api.specs import router as specs_router
-from app.api.runs import router as runs_router
-from app.api.failure_analysis import router as failure_analysis_router
 from app.api.ai_scenarios import router as ai_scenarios_router
-
+from app.api.failure_analysis import router as failure_analysis_router
+from app.api.runs import router as runs_router
+from app.api.specs import router as specs_router
 
 app = FastAPI(
     title="API QA Intelligence",

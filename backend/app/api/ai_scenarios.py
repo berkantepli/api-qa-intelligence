@@ -4,7 +4,6 @@ from pydantic import BaseModel
 from app.domain.openapi import ApiOperation, QaScenario
 from app.integrations.ollama import AIProviderUnavailable, propose_scenarios
 
-
 router = APIRouter(prefix="/api/v1/specs", tags=["QA planning"])
 
 

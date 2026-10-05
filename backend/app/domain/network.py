@@ -1,10 +1,13 @@
 import ipaddress
 import socket
 
+import httpx
 from fastapi import HTTPException, status
 
 
-def ensure_safe_target_host(host: str, port: int) -> None:
+def ensure_safe_target_host(url: httpx.URL) -> None:
+    host = url.host
+    port = url.port or (443 if url.scheme == "https" else 80)
     if host.lower() == "localhost":
         return
 

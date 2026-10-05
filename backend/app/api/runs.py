@@ -9,9 +9,8 @@ import httpx
 from fastapi import APIRouter, HTTPException, status
 from pydantic import AnyHttpUrl, BaseModel, Field, field_validator
 
-from app.domain.network import ensure_safe_target_host
 from app.domain.evidence import redact_headers, redact_text, redact_value, sanitize_url
-
+from app.domain.network import ensure_safe_target_host
 
 router = APIRouter(prefix="/api/v1/runs", tags=["Scenario execution"])
 MAX_RESPONSE_SIZE_BYTES = 250_000
@@ -69,6 +68,10 @@ class ScenarioExecutionRequest(BaseModel):
         if blocked:
             raise ValueError(f"These headers cannot be overridden: {', '.join(blocked)}.")
         return values
+
+    @property
+    def sends_form(self) -> bool:
+        return self.form_body or bool(self.form_fields) or any(self.file_uploads.values())
 
 
 class ScenarioExecutionResult(BaseModel):
@@ -128,7 +131,7 @@ async def _execute_scenario(payload: ScenarioExecutionRequest) -> ScenarioExecut
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Base URL must contain only the scheme and host, for example http://127.0.0.1:8000.",
         )
-    ensure_safe_target_host(base.host, base.port or (443 if base.scheme == "https" else 80))
+    ensure_safe_target_host(base)
 
     target = base.copy_with(path=payload.path, query=None)
     query = urlencode(payload.query_params)
@@ -146,26 +149,21 @@ async def _execute_scenario(payload: ScenarioExecutionRequest) -> ScenarioExecut
                 raise HTTPException(status_code=413, detail="Each uploaded file must be 10 MB or smaller.")
             files.append((field_name, (upload.filename, content, upload.content_type)))
 
+    request_options: dict[str, Any] = {"params": payload.query_params, "headers": payload.headers}
+    if payload.sends_form:
+        # Let HTTPX generate the multipart boundary instead of reusing a caller-supplied Content-Type.
+        request_options["headers"] = {
+            name: value for name, value in payload.headers.items() if name.lower() != "content-type"
+        }
+        request_options["data"] = payload.form_fields or None
+        request_options["files"] = files or None
+    else:
+        request_options["json"] = payload.json_body
+
     started = time.perf_counter()
     try:
-        headers = dict(payload.headers)
-        request_body: dict[str, Any] = {
-            "params": payload.query_params,
-            "headers": headers,
-        }
-        if payload.form_body or payload.form_fields or files:
-            headers = {name: value for name, value in headers.items() if name.lower() != "content-type"}
-            request_body["headers"] = headers
-            request_body["data"] = payload.form_fields or None
-            request_body["files"] = files or None
-        else:
-            request_body["json"] = payload.json_body
         async with httpx.AsyncClient(timeout=httpx.Timeout(15, connect=5), follow_redirects=False) as client:
-            async with client.stream(
-                payload.method,
-                target,
-                **request_body,
-            ) as response:
+            async with client.stream(payload.method, target, **request_options) as response:
                 response_content = bytearray()
                 truncated = False
                 async for chunk in response.aiter_bytes():
@@ -191,19 +189,9 @@ async def _execute_scenario(payload: ScenarioExecutionRequest) -> ScenarioExecut
                     response_headers=redact_headers(dict(response.headers)),
                 )
     except httpx.TimeoutException:
-        return _execution_error(payload, started, "The API did not respond before the 15 second timeout.", request_url, request_headers, request_body_evidence)
+        error = "The API did not respond before the 15 second timeout."
     except httpx.RequestError:
-        return _execution_error(payload, started, "The request could not reach the target API.", request_url, request_headers, request_body_evidence)
-
-
-def _execution_error(
-    payload: ScenarioExecutionRequest,
-    started: float,
-    message: str,
-    request_url: str,
-    request_headers: dict[str, str],
-    request_body: str,
-) -> ScenarioExecutionResult:
+        error = "The request could not reach the target API."
     return ScenarioExecutionResult(
         result="ERROR",
         method=payload.method,
@@ -212,14 +200,14 @@ def _execution_error(
         duration_ms=round((time.perf_counter() - started) * 1000),
         request_url=request_url,
         request_headers=request_headers,
-        request_body=request_body,
-        error=message,
+        request_body=request_body_evidence,
+        error=error,
     )
 
 
 def _request_headers(payload: ScenarioExecutionRequest) -> dict[str, str]:
     headers = dict(payload.headers)
-    if payload.form_body or payload.form_fields or payload.file_uploads:
+    if payload.sends_form:
         headers.setdefault("Content-Type", "multipart/form-data (boundary generated by client)")
     elif payload.json_body is not None:
         headers.setdefault("Content-Type", "application/json")
@@ -228,7 +216,7 @@ def _request_headers(payload: ScenarioExecutionRequest) -> dict[str, str]:
 
 def _request_evidence(payload: ScenarioExecutionRequest) -> str:
     evidence: dict[str, Any] = {}
-    if payload.form_body or payload.form_fields or payload.file_uploads:
+    if payload.sends_form:
         evidence["form_fields"] = payload.form_fields
         evidence["files"] = {
             name: [{"filename": item.filename, "content_type": item.content_type} for item in uploads]

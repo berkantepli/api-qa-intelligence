@@ -3,8 +3,9 @@ from typing import Any
 
 from pydantic import AnyHttpUrl, BaseModel, Field
 
-
 HTTP_METHODS = {"get", "post", "put", "patch", "delete", "head", "options", "trace"}
+FORM_MEDIA_TYPES = ("multipart/form-data", "application/x-www-form-urlencoded")
+BOUNDARY_KEYS = ("minimum", "maximum", "minLength", "maxLength", "minItems", "maxItems")
 
 
 class ScenarioRequestExample(BaseModel):
@@ -118,6 +119,9 @@ def summarize_openapi(document: Any) -> ApiOverview:
                 continue
 
             tags = details.get("tags", [])
+            request_body = details.get("requestBody")
+            body_content_type = _request_body_content_type(request_body, document)
+            body_fields = _request_body_fields(request_body, document)
             operations.append(
                 ApiOperation(
                     method=method.upper(),
@@ -126,10 +130,12 @@ def summarize_openapi(document: Any) -> ApiOverview:
                     summary=_optional_string(details.get("summary")),
                     tags=[tag for tag in tags if isinstance(tag, str)] if isinstance(tags, list) else [],
                     parameters=_operation_parameters(path_item, details, global_security, document),
-                    request_body_content_type=_request_body_content_type(details.get("requestBody"), document),
-                    request_body_required=_request_body_required(details.get("requestBody"), document),
-                    request_body_fields=_request_body_fields(details.get("requestBody"), document),
-                    scenarios=_generate_scenarios(method.upper(), path, details, global_security, document),
+                    request_body_content_type=body_content_type,
+                    request_body_required=_request_body_required(request_body, document),
+                    request_body_fields=body_fields,
+                    scenarios=_generate_scenarios(
+                        method.upper(), path, details, global_security, document, body_content_type, body_fields
+                    ),
                 )
             )
 
@@ -153,11 +159,11 @@ def _generate_scenarios(
     operation: Mapping[str, Any],
     global_security: Any,
     document: Mapping[str, Any],
+    body_content_type: str | None,
+    body_fields: list[ApiBodyField],
 ) -> list[QaScenario]:
     body_schema = _request_body_schema(operation.get("requestBody"), document)
-    body_content_type = _request_body_content_type(operation.get("requestBody"), document)
-    body_fields = _request_body_fields(operation.get("requestBody"), document)
-    is_form_body = bool(body_content_type and body_content_type.lower().startswith(("multipart/form-data", "application/x-www-form-urlencoded")))
+    is_form_body = bool(body_content_type and body_content_type.lower().startswith(FORM_MEDIA_TYPES))
     success_codes = _status_codes(operation.get("responses"), 2) or [200]
     error_codes = _status_codes(operation.get("responses"), 4) or [400, 422]
     request_is_supported = operation.get("requestBody") is None or body_schema is not None or is_form_body
@@ -167,6 +173,13 @@ def _generate_scenarios(
         for field in body_fields
         if not field.is_file and field.example is not None
     }
+
+    def json_body_example(json_body: Any, expected_status_codes: list[int]) -> ScenarioRequestExample | None:
+        if not request_is_supported or not isinstance(valid_body, Mapping):
+            return None
+        return ScenarioRequestExample(
+            method=method, path=path, json_body=json_body, expected_status_codes=expected_status_codes
+        )
 
     scenarios = [
         QaScenario(
@@ -219,7 +232,6 @@ def _generate_scenarios(
         required_fields = body_schema.get("required", [])
         if isinstance(required_fields, list) and required_fields:
             missing_field = required_fields[0]
-            names = str(missing_field)
             invalid_body = dict(valid_body) if isinstance(valid_body, Mapping) else None
             if invalid_body is not None:
                 invalid_body.pop(missing_field, None)
@@ -227,7 +239,7 @@ def _generate_scenarios(
                 QaScenario(
                     category="negative",
                     title="Omit a required request field",
-                    rationale=f"Send the request body without required field(s): {names}; check that the API reports a validation error.",
+                    rationale=f"Send the request body without required field(s): {missing_field}; check that the API reports a validation error.",
                     review_required=True,
                     request_example=(
                         ScenarioRequestExample(
@@ -248,27 +260,16 @@ def _generate_scenarios(
                 if not isinstance(name, str) or not isinstance(schema, Mapping):
                     continue
                 schema = _resolve_schema(schema, document) or schema
-                if any(key in schema for key in ("minimum", "maximum", "minLength", "maxLength", "minItems", "maxItems")):
-                    constraints = ", ".join(
-                        f"{key}={schema[key]}"
-                        for key in ("minimum", "maximum", "minLength", "maxLength", "minItems", "maxItems")
-                        if key in schema
-                    )
+                constraints = ", ".join(f"{key}={schema[key]}" for key in BOUNDARY_KEYS if key in schema)
+                if constraints:
                     scenarios.append(
                         QaScenario(
                             category="boundary",
                             title=f"Check boundary values for {name}",
                             rationale=f"Try values around the documented constraint(s) ({constraints}) and verify boundary behavior.",
                             review_required=True,
-                            request_example=(
-                                ScenarioRequestExample(
-                                    method=method,
-                                    path=path,
-                                    json_body=_body_with_value(valid_body, name, _boundary_value(schema)),
-                                    expected_status_codes=success_codes,
-                                )
-                                if request_is_supported and isinstance(valid_body, Mapping)
-                                else None
+                            request_example=json_body_example(
+                                _body_with_value(valid_body, name, _boundary_value(schema)), success_codes
                             ),
                         )
                     )
@@ -280,15 +281,8 @@ def _generate_scenarios(
                             title=f"Send invalid {name}",
                             rationale=f"Send a value that violates the documented {format_hint} constraint and check that it is rejected.",
                             review_required=True,
-                            request_example=(
-                                ScenarioRequestExample(
-                                    method=method,
-                                    path=path,
-                                    json_body=_body_with_value(valid_body, name, _invalid_value(schema)),
-                                    expected_status_codes=error_codes,
-                                )
-                                if request_is_supported and isinstance(valid_body, Mapping)
-                                else None
+                            request_example=json_body_example(
+                                _body_with_value(valid_body, name, _invalid_value(schema)), error_codes
                             ),
                         )
                     )
@@ -299,15 +293,8 @@ def _generate_scenarios(
                             title=f"Send an undocumented value for {name}",
                             rationale="Send a value outside the documented enum and check that the API rejects it.",
                             review_required=True,
-                            request_example=(
-                                ScenarioRequestExample(
-                                    method=method,
-                                    path=path,
-                                    json_body=_body_with_value(valid_body, name, "__invalid_enum_value__"),
-                                    expected_status_codes=error_codes,
-                                )
-                                if request_is_supported and isinstance(valid_body, Mapping)
-                                else None
+                            request_example=json_body_example(
+                                _body_with_value(valid_body, name, "__invalid_enum_value__"), error_codes
                             ),
                         )
                     )
@@ -327,10 +314,8 @@ def _generate_scenarios(
 
 
 def _request_body_schema(request_body: Any, document: Mapping[str, Any]) -> Mapping[str, Any] | None:
-    if not isinstance(request_body, Mapping):
-        return None
-    request_body = _resolve_schema(request_body, document) or request_body
-    content = request_body.get("content")
+    resolved = _resolved_request_body(request_body, document)
+    content = resolved.get("content") if isinstance(resolved, Mapping) else None
     if not isinstance(content, Mapping):
         return None
     for media_type, media in content.items():
@@ -352,7 +337,7 @@ def _request_body_content_type(request_body: Any, document: Mapping[str, Any]) -
     if not isinstance(content, Mapping):
         return None
     return next((str(media_type) for media_type in content if "json" in str(media_type).lower()), None) or next(
-        (str(media_type) for media_type in content if any(kind in str(media_type).lower() for kind in ("multipart/form-data", "application/x-www-form-urlencoded"))), None
+        (str(media_type) for media_type in content if any(kind in str(media_type).lower() for kind in FORM_MEDIA_TYPES)), None
     )
 
 
@@ -486,13 +471,6 @@ def _resolve_schema(
     if isinstance(items, Mapping):
         result["items"] = _resolve_schema(items, document, seen) or items
     return result
-
-
-def _has_required_parameters(parameters: Any) -> bool:
-    return isinstance(parameters, list) and any(
-        isinstance(parameter, Mapping) and parameter.get("required") is True
-        for parameter in parameters
-    )
 
 
 def _status_codes(responses: Any, first_digit: int) -> list[int]:

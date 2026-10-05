@@ -1,11 +1,11 @@
 import json
+
 import httpx
 import yaml
 from fastapi import APIRouter, File, HTTPException, UploadFile, status
 
-from app.domain.openapi import ApiOverview, OpenApiDocumentError, SpecUrlRequest, summarize_openapi
 from app.domain.network import ensure_safe_target_host
-
+from app.domain.openapi import ApiOverview, OpenApiDocumentError, SpecUrlRequest, summarize_openapi
 
 router = APIRouter(prefix="/api/v1/specs", tags=["API specifications"])
 MAX_SPEC_SIZE_BYTES = 2_000_000
@@ -32,7 +32,7 @@ async def import_specification_from_url(payload: SpecUrlRequest) -> ApiOverview:
             detail="OpenAPI URLs with embedded credentials are not supported.",
         )
 
-    ensure_safe_target_host(url.host, url.port or (443 if url.scheme == "https" else 80))
+    ensure_safe_target_host(url)
 
     try:
         async with httpx.AsyncClient(timeout=httpx.Timeout(10, connect=4), follow_redirects=False) as client:
