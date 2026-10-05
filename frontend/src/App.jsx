@@ -1,4 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
+import { categoryLabels } from "./categories.js";
+import Icon from "./Icon.jsx";
+import RunDetail from "./RunDetail.jsx";
+import { summarizeResults } from "./runDetail.js";
 import ScenarioDraftEditor from "./ScenarioDraftEditor.jsx";
 import { buildEditedScenario, createDraft, isEditedScenario, statusCodeSuggestions, validateDraft } from "./scenarioDraft.js";
 
@@ -8,14 +12,6 @@ const STORAGE_KEYS = {
   savedApis: "api-qa-intelligence-saved-apis",
   activeApi: "api-qa-intelligence-active-api",
   runHistory: "api-qa-intelligence-run-history",
-};
-
-const categoryLabels = {
-  happy_path: "Happy path",
-  negative: "Negative",
-  boundary: "Boundary",
-  invalid_value: "Invalid value",
-  security_minded: "Security-minded",
 };
 
 function readStoredJson(key, fallback) {
@@ -90,35 +86,6 @@ function getRawBodyValue(inputs = {}, fallback) {
   return fallback == null ? "" : JSON.stringify(fallback, null, 2);
 }
 
-function Icon({ name, size = 18, className }) {
-  const common = {
-    className,
-    width: size,
-    height: size,
-    viewBox: "0 0 24 24",
-    fill: "none",
-    stroke: "currentColor",
-    strokeWidth: 1.8,
-    strokeLinecap: "round",
-    strokeLinejoin: "round",
-    "aria-hidden": true,
-  };
-  const paths = {
-    file: <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6M8 13h8M8 17h8" /></>,
-    run: <><path d="m8 5 12 7-12 7z" /></>,
-    upload: <><path d="M12 16V4m0 0L7 9m5-5 5 5" /><path d="M20 16.5v2A1.5 1.5 0 0 1 18.5 20h-13A1.5 1.5 0 0 1 4 18.5v-2" /></>,
-    link: <><path d="M10 13a5 5 0 0 0 7.1 0l3-3A5 5 0 0 0 13 2.9l-1.7 1.7" /><path d="M14 11a5 5 0 0 0-7.1 0l-3 3A5 5 0 0 0 11 21.1l1.7-1.7" /></>,
-    check: <path d="m5 12 4 4L19 6" />,
-    shield: <><path d="M12 22s8-4 8-11V5l-8-3-8 3v6c0 7 8 11 8 11Z" /><path d="m9 12 2 2 4-4" /></>,
-    spark: <><path d="m12 3 1.9 5.8L20 11l-6.1 2.2L12 19l-2-5.8L4 11l6-2.2L12 3Z" /><path d="m19 14 1 2.5 2.5 1-2.5 1L19 21l-1-2.5-2.5-1 2.5-1L19 14Z" /></>,
-    chevron: <path d="m9 18 6-6-6-6" />,
-    close: <><path d="m18 6-12 12M6 6l12 12" /></>,
-    arrow: <><path d="M5 12h14" /><path d="m13 6 6 6-6 6" /></>,
-    clock: <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></>,
-  };
-  return <svg {...common}>{paths[name] || paths.file}</svg>;
-}
-
 function App() {
   const [theme, setTheme] = useState(() => localStorage.getItem(STORAGE_KEYS.theme) || "dark");
   const [savedApis, setSavedApis] = useState(() => readStoredJson(STORAGE_KEYS.savedApis, []));
@@ -126,7 +93,8 @@ function App() {
   const overview = savedApis.find((api) => api.id === activeApiId)?.overview ?? null;
   const [page, setPage] = useState(() => savedApis.length ? "specs" : "import");
   const [runHistory, setRunHistory] = useState(() => readStoredJson(STORAGE_KEYS.runHistory, []));
-  const [expandedRunId, setExpandedRunId] = useState(null);
+  const [selectedRunId, setSelectedRunId] = useState(null);
+  const [lastRunId, setLastRunId] = useState(null);
   const [analysisState, setAnalysisState] = useState({});
   const [scenarioIdeaState, setScenarioIdeaState] = useState({});
   const [sourceMode, setSourceMode] = useState("url");
@@ -194,6 +162,7 @@ function App() {
   const draftContext = { operation, parameters: operationParameters, bodyFields, sendsJsonBody, isFormBody };
   const draftProblems = editingDraft ? validateDraft(editingDraft.draft, draftContext) : [];
   const selectedCount = selectedScenarios.length;
+  const selectedRun = runHistory.find((run) => run.id === selectedRunId);
   const methods = useMemo(() => new Set((overview?.operations ?? []).map((item) => item.method)), [overview]);
 
   useEffect(() => {
@@ -225,6 +194,7 @@ function App() {
   }
 
   function resetRunState() {
+    setLastRunId(null);
     setSelectedScenarios([]);
     setShowExecutionConfirmation(false);
     setResults({});
@@ -443,6 +413,7 @@ function App() {
       if (completed.length) {
         const entry = { id: Date.now(), api: overview.title, endpoint: `${operation.method} ${operation.path}`, target: targetUrl, createdAt: new Date().toISOString(), results: completed };
         setRunHistory((current) => [entry, ...current]);
+        setLastRunId(entry.id);
       }
     } catch (caught) {
       setError(caught.message || "The checks could not be completed.");
@@ -507,6 +478,12 @@ function App() {
     setPage("specs");
   }
 
+  function openRunHistory(runId = null) {
+    setSelectedRunId(runId);
+    setPage("history");
+    window.scrollTo(0, 0);
+  }
+
   const draftEditor = editingDraft && <ScenarioDraftEditor
     draft={editingDraft.draft}
     problems={draftProblems}
@@ -543,7 +520,7 @@ function App() {
         <button className={`nav-link ${page === "specs" ? "active" : ""}`} onClick={openSpecsPage}>
           <Icon name="file" /><span>API specs</span>
         </button>
-        <button className={`nav-link ${page === "history" ? "active" : ""}`} onClick={() => setPage("history")}>
+        <button className={`nav-link ${page === "history" ? "active" : ""}`} onClick={() => openRunHistory()}>
           <Icon name="clock" /><span>Run history</span>
         </button>
       </aside>
@@ -563,33 +540,21 @@ function App() {
           <div className="topbar-right"><button className="theme-switch" type="button" onClick={() => setTheme((current) => current === "dark" ? "light" : "dark")} aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`} aria-pressed={theme === "light"} title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}><span className="theme-switch-track"><svg className="theme-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><circle cx="12" cy="12" r="4" /><path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32 1.41 1.41M2 12h2m16 0h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" /></svg><svg className="theme-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3 6.7 6.7 0 0 0 21 12.8Z" /></svg></span><span className="theme-knob" /></button></div>
         </header>
 
-        {page === "history" ? (
+        {page === "history" && selectedRun ? (
+          <RunDetail run={selectedRun} analysisState={analysisState} onAnalyze={analyzeFailure} onBack={() => openRunHistory()} />
+        ) : page === "history" ? (
           <section className="history-page">
             <div className="page-eyebrow">TEST EXECUTIONS</div>
             <h1>Run history</h1>
             <p className="page-lede">Review the checks you have run in this browser.</p>
             {runHistory.length ? <div className="history-list">{runHistory.map((run) => {
-              const passed = run.results.filter((result) => result.result === "PASS").length;
-              const failed = run.results.length - passed;
-              const expanded = expandedRunId === run.id;
+              const summary = summarizeResults(run.results);
               return <article className="history-card" key={run.id}>
-                <button className="history-card-toggle" type="button" aria-expanded={expanded} onClick={() => setExpandedRunId(expanded ? null : run.id)}>
-                  <div className="history-card-heading"><div><strong>{run.api}</strong><span>{run.endpoint}</span></div><time>{new Date(run.createdAt).toLocaleString()}</time><Icon className={`history-chevron ${expanded ? "expanded" : ""}`} name="chevron" size={17} /></div>
-                  <div className="history-card-footer"><span>{run.results.length} checks · <i className="history-pass">{passed} passed</i> · <i className="history-fail">{failed} failed</i></span><span className="history-target">Target: {run.target}</span></div>
-                  <span className="history-view-label">{expanded ? "Hide details" : "View check details"}</span>
+                <button className="history-card-toggle" type="button" onClick={() => openRunHistory(run.id)}>
+                  <div className="history-card-heading"><div><strong>{run.api}</strong><span>{run.endpoint}</span></div><time>{new Date(run.createdAt).toLocaleString()}</time><Icon className="history-chevron" name="chevron" size={17} /></div>
+                  <div className="history-card-footer"><span>{summary.total} {summary.total === 1 ? "check" : "checks"} · <i className="history-pass">{summary.passed} passed</i> · <i className={summary.failed ? "history-fail" : undefined}>{summary.failed} failed</i>{summary.errors > 0 && <> · <i className="history-fail">{summary.errors} {summary.errors === 1 ? "error" : "errors"}</i></>}</span><span className="history-target">Target: {run.target}</span></div>
+                  <span className="history-view-label">View run details</span>
                 </button>
-                {expanded && <div className="history-details">{run.results.map((result, index) => {
-                  const analysis = analysisState[`${run.id}:${index}`] ?? {};
-                  return <section className="history-result" key={`${result.title || "check"}-${index}`}>
-                  <div className="history-result-heading"><span className={`history-status status-${String(result.result || "error").toLowerCase()}`}>{result.result || "ERROR"}</span><strong>{result.title || `Check ${index + 1}`}</strong>{isEditedScenario(result) && <span className="edited-pill">AI idea · edited</span>}{result.response_status && <span>HTTP {result.response_status}</span>}{result.duration_ms != null && <span>{result.duration_ms} ms</span>}</div>
-                  {result.error && <p className="history-error">{result.error}</p>}
-                  {(result.request_url || result.request_headers || result.request_body) && <details className="history-response"><summary>Request evidence</summary><pre>{JSON.stringify({ url: result.request_url, headers: result.request_headers, body: result.request_body || undefined }, null, 2)}</pre></details>}
-                  {(result.response_status || result.response_headers || result.response_body) && <details className="history-response"><summary>Response evidence</summary><pre>{JSON.stringify({ status: result.response_status, headers: result.response_headers, body: result.response_body || undefined, truncated: result.response_truncated || undefined }, null, 2)}</pre></details>}
-                  {result.result === "FAIL" && !result.analysis && <div className="failure-analysis-action"><button className="secondary-button" type="button" disabled={analysis.loading} onClick={() => analyzeFailure(run.id, index, result)}><Icon name="spark" size={14} />{analysis.loading ? "Analyzing with AI…" : "Analyze with AI"}</button><span>Credential-like values are redacted. Clicking sends this check’s evidence to your configured Ollama model.</span></div>}
-                  {analysis.error && <p className="history-error">{analysis.error}</p>}
-                  {result.analysis && <div className="failure-analysis"><div className="failure-analysis-title"><Icon name="spark" size={15} /><strong>AI failure analysis</strong><span>Advisory</span></div><p>{result.analysis.summary}</p>{result.analysis.likely_causes?.length > 0 && <div><strong>Possible causes</strong><ul>{result.analysis.likely_causes.map((cause, causeIndex) => <li key={causeIndex}><b>{cause.cause}</b><span>{cause.evidence} · Confidence: {cause.confidence}</span></li>)}</ul></div>}{result.analysis.next_steps?.length > 0 && <div><strong>Suggested next steps</strong><ul>{result.analysis.next_steps.map((step, stepIndex) => <li key={stepIndex}>{step}</li>)}</ul></div>}<small>{result.analysis.limitations}</small></div>}
-                  </section>;
-                })}</div>}
               </article>;
             })}</div> : <div className="history-empty"><Icon name="clock" size={25} /><strong>No runs yet</strong><span>Run selected checks from an API overview and they will appear here.</span><button className="secondary-button" onClick={openSpecsPage}>Go to API specs</button></div>}
           </section>
@@ -706,7 +671,7 @@ function App() {
                   <div><strong>This request may change data.</strong><p>You are about to run {selectedCount} {operation.method} {operation.path} check{selectedCount === 1 ? "" : "s"} against {targetUrl}. This can create, update, or delete data in the target API.</p></div>
                   <div className="execution-confirmation-actions"><button className="secondary-button" type="button" onClick={() => setShowExecutionConfirmation(false)}>Cancel</button><button className="primary-button" type="button" onClick={confirmRun}>Confirm and run</button></div>
                 </div>}
-                <div className="run-footer"><span>{inputsReady ? `${availableScenarios.length} ${availableScenarios.length === 1 ? "check" : "checks"} ready to run` : "Complete required request details first"}</span><button className="primary-button" disabled={!inputsReady || selectedCount === 0 || running} onClick={requestRun}>{running ? <><span className="spinner" /> Running…</> : <><Icon name="run" size={15} /> Run selected{selectedCount ? ` (${selectedCount})` : ""}</>}</button></div>
+                <div className="run-footer">{lastRunId && !running && <button className="text-button" type="button" onClick={() => openRunHistory(lastRunId)}>View run details</button>}<span>{inputsReady ? `${availableScenarios.length} ${availableScenarios.length === 1 ? "check" : "checks"} ready to run` : "Complete required request details first"}</span><button className="primary-button" disabled={!inputsReady || selectedCount === 0 || running} onClick={requestRun}>{running ? <><span className="spinner" /> Running…</> : <><Icon name="run" size={15} /> Run selected{selectedCount ? ` (${selectedCount})` : ""}</>}</button></div>
                 {error && <div className="alert error-alert run-error" role="alert"><Icon name="close" size={17} />{error}</div>}
               </section>
             </div>
