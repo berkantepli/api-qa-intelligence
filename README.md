@@ -97,7 +97,7 @@ The **Coverage** page summarizes, for the active API, how many endpoints have be
 
 ### Settings and backups
 
-Saved APIs and Run history live only in this browser’s storage. The **Settings** page shows whether the configured Ollama model is reachable and installed (`GET /api/v1/ai/status`), exports the workspace as a JSON file, imports an export (APIs with the same id are replaced and existing runs are skipped), and can delete all local data after confirmation.
+Saved APIs and Run history live only in this browser’s storage. The **Settings** page shows whether the configured Ollama model is reachable and installed (`GET /api/v1/ai/status`), runs a step-by-step diagnosis — backend, Ollama server, required model, and a short inference test — with a suggested fix for any failing step (`GET /api/v1/ai/diagnose`; also started by clicking the AI status in the sidebar), exports the workspace as a JSON file, imports an export (APIs with the same id are replaced and existing runs are skipped), and can delete all local data after confirmation.
 
 ### Optional AI features
 

@@ -275,6 +275,23 @@ h1, h2, h3, p { margin-top: 0; }
 .settings-facts dt { color: var(--muted); font-size: 10px; }
 .settings-facts dd { margin: 6px 0 0; overflow-wrap: anywhere; color: var(--text); font-size: 11px; }
 .settings-facts .connection-status { padding: 3px 8px; }
+.settings-buttons { display: flex; flex: 0 0 auto; flex-wrap: wrap; gap: 8px; }
+.diagnosis { margin-top: 14px; padding: 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-soft); }
+.diagnosis-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; font-size: 11px; }
+.diagnosis-heading strong { color: var(--text); font-size: 12px; }
+.diagnosis-heading > span { display: inline-flex; align-items: center; gap: 7px; color: var(--muted); }
+.diagnosis-heading .spinner { border-color: var(--line); border-top-color: var(--accent); }
+.diagnosis-steps { display: grid; margin: 12px 0 0; padding: 0; list-style: none; }
+.diagnosis-step { position: relative; display: grid; grid-template-columns: 24px minmax(0, 1fr); gap: 10px; padding-bottom: 14px; }
+.diagnosis-step:last-child { padding-bottom: 0; }
+.diagnosis-step:not(:last-child)::before { position: absolute; top: 24px; bottom: 2px; left: 11px; width: 2px; border-radius: 1px; background: var(--line); content: ""; }
+.diagnosis-icon { display: grid; width: 24px; height: 24px; place-items: center; border-radius: 50%; background: var(--surface); box-shadow: inset 0 0 0 1px var(--line); color: var(--muted); }
+.diagnosis-available .diagnosis-icon { background: var(--green-soft); box-shadow: none; color: var(--green); }
+.diagnosis-unavailable .diagnosis-icon { background: var(--red-soft); box-shadow: none; color: var(--red); }
+.diagnosis-step strong { color: var(--text); font-size: 11px; }
+.diagnosis-skipped strong { color: var(--muted); }
+.diagnosis-step p { margin: 3px 0 0; color: var(--muted); font-size: 11px; line-height: 1.5; }
+.diagnosis-step .diagnosis-action { color: var(--text); }
 .settings-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 10px; }
 .settings-card .alert { margin-top: 12px; }
 .settings-danger { border-color: color-mix(in srgb, var(--red) 35%, var(--line)); }

@@ -8,7 +8,46 @@ export function aiStatusLabel(aiStatus) {
   return { tone: "connected", text: "AI model ready" };
 }
 
-export default function SettingsPage({ aiStatus, onRefreshAiStatus, savedApiCount, runCount, onExport, onImport, onDeleteAll }) {
+const diagnosisSteps = [
+  { key: "application", label: "Application" },
+  { key: "ollama", label: "Ollama server" },
+  { key: "model_check", label: "Required model" },
+  { key: "inference", label: "Inference test" },
+];
+const stepIcons = { available: "check", unavailable: "close", skipped: "minus" };
+
+// Renders `backticked` fragments of a diagnosis message as inline code.
+function DiagnosisText({ text }) {
+  return text.split(/(`[^`]+`)/).map((part, index) => part.startsWith("`") && part.endsWith("`")
+    ? <code key={index}>{part.slice(1, -1)}</code>
+    : part);
+}
+
+function AiDiagnosis({ diagnosis }) {
+  const { loading, result, error, checkedAt } = diagnosis;
+  const summary = loading
+    ? "Running… the test prompt can take up to a minute while the model loads."
+    : error || `${result.available ? "All checks passed" : "A problem was found"} · ${new Date(checkedAt).toLocaleTimeString()}`;
+  return <div className="diagnosis" aria-live="polite">
+    <div className="diagnosis-heading">
+      <strong>Diagnosis</strong>
+      <span className={!loading && result ? (result.available ? "history-pass" : "history-fail") : undefined}>{loading && <span className="spinner" />}{summary}</span>
+    </div>
+    {result && !loading && <ol className="diagnosis-steps">{diagnosisSteps.map(({ key, label }) => {
+      const step = result[key];
+      return <li key={key} className={`diagnosis-step diagnosis-${step.status}`}>
+        <span className="diagnosis-icon"><Icon name={stepIcons[step.status]} size={13} /></span>
+        <div>
+          <strong>{label}</strong>
+          <p><DiagnosisText text={step.reason} /></p>
+          {step.suggested_action && <p className="diagnosis-action">Suggested: <DiagnosisText text={step.suggested_action} /></p>}
+        </div>
+      </li>;
+    })}</ol>}
+  </div>;
+}
+
+export default function SettingsPage({ aiStatus, onRefreshAiStatus, aiDiagnosis, onRunDiagnosis, savedApiCount, runCount, onExport, onImport, onDeleteAll }) {
   const fileInput = useRef(null);
   const [importMessage, setImportMessage] = useState(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -34,7 +73,10 @@ export default function SettingsPage({ aiStatus, onRefreshAiStatus, savedApiCoun
     <section className="settings-card">
       <div className="settings-card-heading">
         <div><h2>AI model</h2><p>Used for scenario ideas and failure analysis. Configure it with <code>OLLAMA_BASE_URL</code> and <code>OLLAMA_MODEL</code> before starting the backend.</p></div>
-        <button className="secondary-button" type="button" onClick={onRefreshAiStatus} disabled={aiStatus?.loading}>{aiStatus?.loading ? "Checking…" : "Check again"}</button>
+        <div className="settings-buttons">
+          <button className="secondary-button" type="button" onClick={onRefreshAiStatus} disabled={aiStatus?.loading}>{aiStatus?.loading ? "Checking…" : "Check again"}</button>
+          <button className="primary-button" type="button" onClick={onRunDiagnosis} disabled={aiDiagnosis?.loading}><Icon name="spark" size={14} /> {aiDiagnosis?.loading ? "Diagnosing…" : "Run diagnosis"}</button>
+        </div>
       </div>
       <dl className="settings-facts">
         <div><dt>Status</dt><dd><span className={`connection-status connection-${status.tone}`}><span className="connection-dot" aria-hidden="true" />{status.text}</span></dd></div>
@@ -44,6 +86,7 @@ export default function SettingsPage({ aiStatus, onRefreshAiStatus, savedApiCoun
       </dl>
       {aiStatus?.reachable && !aiStatus.model_available && <p className="settings-note">The server is running but <code>{aiStatus.model}</code> is not installed. Installed models: {aiStatus.available_models?.length ? aiStatus.available_models.join(", ") : "none"}.</p>}
       {aiStatus && !aiStatus.loading && !aiStatus.reachable && <p className="settings-note">Start Ollama or check <code>OLLAMA_BASE_URL</code>. Everything except the AI features keeps working without it.</p>}
+      {aiDiagnosis && <AiDiagnosis diagnosis={aiDiagnosis} />}
     </section>
 
     <section className="settings-card">
