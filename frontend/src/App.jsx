@@ -7,7 +7,8 @@ import RunDetail from "./RunDetail.jsx";
 import RunHistoryList from "./RunHistoryList.jsx";
 import { removeSavedApi } from "./savedApis.js";
 import ScenarioDraftEditor from "./ScenarioDraftEditor.jsx";
-import SettingsPage from "./SettingsPage.jsx";
+import SettingsPage, { aiStatusLabel } from "./SettingsPage.jsx";
+import { version as appVersion } from "../package.json";
 import { buildWorkspaceExport, mergeWorkspace, parseWorkspaceImport, workspaceFileName } from "./workspace.js";
 import { buildEditedScenario, createDraft, isEditedScenario, statusCodeSuggestions, validateDraft } from "./scenarioDraft.js";
 
@@ -620,9 +621,16 @@ function App() {
           {failingEndpoints > 0 && <em className="nav-badge" title={`${failingEndpoints} ${failingEndpoints === 1 ? "endpoint" : "endpoints"} failed in the latest run`} aria-label={`${failingEndpoints} failing`}>{failingEndpoints}</em>}
         </button>
         <div className="sidebar-footer">
+          <button className={`sidebar-status connection-${aiStatusLabel(aiStatus).tone}`} type="button" onClick={openSettingsPage} title="Open AI model settings">
+            <span className="connection-dot" aria-hidden="true" /><span>{aiStatusLabel(aiStatus).text}</span>
+          </button>
+          <a className="nav-link" href="/docs" target="_blank" rel="noreferrer">
+            <Icon name="link" /><span>Backend API docs</span>
+          </a>
           <button className={`nav-link ${page === "settings" ? "active" : ""}`} onClick={openSettingsPage}>
             <Icon name="settings" /><span>Settings</span>
           </button>
+          <span className="sidebar-version">v{appVersion}</span>
         </div>
       </aside>
 
