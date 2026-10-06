@@ -33,7 +33,7 @@ export default function RunHistoryList({ runs, savedApis, openGroups, onToggleGr
     <p className="page-lede">Review the checks you have run in this browser, grouped by API.</p>
 
     {groups.length ? <div className="history-groups">{groups.map((group, index) => {
-      const open = openGroups[group.key] ?? index === 0;
+      const open = openGroups[group.key] ?? false;
       const bodyId = `run-group-${index}`;
       const groupPending = pendingDelete?.type === "group" && pendingDelete.key === group.key;
       return <section className={`history-group ${open ? "open" : ""}`} key={group.key}>
