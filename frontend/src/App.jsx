@@ -174,6 +174,7 @@ function App() {
   const selectedCount = selectedScenarios.length;
   const selectedRun = runHistory.find((run) => run.id === selectedRunId);
   const failingEndpoints = failingEndpointCount(runHistory, savedApis);
+  const serviceStatus = aiStatusLabel(aiStatus);
   const methods = useMemo(() => new Set((overview?.operations ?? []).map((item) => item.method)), [overview]);
 
   useEffect(() => {
@@ -635,8 +636,8 @@ function App() {
           {failingEndpoints > 0 && <em className="nav-badge" title={`${failingEndpoints} ${failingEndpoints === 1 ? "endpoint" : "endpoints"} failed in the latest run`} aria-label={`${failingEndpoints} failing`}>{failingEndpoints}</em>}
         </button>
         <div className="sidebar-footer">
-          <button className={`sidebar-status connection-${aiStatusLabel(aiStatus).tone}`} type="button" onClick={() => { openSettingsPage(); runAiDiagnosis(); }} title="Run AI diagnosis">
-            <span className="connection-dot" aria-hidden="true" /><span>{aiStatusLabel(aiStatus).text}</span>
+          <button className={`sidebar-status connection-${serviceStatus.tone}`} type="button" onClick={() => { openSettingsPage(); runAiDiagnosis(); }} title={`Intelligence service: ${serviceStatus.detail}\nClick to run a diagnosis.`} aria-label={`Service status: ${serviceStatus.text}. Run a diagnosis.`}>
+            <span className="connection-dot" aria-hidden="true" /><span>Service status</span>
           </button>
           <a className="nav-link" href="/docs" target="_blank" rel="noreferrer">
             <Icon name="link" /><span>Backend API docs</span>

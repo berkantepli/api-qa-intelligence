@@ -1,11 +1,13 @@
 import { useRef, useState } from "react";
 import Icon from "./Icon.jsx";
 
+// tone drives the dot color; text is the short label; detail explains it (sidebar tooltip).
 export function aiStatusLabel(aiStatus) {
-  if (!aiStatus || aiStatus.loading) return { tone: "checking", text: "Checking AI model" };
-  if (aiStatus.error || !aiStatus.reachable) return { tone: "unavailable", text: "AI model unavailable" };
-  if (!aiStatus.model_available) return { tone: "warning", text: "Model not installed" };
-  return { tone: "connected", text: "AI model ready" };
+  if (!aiStatus || aiStatus.loading) return { tone: "checking", text: "Checking AI model", detail: "Checking the intelligence service…" };
+  if (aiStatus.error) return { tone: "unavailable", text: "AI model unavailable", detail: aiStatus.error };
+  if (!aiStatus.reachable) return { tone: "unavailable", text: "AI model unavailable", detail: `Ollama is not reachable at ${aiStatus.base_url}` };
+  if (!aiStatus.model_available) return { tone: "warning", text: "Model not installed", detail: `${aiStatus.model} is not installed in Ollama` };
+  return { tone: "connected", text: "AI model ready", detail: `${aiStatus.model} is ready` };
 }
 
 const diagnosisSteps = [
