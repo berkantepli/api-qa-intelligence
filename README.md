@@ -85,6 +85,8 @@ Only call APIs you own or are authorized to test. Execution does not happen duri
 
 For a selected set of checks, use `POST /api/v1/runs/execute-batch` with a `scenarios` array containing the same fields as the single-check request. The response includes a PASS/FAIL/ERROR summary and per-check request/response evidence. Sensitive header and body values are redacted, and uploaded file contents are not included in the evidence. Credentials derived from an operation’s security requirement (for example an `Authorization` header or an API key) are shown as optional *credential* fields: fill them to call the API authenticated, or leave them empty to send the request without credentials. JSON examples are only generated when the contract provides enough information; path parameters and non-JSON request bodies still need a manual example.
 
+Saved APIs can be deleted from the API specs page (trash icon, then confirm). Deleting removes the API’s contract, scenarios, and edited AI checks from this browser; its Run history is kept.
+
 ### Run history
 
 Every executed batch is saved in this browser’s Run history, grouped by API with pass/fail/error totals and the most recently used API first. Open a run to see its target, PASS/FAIL/ERROR counts, and, for each check, the expected and received status, duration, the request line with headers and body, and the response status, headers, and body. Failed and errored checks open expanded. Evidence is stored already redacted; uploaded file contents are never stored.

@@ -228,13 +228,22 @@ h1, h2, h3, p { margin-top: 0; }
 .specs-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 18px; }
 .specs-heading h1 { margin: 9px 0 5px; color: #20222b; font-family: Manrope, sans-serif; font-size: 26px; letter-spacing: -1px; }
 .specs-list { display: grid; gap: 14px; margin-top: 30px; }
-.spec-card { display: flex; width: 100%; min-height: 104px; align-items: center; gap: 18px; padding: 20px 24px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); color: var(--text); text-align: left; transition: border-color .15s, transform .15s; }
-.spec-card:hover { transform: translateY(-1px); border-color: var(--accent); }
+.spec-card { display: flex; min-height: 104px; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 0 16px 0 0; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); color: var(--text); transition: border-color .15s; }
+.spec-card:has(.spec-card-open:hover) { border-color: var(--accent); }
+.spec-card-open { display: flex; min-width: 0; flex: 1; align-items: center; gap: 18px; align-self: stretch; padding: 20px 8px 20px 24px; border: 0; border-radius: 12px 0 0 12px; background: transparent; color: inherit; text-align: left; }
+.spec-card-open:focus-visible { outline: 2px solid var(--accent); outline-offset: -3px; }
+.icon-button { display: grid; width: 34px; height: 34px; flex: 0 0 auto; place-items: center; border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--muted); }
+.icon-button:hover { border-color: var(--line); background: var(--red-soft); color: var(--red); }
+.spec-card-confirm { display: flex; flex: 1 1 100%; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; padding: 0 0 14px 24px; }
+.spec-card-confirm span { flex: 1; min-width: 200px; color: var(--muted); font-size: 11px; }
+.spec-card-confirm .secondary-button, .spec-card-confirm .danger-button { min-height: 32px; font-size: 11px; }
+.danger-button { display: inline-flex; min-height: 39px; align-items: center; justify-content: center; gap: 8px; padding: 0 14px; border: 0; border-radius: 7px; background: var(--red); color: white; font-size: 12px; font-weight: 600; }
+.danger-button:hover { filter: brightness(1.08); }
 .spec-card-icon { display: grid; width: 50px; height: 50px; flex: 0 0 auto; place-items: center; border-radius: 10px; background: var(--accent-soft); color: var(--accent); }
 .spec-card-copy { display: grid; flex: 1; gap: 6px; }
 .spec-card-copy strong { font-size: 14px; }
 .spec-card-copy small { color: var(--muted); font-size: 11px; }
-.spec-card > svg { color: var(--muted); }
+.spec-card-open > svg { flex: 0 0 auto; color: var(--muted); }
 .overview-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; }
 .overview-heading h1 { margin-bottom: 5px; font-size: 26px; }
 .overview-heading .secondary-button { margin-bottom: 2px; }

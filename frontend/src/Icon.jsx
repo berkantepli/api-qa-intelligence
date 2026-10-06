@@ -23,6 +23,7 @@ export default function Icon({ name, size = 18, className }) {
     close: <><path d="m18 6-12 12M6 6l12 12" /></>,
     arrow: <><path d="M5 12h14" /><path d="m13 6 6 6-6 6" /></>,
     back: <><path d="M19 12H5" /><path d="m11 6-6 6 6 6" /></>,
+    trash: <><path d="M4 7h16" /><path d="M10 11v6M14 11v6" /><path d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12" /><path d="M9 7V4h6v3" /></>,
     clock: <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></>,
   };
   return <svg {...common}>{paths[name] || paths.file}</svg>;

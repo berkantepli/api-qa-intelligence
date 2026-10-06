@@ -3,6 +3,7 @@ import { categoryLabels, parameterLabel } from "./categories.js";
 import Icon from "./Icon.jsx";
 import RunDetail from "./RunDetail.jsx";
 import RunHistoryList from "./RunHistoryList.jsx";
+import { removeSavedApi } from "./savedApis.js";
 import ScenarioDraftEditor from "./ScenarioDraftEditor.jsx";
 import { buildEditedScenario, createDraft, isEditedScenario, statusCodeSuggestions, validateDraft } from "./scenarioDraft.js";
 
@@ -94,6 +95,7 @@ function App() {
   const [page, setPage] = useState(() => savedApis.length ? "specs" : "import");
   const [runHistory, setRunHistory] = useState(() => readStoredJson(STORAGE_KEYS.runHistory, []));
   const [selectedRunId, setSelectedRunId] = useState(null);
+  const [pendingDeleteApiId, setPendingDeleteApiId] = useState(null);
   const [openRunGroups, setOpenRunGroups] = useState({});
   const [lastRunId, setLastRunId] = useState(null);
   const [analysisState, setAnalysisState] = useState({});
@@ -466,6 +468,17 @@ function App() {
     setPage("overview");
   }
 
+  function deleteSavedApi(apiId) {
+    const { remaining, nextActiveApi, activeChanged } = removeSavedApi(savedApis, apiId, activeApiId);
+    setSavedApis(remaining);
+    setPendingDeleteApiId(null);
+    if (!activeChanged) return;
+    setActiveApiId(nextActiveApi?.id ?? "");
+    setTargetUrl(resolveApiTarget(nextActiveApi) || DEFAULT_TARGET_URL);
+    setSelectedOperation(firstRunnableOperationIndex(nextActiveApi?.overview));
+    resetRunState();
+  }
+
   function openImportPage() {
     setError("");
     setNotice("");
@@ -554,7 +567,16 @@ function App() {
         ) : page === "specs" ? (
           <section className="specs-page">
             <div className="specs-heading"><div><div className="page-eyebrow">YOUR API QA WORKSPACE</div><h1>API specs</h1><p className="page-lede">Your imported APIs stay here so you can return to them anytime.</p></div><button className="primary-button" onClick={openImportPage}><Icon name="upload" size={15} /> Import API</button></div>
-            {savedApis.length ? <div className="specs-list">{savedApis.map((api) => <button className="spec-card" key={api.id} onClick={() => openSavedApi(api)}><span className="spec-card-icon"><Icon name="file" size={20} /></span><span className="spec-card-copy"><strong>{api.title}</strong><small>Version {api.overview.version} · OpenAPI {api.overview.openapi_version}</small><small>{api.overview.operation_count} endpoints · Imported {new Date(api.importedAt).toLocaleDateString()}</small></span><Icon name="chevron" size={18} /></button>)}</div> : <div className="history-empty"><Icon name="file" size={25} /><strong>No API specs yet</strong><span>Import an OpenAPI specification and it will be saved here.</span><button className="primary-button" onClick={openImportPage}><Icon name="upload" size={15} /> Import API</button></div>}
+            {savedApis.length ? <div className="specs-list">{savedApis.map((api) => <article className="spec-card" key={api.id}>
+              <button className="spec-card-open" type="button" onClick={() => openSavedApi(api)}><span className="spec-card-icon"><Icon name="file" size={20} /></span><span className="spec-card-copy"><strong>{api.title}</strong><small>Version {api.overview.version} · OpenAPI {api.overview.openapi_version}</small><small>{api.overview.operation_count} endpoints · Imported {new Date(api.importedAt).toLocaleDateString()}</small></span><Icon name="chevron" size={18} /></button>
+              {pendingDeleteApiId === api.id
+                ? <div className="spec-card-confirm" role="group" aria-label={`Delete ${api.title}`}>
+                  <span>Delete this API? Its scenarios and AI checks are removed; Run history is kept.</span>
+                  <button className="secondary-button" type="button" onClick={() => setPendingDeleteApiId(null)}>Cancel</button>
+                  <button className="danger-button" type="button" onClick={() => deleteSavedApi(api.id)}>Delete</button>
+                </div>
+                : <button className="icon-button" type="button" aria-label={`Delete ${api.title}`} title="Delete API" onClick={() => setPendingDeleteApiId(api.id)}><Icon name="trash" size={16} /></button>}
+            </article>)}</div> : <div className="history-empty"><Icon name="file" size={25} /><strong>No API specs yet</strong><span>Import an OpenAPI specification and it will be saved here.</span><button className="primary-button" onClick={openImportPage}><Icon name="upload" size={15} /> Import API</button></div>}
           </section>
         ) : page === "import" || !overview ? (
           <section className="setup-page">
