@@ -102,6 +102,7 @@ function App() {
   const [selectedRunId, setSelectedRunId] = useState(null);
   const [pendingDeleteApiId, setPendingDeleteApiId] = useState(null);
   const [aiStatus, setAiStatus] = useState({ loading: true });
+  const [aiDiagnosis, setAiDiagnosis] = useState(null);
   const [openRunGroups, setOpenRunGroups] = useState({});
   const [lastRunId, setLastRunId] = useState(null);
   const [analysisState, setAnalysisState] = useState({});
@@ -486,6 +487,19 @@ function App() {
     }
   }
 
+  async function runAiDiagnosis() {
+    if (aiDiagnosis?.loading) return;
+    setAiDiagnosis({ loading: true });
+    try {
+      const response = await fetch("/api/v1/ai/diagnose");
+      const result = await readJsonResponse(response, "The AI diagnosis could not be completed.");
+      setAiDiagnosis({ result, checkedAt: new Date().toISOString() });
+    } catch (caught) {
+      setAiDiagnosis({ error: caught.message || "The AI diagnosis could not be completed." });
+    }
+    refreshAiStatus();
+  }
+
   function exportWorkspace() {
     const blob = new Blob([JSON.stringify(buildWorkspaceExport(savedApis, runHistory), null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
@@ -621,7 +635,7 @@ function App() {
           {failingEndpoints > 0 && <em className="nav-badge" title={`${failingEndpoints} ${failingEndpoints === 1 ? "endpoint" : "endpoints"} failed in the latest run`} aria-label={`${failingEndpoints} failing`}>{failingEndpoints}</em>}
         </button>
         <div className="sidebar-footer">
-          <button className={`sidebar-status connection-${aiStatusLabel(aiStatus).tone}`} type="button" onClick={openSettingsPage} title="Open AI model settings">
+          <button className={`sidebar-status connection-${aiStatusLabel(aiStatus).tone}`} type="button" onClick={() => { openSettingsPage(); runAiDiagnosis(); }} title="Run AI diagnosis">
             <span className="connection-dot" aria-hidden="true" /><span>{aiStatusLabel(aiStatus).text}</span>
           </button>
           <a className="nav-link" href="/docs" target="_blank" rel="noreferrer">
@@ -653,6 +667,8 @@ function App() {
           <SettingsPage
             aiStatus={aiStatus}
             onRefreshAiStatus={refreshAiStatus}
+            aiDiagnosis={aiDiagnosis}
+            onRunDiagnosis={runAiDiagnosis}
             savedApiCount={savedApis.length}
             runCount={runHistory.length}
             onExport={exportWorkspace}

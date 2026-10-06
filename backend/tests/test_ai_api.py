@@ -1,6 +1,7 @@
 import json
 
 import httpx
+import pytest
 
 
 def ollama_reply(content):
@@ -127,3 +128,63 @@ def test_ai_status_reports_unreachable_server(client, mock_http):
     status = client.get("/api/v1/ai/status").json()
 
     assert (status["reachable"], status["model_available"]) == (False, False)
+
+
+def ollama_server(tags=("llama3:latest",), chat_status=200, chat_content="OK"):
+    def handler(request):
+        if request.url.path == "/api/tags":
+            return httpx.Response(200, json={"models": [{"name": name} for name in tags]})
+        return httpx.Response(chat_status, json={"message": {"content": chat_content}})
+
+    return handler
+
+
+def steps(diagnosis):
+    return [diagnosis[name]["status"] for name in ("application", "ollama", "model_check", "inference")]
+
+
+def test_diagnosis_passes_every_step(client, mock_http, monkeypatch):
+    monkeypatch.setenv("OLLAMA_MODEL", "llama3")
+    mock_http.respond_with(ollama_server())
+
+    diagnosis = client.get("/api/v1/ai/diagnose").json()
+
+    assert steps(diagnosis) == ["available"] * 4
+    assert diagnosis["available"] is True
+    assert [request.url.path for request in mock_http.requests] == ["/api/tags", "/api/chat"]
+    assert "Reply with the single word OK." in mock_http.requests[1].content.decode()
+
+
+def test_diagnosis_skips_inference_when_model_is_missing(client, mock_http, monkeypatch):
+    monkeypatch.setenv("OLLAMA_MODEL", "mistral")
+    mock_http.respond_with(ollama_server())
+
+    diagnosis = client.get("/api/v1/ai/diagnose").json()
+
+    assert steps(diagnosis) == ["available", "available", "unavailable", "skipped"]
+    assert "ollama pull mistral" in diagnosis["model_check"]["suggested_action"]
+    assert diagnosis["available"] is False
+    assert len(mock_http.requests) == 1
+
+
+def test_diagnosis_skips_later_steps_when_ollama_is_down(client, mock_http):
+    def refuse(request):
+        raise httpx.ConnectError("refused", request=request)
+
+    mock_http.respond_with(refuse)
+
+    diagnosis = client.get("/api/v1/ai/diagnose").json()
+
+    assert steps(diagnosis) == ["available", "unavailable", "skipped", "skipped"]
+    assert "OLLAMA_BASE_URL" in diagnosis["ollama"]["suggested_action"]
+
+
+@pytest.mark.parametrize(("chat_status", "chat_content"), [(500, "OK"), (200, "")])
+def test_diagnosis_reports_failed_inference(client, mock_http, monkeypatch, chat_status, chat_content):
+    monkeypatch.setenv("OLLAMA_MODEL", "llama3")
+    mock_http.respond_with(ollama_server(chat_status=chat_status, chat_content=chat_content))
+
+    diagnosis = client.get("/api/v1/ai/diagnose").json()
+
+    assert steps(diagnosis) == ["available", "available", "available", "unavailable"]
+    assert diagnosis["available"] is False
