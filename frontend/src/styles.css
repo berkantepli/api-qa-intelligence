@@ -158,6 +158,33 @@ h1, h2, h3, p { margin-top: 0; }
 .history-run-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; color: var(--muted); font-size: 11px; }
 .history-run-time { color: var(--muted); font-size: 11px; white-space: nowrap; }
 .history-confirm { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; padding: 12px 16px 12px 54px; border-top: 1px solid var(--line); background: var(--surface-soft); }
+.stats-row.coverage-stats { grid-template-columns: repeat(4, minmax(0, 1fr)); margin-top: 26px; }
+.coverage-meter { display: block; width: 100%; height: 4px; margin-top: 10px; overflow: hidden; border-radius: 999px; background: var(--line); }
+.coverage-meter span { display: block; height: 100%; border-radius: inherit; background: var(--green); }
+.coverage-warning { color: #b7791f; }
+.coverage-list { margin-top: 18px; }
+.coverage-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 18px; }
+.coverage-filters { display: flex; flex-wrap: wrap; gap: 6px; }
+.coverage-filters button { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border: 1px solid var(--line); border-radius: 999px; background: transparent; color: var(--muted); font-size: 11px; }
+.coverage-filters button span { color: var(--muted); font-size: 10px; }
+.coverage-filters button.selected { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.coverage-row { display: grid; width: 100%; grid-template-columns: 52px minmax(0, 1.3fr) 92px minmax(0, .8fr) minmax(0, 1.4fr) 15px; align-items: center; gap: 14px; padding: 13px 18px; border: 0; background: transparent; color: var(--text); text-align: left; }
+.coverage-row:hover { background: var(--surface-soft); }
+.coverage-row:hover .history-chevron { color: var(--accent); }
+.coverage-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -3px; }
+.coverage-endpoint { display: grid; min-width: 0; gap: 3px; }
+.coverage-endpoint strong { overflow: hidden; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.coverage-endpoint small, .coverage-checks small { overflow: hidden; color: var(--muted); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.coverage-checks { display: grid; gap: 3px; font-size: 11px; }
+.coverage-status { justify-self: start; padding: 3px 8px; border-radius: 999px; font-size: 10px; font-weight: 600; }
+.coverage-status-passing { background: var(--green-soft); color: var(--green); }
+.coverage-status-failing { background: var(--red-soft); color: var(--red); }
+.coverage-status-untested { background: var(--surface-soft); color: var(--muted); box-shadow: inset 0 0 0 1px var(--line); }
+.coverage-risks { display: flex; min-width: 0; flex-wrap: wrap; gap: 5px; }
+.coverage-risk { padding: 2px 7px; border-radius: 4px; background: var(--accent-soft); color: var(--accent); font-size: 9px; font-style: normal; font-weight: 600; }
+.coverage-risk-failing { background: var(--red-soft); color: var(--red); }
+.coverage-risk-untested-write { background: #fff3db; color: #9a6b19; }
+.coverage-empty { margin: 0; padding: 24px 18px; border-top: 1px solid var(--line); color: var(--muted); font-size: 11px; text-align: center; }
 .history-confirm span { flex: 1; min-width: 200px; color: var(--text); font-size: 11px; }
 .history-confirm .secondary-button, .history-confirm .danger-button { min-height: 32px; font-size: 11px; }
 .history-pass { color: var(--green); }
@@ -462,6 +489,8 @@ h1, h2, h3, p { margin-top: 0; }
 :root[data-theme="dark"] .scenario-card { border-color: #2b303a; background: #171a21; }
 :root[data-theme="dark"] .review-pill { background: #3a301c; color: #eac578; }
 :root[data-theme="dark"] .draft-warning { color: #eac578; }
+:root[data-theme="dark"] .coverage-warning { color: #eac578; }
+:root[data-theme="dark"] .coverage-risk-untested-write { background: #3a301c; color: #eac578; }
 :root[data-theme="dark"] .scenario-card.checked { border-color: #48588b; background: #1a2030; }
 :root[data-theme="dark"] .custom-check { border-color: #59616e; background: #171a21; }
 :root[data-theme="dark"] .category-pill { background: #282d36; color: #c1c8d3; }
@@ -495,6 +524,10 @@ h1, h2, h3, p { margin-top: 0; }
   .evidence-grid { grid-template-columns: 1fr; }
   .workspace-grid { grid-template-columns: minmax(250px, .8fr) minmax(360px, 1.2fr); }
   .overview-page, .specs-page, .history-page { width: calc(100% - 38px); }
+  .stats-row.coverage-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .coverage-row { grid-template-columns: 52px minmax(0, 1fr) 92px 15px; }
+  .coverage-checks, .coverage-risks { grid-column: 2 / 4; }
+  .coverage-row .history-chevron { grid-column: 4; grid-row: 1; }
   .topbar { padding: 0 23px; }
 }
 @media (max-width: 780px) {

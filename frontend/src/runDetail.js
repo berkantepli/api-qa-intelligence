@@ -36,12 +36,22 @@ export function hasResponseEvidence(result) {
 
 // Groups saved runs by API, newest activity first. Runs saved before apiId was recorded are
 // matched to a saved API by title when that title is unambiguous.
-export function groupRunsByApi(runs = [], savedApis = []) {
+// Maps each saved API title to its id, or null when two saved APIs share the title.
+export function apiIdsByTitle(savedApis = []) {
   const idsByTitle = new Map();
   for (const api of savedApis) idsByTitle.set(api.title, idsByTitle.has(api.title) ? null : api.id);
+  return idsByTitle;
+}
+
+export function runApiKey(run, idsByTitle) {
+  return run.apiId || idsByTitle.get(run.api) || `title:${run.api}`;
+}
+
+export function groupRunsByApi(runs = [], savedApis = []) {
+  const idsByTitle = apiIdsByTitle(savedApis);
   const groups = new Map();
   for (const run of runs) {
-    const key = run.apiId || idsByTitle.get(run.api) || `title:${run.api}`;
+    const key = runApiKey(run, idsByTitle);
     if (!groups.has(key)) groups.set(key, { key, api: run.api, runs: [] });
     groups.get(key).runs.push(run);
   }
