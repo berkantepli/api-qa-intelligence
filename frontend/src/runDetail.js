@@ -33,3 +33,27 @@ export function hasRequestEvidence(result) {
 export function hasResponseEvidence(result) {
   return result.response_status != null || Boolean(result.response_body || Object.keys(result.response_headers ?? {}).length);
 }
+
+// Groups saved runs by API, newest activity first. Runs saved before apiId was recorded are
+// matched to a saved API by title when that title is unambiguous.
+export function groupRunsByApi(runs = [], savedApis = []) {
+  const idsByTitle = new Map();
+  for (const api of savedApis) idsByTitle.set(api.title, idsByTitle.has(api.title) ? null : api.id);
+  const groups = new Map();
+  for (const run of runs) {
+    const key = run.apiId || idsByTitle.get(run.api) || `title:${run.api}`;
+    if (!groups.has(key)) groups.set(key, { key, api: run.api, runs: [] });
+    groups.get(key).runs.push(run);
+  }
+  return [...groups.values()]
+    .map((group) => {
+      const sortedRuns = [...group.runs].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+      return {
+        ...group,
+        runs: sortedRuns,
+        latestAt: sortedRuns[0]?.createdAt,
+        summary: summarizeResults(sortedRuns.flatMap((run) => run.results ?? [])),
+      };
+    })
+    .sort((a, b) => new Date(b.latestAt) - new Date(a.latestAt));
+}

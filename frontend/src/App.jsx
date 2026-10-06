@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { categoryLabels } from "./categories.js";
 import Icon from "./Icon.jsx";
 import RunDetail from "./RunDetail.jsx";
-import { summarizeResults } from "./runDetail.js";
+import RunHistoryList from "./RunHistoryList.jsx";
 import ScenarioDraftEditor from "./ScenarioDraftEditor.jsx";
 import { buildEditedScenario, createDraft, isEditedScenario, statusCodeSuggestions, validateDraft } from "./scenarioDraft.js";
 
@@ -94,6 +94,7 @@ function App() {
   const [page, setPage] = useState(() => savedApis.length ? "specs" : "import");
   const [runHistory, setRunHistory] = useState(() => readStoredJson(STORAGE_KEYS.runHistory, []));
   const [selectedRunId, setSelectedRunId] = useState(null);
+  const [openRunGroups, setOpenRunGroups] = useState({});
   const [lastRunId, setLastRunId] = useState(null);
   const [analysisState, setAnalysisState] = useState({});
   const [scenarioIdeaState, setScenarioIdeaState] = useState({});
@@ -411,7 +412,7 @@ function App() {
         setResults({ ...nextResults });
       }
       if (completed.length) {
-        const entry = { id: Date.now(), api: overview.title, endpoint: `${operation.method} ${operation.path}`, target: targetUrl, createdAt: new Date().toISOString(), results: completed };
+        const entry = { id: Date.now(), apiId: activeApiId, api: overview.title, endpoint: `${operation.method} ${operation.path}`, target: targetUrl, createdAt: new Date().toISOString(), results: completed };
         setRunHistory((current) => [entry, ...current]);
         setLastRunId(entry.id);
       }
@@ -542,21 +543,14 @@ function App() {
         {page === "history" && selectedRun ? (
           <RunDetail run={selectedRun} analysisState={analysisState} onAnalyze={analyzeFailure} onBack={() => openRunHistory()} />
         ) : page === "history" ? (
-          <section className="history-page">
-            <div className="page-eyebrow">TEST EXECUTIONS</div>
-            <h1>Run history</h1>
-            <p className="page-lede">Review the checks you have run in this browser.</p>
-            {runHistory.length ? <div className="history-list">{runHistory.map((run) => {
-              const summary = summarizeResults(run.results);
-              return <article className="history-card" key={run.id}>
-                <button className="history-card-toggle" type="button" onClick={() => openRunHistory(run.id)}>
-                  <div className="history-card-heading"><div><strong>{run.api}</strong><span>{run.endpoint}</span></div><time>{new Date(run.createdAt).toLocaleString()}</time><Icon className="history-chevron" name="chevron" size={17} /></div>
-                  <div className="history-card-footer"><span>{summary.total} {summary.total === 1 ? "check" : "checks"} · <i className="history-pass">{summary.passed} passed</i> · <i className={summary.failed ? "history-fail" : undefined}>{summary.failed} failed</i>{summary.errors > 0 && <> · <i className="history-fail">{summary.errors} {summary.errors === 1 ? "error" : "errors"}</i></>}</span><span className="history-target">Target: {run.target}</span></div>
-                  <span className="history-view-label">View run details</span>
-                </button>
-              </article>;
-            })}</div> : <div className="history-empty"><Icon name="clock" size={25} /><strong>No runs yet</strong><span>Run selected checks from an API overview and they will appear here.</span><button className="secondary-button" onClick={openSpecsPage}>Go to API specs</button></div>}
-          </section>
+          <RunHistoryList
+            runs={runHistory}
+            savedApis={savedApis}
+            openGroups={openRunGroups}
+            onToggleGroup={(key, open) => setOpenRunGroups((current) => ({ ...current, [key]: open }))}
+            onOpenRun={openRunHistory}
+            onGoToSpecs={openSpecsPage}
+          />
         ) : page === "specs" ? (
           <section className="specs-page">
             <div className="specs-heading"><div><div className="page-eyebrow">YOUR API QA WORKSPACE</div><h1>API specs</h1><p className="page-lede">Your imported APIs stay here so you can return to them anytime.</p></div><button className="primary-button" onClick={openImportPage}><Icon name="upload" size={15} /> Import API</button></div>
