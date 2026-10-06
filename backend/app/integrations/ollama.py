@@ -120,7 +120,7 @@ async def diagnose_ai() -> AIDiagnosis:
             ollama=DiagnosisStep(
                 status="unavailable",
                 reason=f"Ollama is not reachable at {base_url}.",
-                suggested_action="Start Ollama (for example with `ollama serve`) or set OLLAMA_BASE_URL.",
+                suggested_action="Start Ollama (for example with `ollama serve`) or set `OLLAMA_BASE_URL`.",
             ),
             model_check=skipped,
             inference=skipped,
@@ -136,7 +136,7 @@ async def diagnose_ai() -> AIDiagnosis:
             model_check=DiagnosisStep(
                 status="unavailable",
                 reason=f"{model} is not installed. Installed models: {', '.join(names[:10]) or 'none'}.",
-                suggested_action=f"Run `ollama pull {model}` or set OLLAMA_MODEL to an installed model.",
+                suggested_action=f"Run `ollama pull {model}` or set `OLLAMA_MODEL` to an installed model.",
             ),
             inference=DiagnosisStep(status="skipped", reason="Skipped because the model is not installed."),
         )
