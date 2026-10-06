@@ -468,6 +468,12 @@ function App() {
     setPage("overview");
   }
 
+  function deleteRuns(runIds) {
+    const removed = new Set(runIds);
+    setRunHistory((current) => current.filter((run) => !removed.has(run.id)));
+    if (removed.has(lastRunId)) setLastRunId(null);
+  }
+
   function deleteSavedApi(apiId) {
     const { remaining, nextActiveApi, activeChanged } = removeSavedApi(savedApis, apiId, activeApiId);
     setSavedApis(remaining);
@@ -562,6 +568,7 @@ function App() {
             openGroups={openRunGroups}
             onToggleGroup={(key, open) => setOpenRunGroups((current) => ({ ...current, [key]: open }))}
             onOpenRun={openRunHistory}
+            onDeleteRuns={deleteRuns}
             onGoToSpecs={openSpecsPage}
           />
         ) : page === "specs" ? (
