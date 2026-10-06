@@ -126,14 +126,15 @@ async def _execute_scenario(payload: ScenarioExecutionRequest) -> ScenarioExecut
             status_code=422,
             detail="Target URLs with embedded credentials are not supported; use a request header instead.",
         )
-    if base.path not in ("", "/") or base.query or base.fragment:
+    if base.query or base.fragment:
         raise HTTPException(
             status_code=422,
-            detail="Base URL must contain only the scheme and host, for example http://127.0.0.1:8000.",
+            detail="Base URL cannot contain a query or fragment, for example https://api.example.com/v1.",
         )
     ensure_safe_target_host(base)
 
-    target = base.copy_with(path=payload.path, query=None)
+    # OpenAPI servers often carry a base path (e.g. /api/v3); operation paths are relative to it.
+    target = base.copy_with(path=base.path.rstrip("/") + payload.path, query=None)
     query = urlencode(payload.query_params)
     request_url = sanitize_url(f"{target}?{query}" if query else str(target))
     request_headers = _request_headers(payload)

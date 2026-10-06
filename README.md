@@ -70,7 +70,7 @@ uvicorn app.main:app --app-dir backend --reload --port 8001
 
 Open `http://127.0.0.1:8001` for the API QA Intelligence interface and API. The backend serves the built frontend from `frontend/dist`.
 
-To run one explicit check, use `POST /api/v1/runs/execute`. Provide a base URL, method, path, optional query parameters, headers or JSON body, and expected status codes. For example:
+To run one explicit check, use `POST /api/v1/runs/execute`. Provide a base URL (it may include the server’s base path, such as `https://petstore3.swagger.io/api/v3`; the operation path is appended to it), method, path, optional query parameters, headers or JSON body, and expected status codes. For example:
 
 ```json
 {

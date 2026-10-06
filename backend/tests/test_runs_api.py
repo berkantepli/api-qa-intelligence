@@ -25,6 +25,15 @@ def test_pass_when_status_matches_expectation(client, mock_http):
     assert str(mock_http.requests[0].url) == f"{BASE_URL}/health"
 
 
+@pytest.mark.parametrize("base_url", ["http://127.0.0.1:8000/api/v3", "http://127.0.0.1:8000/api/v3/"])
+def test_base_url_path_prefixes_the_operation_path(client, mock_http, base_url):
+    result = execute(client, base_url=base_url, path="/pet/findByStatus", query_params={"status": "available"}).json()
+
+    assert result["result"] == "PASS"
+    assert str(mock_http.requests[0].url) == f"{BASE_URL}/api/v3/pet/findByStatus?status=available"
+    assert result["request_url"] == f"{BASE_URL}/api/v3/pet/findByStatus?status=available"
+
+
 def test_fail_when_status_does_not_match(client, mock_http):
     mock_http.respond_with(lambda request: httpx.Response(500, text="boom"))
 
@@ -116,7 +125,8 @@ def test_large_responses_are_truncated(client, mock_http):
 @pytest.mark.parametrize(
     "overrides",
     [
-        {"base_url": "http://127.0.0.1:8000/api"},
+        {"base_url": "http://127.0.0.1:8000/api?version=1"},
+        {"base_url": "http://127.0.0.1:8000/api#v1"},
         {"base_url": "http://u:p@127.0.0.1:8000"},
         {"base_url": "http://10.0.0.1"},
         {"path": "/../admin"},
