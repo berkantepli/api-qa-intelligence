@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { categoryLabels, parameterLabel } from "./categories.js";
 import CoveragePage from "./CoveragePage.jsx";
-import { runsForApi } from "./coverage.js";
+import { failingEndpointCount, runsForApi } from "./coverage.js";
 import Icon from "./Icon.jsx";
 import RunDetail from "./RunDetail.jsx";
 import RunHistoryList from "./RunHistoryList.jsx";
@@ -168,6 +168,7 @@ function App() {
   const draftProblems = editingDraft ? validateDraft(editingDraft.draft, draftContext) : [];
   const selectedCount = selectedScenarios.length;
   const selectedRun = runHistory.find((run) => run.id === selectedRunId);
+  const failingEndpoints = failingEndpointCount(runHistory, savedApis);
   const methods = useMemo(() => new Set((overview?.operations ?? []).map((item) => item.method)), [overview]);
 
   useEffect(() => {
@@ -564,6 +565,7 @@ function App() {
         </button>}
         <button className={`nav-link ${page === "history" ? "active" : ""}`} onClick={() => openRunHistory()}>
           <Icon name="clock" /><span>Run history</span>
+          {failingEndpoints > 0 && <em className="nav-badge" title={`${failingEndpoints} ${failingEndpoints === 1 ? "endpoint" : "endpoints"} failed in the latest run`} aria-label={`${failingEndpoints} failing`}>{failingEndpoints}</em>}
         </button>
       </aside>
 
