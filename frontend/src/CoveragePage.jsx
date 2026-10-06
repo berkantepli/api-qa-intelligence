@@ -15,7 +15,7 @@ export default function CoveragePage({ overview, apiRuns, onOpenEndpoint, onGoTo
   if (!overview) {
     return <section className="history-page coverage-page">
       <div className="page-eyebrow">TEST COVERAGE</div>
-      <h1>Coverage &amp; risk</h1>
+      <h1>Coverage &amp; Risk</h1>
       <div className="history-empty"><Icon name="shield" size={25} /><strong>No active API</strong><span>Import or open an API to see which endpoints have been tested.</span><button className="secondary-button" onClick={onGoToSpecs}>Go to API specs</button></div>
     </section>;
   }
@@ -26,7 +26,7 @@ export default function CoveragePage({ overview, apiRuns, onOpenEndpoint, onGoTo
 
   return <section className="history-page coverage-page">
     <div className="page-eyebrow">TEST COVERAGE</div>
-    <h1>Coverage &amp; risk</h1>
+    <h1>Coverage &amp; Risk</h1>
     <p className="page-lede">{overview.title} · based on the checks run in this browser.</p>
 
     <div className="stats-row coverage-stats">

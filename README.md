@@ -91,7 +91,7 @@ Saved APIs can be deleted from the API specs page (trash icon, then confirm). De
 
 Every executed batch is saved in this browser’s Run history, grouped by API with pass/fail/error totals and the most recently used API first. Groups start collapsed; open one to see its runs. Open a run to see its target, PASS/FAIL/ERROR counts, and, for each check, the expected and received status, duration, the request line with headers and body, and the response status, headers, and body. Failed and errored checks open expanded. Delete a single run with the trash icon on its row, or every run for an API with the trash icon on the group header; both ask for confirmation and cannot be undone. Evidence is stored already redacted; uploaded file contents are never stored.
 
-### Coverage & risk
+### Coverage & Risk
 
 The **Coverage** page summarizes, for the active API, how many endpoints have been tested in this browser, which endpoints failed in their latest run, and which data-changing endpoints were never tested. Each endpoint shows its latest status, how many of its runnable checks were executed, and risk flags such as *Changes data, not tested*, *Only happy path tested*, or *Auth not checked*. Select an endpoint to open it in the overview.
 
