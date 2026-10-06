@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { categoryLabels, parameterLabel } from "./categories.js";
+import CoveragePage from "./CoveragePage.jsx";
+import { runsForApi } from "./coverage.js";
 import Icon from "./Icon.jsx";
 import RunDetail from "./RunDetail.jsx";
 import RunHistoryList from "./RunHistoryList.jsx";
@@ -503,6 +505,16 @@ function App() {
     window.scrollTo(0, 0);
   }
 
+  function openCoveragePage() {
+    setPage("coverage");
+    window.scrollTo(0, 0);
+  }
+
+  function openEndpointFromCoverage(operationIndex) {
+    selectOperation(operationIndex);
+    openOverviewPage();
+  }
+
   function openRunHistory(runId = null) {
     setSelectedRunId(runId);
     setPage("history");
@@ -547,6 +559,9 @@ function App() {
         {overview && <button className={`nav-link nav-link-api ${page === "overview" ? "active" : ""}`} onClick={openOverviewPage} title={`${overview.title} overview`}>
           <Icon name="grid" /><span className="nav-link-copy"><span>Overview</span><small>{overview.title} · {overview.operation_count} endpoints</small></span>
         </button>}
+        {overview && <button className={`nav-link ${page === "coverage" ? "active" : ""}`} onClick={openCoveragePage}>
+          <Icon name="shield" /><span>Coverage</span>
+        </button>}
         <button className={`nav-link ${page === "history" ? "active" : ""}`} onClick={() => openRunHistory()}>
           <Icon name="clock" /><span>Run history</span>
         </button>
@@ -567,7 +582,14 @@ function App() {
           <div className="topbar-right"><button className="theme-switch" type="button" onClick={() => setTheme((current) => current === "dark" ? "light" : "dark")} aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`} aria-pressed={theme === "light"} title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}><span className="theme-switch-track"><svg className="theme-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><circle cx="12" cy="12" r="4" /><path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32 1.41 1.41M2 12h2m16 0h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" /></svg><svg className="theme-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3 6.7 6.7 0 0 0 21 12.8Z" /></svg></span><span className="theme-knob" /></button></div>
         </header>
 
-        {page === "history" && selectedRun ? (
+        {page === "coverage" ? (
+          <CoveragePage
+            overview={overview}
+            apiRuns={runsForApi(runHistory, activeApiId, savedApis)}
+            onOpenEndpoint={openEndpointFromCoverage}
+            onGoToSpecs={openSpecsPage}
+          />
+        ) : page === "history" && selectedRun ? (
           <RunDetail run={selectedRun} analysisState={analysisState} onAnalyze={analyzeFailure} onBack={() => openRunHistory()} />
         ) : page === "history" ? (
           <RunHistoryList
