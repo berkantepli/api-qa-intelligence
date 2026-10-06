@@ -87,7 +87,7 @@ For a selected set of checks, use `POST /api/v1/runs/execute-batch` with a `scen
 
 ### Run history
 
-Every executed batch is saved in this browser’s Run history. Open a run to see its target, PASS/FAIL/ERROR counts, and, for each check, the expected and received status, duration, the request line with headers and body, and the response status, headers, and body. Failed and errored checks open expanded. Evidence is stored already redacted; uploaded file contents are never stored.
+Every executed batch is saved in this browser’s Run history, grouped by API with pass/fail/error totals and the most recently used API first. Open a run to see its target, PASS/FAIL/ERROR counts, and, for each check, the expected and received status, duration, the request line with headers and body, and the response status, headers, and body. Failed and errored checks open expanded. Evidence is stored already redacted; uploaded file contents are never stored.
 
 ### Optional AI features
 

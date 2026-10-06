@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   formatEvidenceBody,
+  groupRunsByApi,
   hasRequestEvidence,
   hasResponseEvidence,
   outcomeSummary,
@@ -60,5 +61,43 @@ describe("evidence presence", () => {
     expect(hasResponseEvidence(legacy)).toBe(true);
     expect(hasRequestEvidence({ request_headers: { Accept: "a" } })).toBe(true);
     expect(hasResponseEvidence({ result: "ERROR", response_headers: {} })).toBe(false);
+  });
+});
+
+describe("groupRunsByApi", () => {
+  const savedApis = [{ id: "pets-id", title: "Pets" }, { id: "bugs-id", title: "Bugs" }];
+
+  it("groups by API id, newest activity first, with check totals", () => {
+    const runs = [
+      { id: 1, apiId: "pets-id", api: "Pets", createdAt: "2026-10-01T10:00:00Z", results: [{ result: "PASS" }] },
+      { id: 2, apiId: "bugs-id", api: "Bugs", createdAt: "2026-10-03T10:00:00Z", results: [{ result: "FAIL" }, { result: "ERROR" }] },
+      { id: 3, apiId: "pets-id", api: "Pets", createdAt: "2026-10-02T10:00:00Z", results: [{ result: "FAIL" }] },
+    ];
+
+    const groups = groupRunsByApi(runs, savedApis);
+
+    expect(groups.map((group) => group.key)).toEqual(["bugs-id", "pets-id"]);
+    expect(groups[1].runs.map((run) => run.id)).toEqual([3, 1]);
+    expect(groups[1].latestAt).toBe("2026-10-02T10:00:00Z");
+    expect(groups[1].summary).toEqual({ total: 2, passed: 1, failed: 1, errors: 0 });
+  });
+
+  it("matches legacy runs by unique title and keeps unknown APIs separate", () => {
+    const runs = [
+      { id: 1, api: "Pets", createdAt: "2026-10-01T10:00:00Z", results: [] },
+      { id: 2, apiId: "pets-id", api: "Pets", createdAt: "2026-10-02T10:00:00Z", results: [] },
+      { id: 3, api: "Removed API", createdAt: "2026-10-03T10:00:00Z", results: [] },
+    ];
+
+    const groups = groupRunsByApi(runs, savedApis);
+
+    expect(groups.map((group) => [group.key, group.runs.length])).toEqual([["title:Removed API", 1], ["pets-id", 2]]);
+  });
+
+  it("does not merge legacy runs when two saved APIs share a title", () => {
+    const duplicates = [{ id: "a", title: "Same" }, { id: "b", title: "Same" }];
+    const runs = [{ id: 1, api: "Same", createdAt: "2026-10-01T10:00:00Z", results: [] }];
+
+    expect(groupRunsByApi(runs, duplicates)[0].key).toBe("title:Same");
   });
 });
