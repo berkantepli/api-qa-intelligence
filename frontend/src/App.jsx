@@ -498,6 +498,11 @@ function App() {
     setPage("specs");
   }
 
+  function openOverviewPage() {
+    setPage("overview");
+    window.scrollTo(0, 0);
+  }
+
   function openRunHistory(runId = null) {
     setSelectedRunId(runId);
     setPage("history");
@@ -539,6 +544,9 @@ function App() {
         <button className={`nav-link ${page === "specs" ? "active" : ""}`} onClick={openSpecsPage}>
           <Icon name="file" /><span>API specs</span>
         </button>
+        {overview && <button className={`nav-link nav-link-api ${page === "overview" ? "active" : ""}`} onClick={openOverviewPage} title={`${overview.title} overview`}>
+          <Icon name="grid" /><span className="nav-link-copy"><span>Overview</span><small>{overview.title} · {overview.operation_count} endpoints</small></span>
+        </button>}
         <button className={`nav-link ${page === "history" ? "active" : ""}`} onClick={() => openRunHistory()}>
           <Icon name="clock" /><span>Run history</span>
         </button>
