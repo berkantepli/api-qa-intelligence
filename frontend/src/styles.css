@@ -125,10 +125,8 @@ h1, h2, h3, p { margin-top: 0; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* API overview, API specs, and Run history share one content width. */
-.overview-page, .specs-page, .history-page { width: min(1440px, calc(100% - 60px)); margin: 0 auto; }
-.overview-page { padding: 34px 0 52px; }
-.history-page { padding: 56px 0; }
-.history-page h1 { margin: 9px 0 5px; color: #20222b; font-family: Manrope, sans-serif; font-size: 26px; letter-spacing: -1px; }
+.overview-page, .specs-page, .history-page { width: min(1440px, calc(100% - 60px)); margin: 0 auto; padding: 34px 0 52px; }
+.history-page h1 { margin: 9px 0 5px; color: #20222b; font-family: Manrope, sans-serif; font-size: 26px; font-weight: 600; letter-spacing: -1.1px; line-height: 1.2; }
 .history-chevron { flex: 0 0 auto; color: var(--muted); transition: transform .15s; }
 .history-groups { display: grid; gap: 14px; margin-top: 30px; }
 .history-group { overflow: hidden; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
@@ -229,9 +227,8 @@ h1, h2, h3, p { margin-top: 0; }
 .history-empty strong { color: var(--text); font-size: 14px; }
 .history-empty span { font-size: 12px; }
 .history-empty .secondary-button { margin-top: 5px; }
-.specs-page { padding: 56px 0; }
 .specs-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 18px; }
-.specs-heading h1 { margin: 9px 0 5px; color: #20222b; font-family: Manrope, sans-serif; font-size: 26px; letter-spacing: -1px; }
+.specs-heading h1 { margin: 9px 0 5px; color: #20222b; font-family: Manrope, sans-serif; font-size: 26px; font-weight: 600; letter-spacing: -1.1px; line-height: 1.2; }
 .specs-list { display: grid; gap: 14px; margin-top: 30px; }
 .spec-card { display: flex; min-height: 104px; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 0 16px 0 0; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); color: var(--text); transition: border-color .15s; }
 .spec-card:has(.spec-card-open:hover) { border-color: var(--accent); }
@@ -517,7 +514,7 @@ h1, h2, h3, p { margin-top: 0; }
   .connection-status { gap: 5px; padding: 5px 7px; font-size: 9px; }
   .topbar-right { gap: 8px; }
   .setup-page { width: calc(100% - 28px); padding-top: 34px; }
-  .setup-page h1, .overview-heading h1 { font-size: 23px; }
+  .setup-page h1, .overview-heading h1, .specs-heading h1, .history-page h1 { font-size: 23px; }
   .import-card { padding: 18px 16px 15px; }
   .card-heading p { max-width: 220px; line-height: 1.4; }
   .card-footer { align-items: stretch; flex-direction: column; }
@@ -525,8 +522,7 @@ h1, h2, h3, p { margin-top: 0; }
   .workflow-strip { align-items: stretch; flex-direction: column; gap: 12px; }
   .workflow-line { display: none; }
   .workflow-step small { white-space: normal; }
-  .overview-page, .specs-page, .history-page { width: calc(100% - 24px); }
-  .overview-page { padding-top: 25px; }
+  .overview-page, .specs-page, .history-page { width: calc(100% - 24px); padding-top: 25px; }
   .request-input { grid-template-columns: 1fr; }
   .request-input-help { grid-column: 1; }
   .history-group-toggle { flex-wrap: wrap; }
