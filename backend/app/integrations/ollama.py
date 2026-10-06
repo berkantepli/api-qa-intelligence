@@ -29,11 +29,47 @@ class ScenarioIdeas(BaseModel):
     scenarios: list[ScenarioIdea] = Field(max_length=3)
 
 
+class AIStatus(BaseModel):
+    provider: Literal["ollama"] = "ollama"
+    base_url: str
+    model: str
+    reachable: bool
+    model_available: bool
+    available_models: list[str] = Field(default_factory=list)
+
+
 class AIProviderUnavailable(Exception):
     """Raised when the configured local model cannot return a valid structured response."""
 
 
 ResponseModel = TypeVar("ResponseModel", bound=BaseModel)
+
+
+def _settings() -> tuple[str, str]:
+    base_url = os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434").rstrip("/")
+    model = os.getenv("OLLAMA_MODEL", "qwen3-vl:8b-instruct")
+    return base_url, model
+
+
+async def ai_status() -> AIStatus:
+    base_url, model = _settings()
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(3, connect=2)) as client:
+            response = await client.get(f"{base_url}/api/tags")
+        response.raise_for_status()
+        models = response.json().get("models", [])
+        names = [item["name"] for item in models if isinstance(item, dict) and isinstance(item.get("name"), str)]
+    except (httpx.HTTPError, ValueError, KeyError, TypeError, AttributeError):
+        return AIStatus(base_url=base_url, model=model, reachable=False, model_available=False)
+    # Ollama reports untagged models with an implicit ":latest" tag.
+    wanted = {model, f"{model}:latest"} if ":" not in model else {model}
+    return AIStatus(
+        base_url=base_url,
+        model=model,
+        reachable=True,
+        model_available=any(name in wanted for name in names),
+        available_models=names[:50],
+    )
 
 
 async def analyze_failure(evidence: dict) -> FailureAnalysis:
@@ -69,8 +105,7 @@ async def propose_scenarios(operation: dict) -> ScenarioIdeas:
 async def _structured_chat(
     system_message: str, user_message: str, schema: type[ResponseModel]
 ) -> ResponseModel:
-    base_url = os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434").rstrip("/")
-    model = os.getenv("OLLAMA_MODEL", "qwen3-vl:8b-instruct")
+    base_url, model = _settings()
     try:
         async with httpx.AsyncClient(timeout=httpx.Timeout(120, connect=3)) as client:
             response = await client.post(

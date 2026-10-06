@@ -95,3 +95,35 @@ def test_scenario_ideas_are_review_only_and_exclude_example_values(client, mock_
     prompt = sent_prompt(mock_http.requests[0])
     assert "owner" in prompt
     assert "example-secret" not in prompt
+
+
+def test_ai_status_reports_reachable_model(client, mock_http, monkeypatch):
+    monkeypatch.setenv("OLLAMA_MODEL", "llama3")
+    mock_http.respond_with(lambda request: httpx.Response(200, json={"models": [{"name": "llama3:latest"}, {"name": "qwen"}]}))
+
+    status = client.get("/api/v1/ai/status").json()
+
+    assert status["reachable"] is True
+    assert status["model_available"] is True
+    assert status["available_models"] == ["llama3:latest", "qwen"]
+    assert mock_http.requests[0].url.path == "/api/tags"
+
+
+def test_ai_status_reports_missing_model(client, mock_http, monkeypatch):
+    monkeypatch.setenv("OLLAMA_MODEL", "llama3:8b")
+    mock_http.respond_with(lambda request: httpx.Response(200, json={"models": [{"name": "llama3:latest"}]}))
+
+    status = client.get("/api/v1/ai/status").json()
+
+    assert (status["reachable"], status["model_available"]) == (True, False)
+
+
+def test_ai_status_reports_unreachable_server(client, mock_http):
+    def refuse(request):
+        raise httpx.ConnectError("refused", request=request)
+
+    mock_http.respond_with(refuse)
+
+    status = client.get("/api/v1/ai/status").json()
+
+    assert (status["reachable"], status["model_available"]) == (False, False)

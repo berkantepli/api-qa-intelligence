@@ -7,6 +7,8 @@ import RunDetail from "./RunDetail.jsx";
 import RunHistoryList from "./RunHistoryList.jsx";
 import { removeSavedApi } from "./savedApis.js";
 import ScenarioDraftEditor from "./ScenarioDraftEditor.jsx";
+import SettingsPage from "./SettingsPage.jsx";
+import { buildWorkspaceExport, mergeWorkspace, parseWorkspaceImport, workspaceFileName } from "./workspace.js";
 import { buildEditedScenario, createDraft, isEditedScenario, statusCodeSuggestions, validateDraft } from "./scenarioDraft.js";
 
 const DEFAULT_TARGET_URL = "http://127.0.0.1:8000";
@@ -98,6 +100,7 @@ function App() {
   const [runHistory, setRunHistory] = useState(() => readStoredJson(STORAGE_KEYS.runHistory, []));
   const [selectedRunId, setSelectedRunId] = useState(null);
   const [pendingDeleteApiId, setPendingDeleteApiId] = useState(null);
+  const [aiStatus, setAiStatus] = useState({ loading: true });
   const [openRunGroups, setOpenRunGroups] = useState({});
   const [lastRunId, setLastRunId] = useState(null);
   const [analysisState, setAnalysisState] = useState({});
@@ -179,6 +182,7 @@ function App() {
   useEffect(() => { localStorage.setItem(STORAGE_KEYS.savedApis, JSON.stringify(savedApis)); }, [savedApis]);
   useEffect(() => { localStorage.setItem(STORAGE_KEYS.activeApi, activeApiId); }, [activeApiId]);
   useEffect(() => { localStorage.setItem(STORAGE_KEYS.runHistory, JSON.stringify(runHistory)); }, [runHistory]);
+  useEffect(() => { refreshAiStatus(); }, []);
 
   useEffect(() => {
     if (!activeApiId || !targetUrl.trim()) {
@@ -471,6 +475,49 @@ function App() {
     setPage("overview");
   }
 
+  async function refreshAiStatus() {
+    setAiStatus((current) => ({ ...current, loading: true }));
+    try {
+      const response = await fetch("/api/v1/ai/status");
+      setAiStatus(await readJsonResponse(response, "The AI status could not be checked."));
+    } catch (caught) {
+      setAiStatus({ error: caught.message || "The AI status could not be checked." });
+    }
+  }
+
+  function exportWorkspace() {
+    const blob = new Blob([JSON.stringify(buildWorkspaceExport(savedApis, runHistory), null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = workspaceFileName();
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function importWorkspace(text) {
+    const merged = mergeWorkspace({ savedApis, runHistory }, parseWorkspaceImport(text));
+    setSavedApis(merged.savedApis);
+    setRunHistory(merged.runHistory);
+    if (!merged.savedApis.some((api) => api.id === activeApiId) && merged.savedApis[0]) {
+      setActiveApiId(merged.savedApis[0].id);
+      setTargetUrl(resolveApiTarget(merged.savedApis[0]) || DEFAULT_TARGET_URL);
+      setSelectedOperation(firstRunnableOperationIndex(merged.savedApis[0].overview));
+      resetRunState();
+    }
+    return merged;
+  }
+
+  function deleteAllData() {
+    setSavedApis([]);
+    setRunHistory([]);
+    setActiveApiId("");
+    setTargetUrl(DEFAULT_TARGET_URL);
+    setSelectedRunId(null);
+    setOpenRunGroups({});
+    resetRunState();
+  }
+
   function deleteRuns(runIds) {
     const removed = new Set(runIds);
     setRunHistory((current) => current.filter((run) => !removed.has(run.id)));
@@ -514,6 +561,11 @@ function App() {
   function openEndpointFromCoverage(operationIndex) {
     selectOperation(operationIndex);
     openOverviewPage();
+  }
+
+  function openSettingsPage() {
+    setPage("settings");
+    window.scrollTo(0, 0);
   }
 
   function openRunHistory(runId = null) {
@@ -567,6 +619,11 @@ function App() {
           <Icon name="clock" /><span>Run history</span>
           {failingEndpoints > 0 && <em className="nav-badge" title={`${failingEndpoints} ${failingEndpoints === 1 ? "endpoint" : "endpoints"} failed in the latest run`} aria-label={`${failingEndpoints} failing`}>{failingEndpoints}</em>}
         </button>
+        <div className="sidebar-footer">
+          <button className={`nav-link ${page === "settings" ? "active" : ""}`} onClick={openSettingsPage}>
+            <Icon name="settings" /><span>Settings</span>
+          </button>
+        </div>
       </aside>
 
       <main className="main-area">
@@ -584,7 +641,17 @@ function App() {
           <div className="topbar-right"><button className="theme-switch" type="button" onClick={() => setTheme((current) => current === "dark" ? "light" : "dark")} aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`} aria-pressed={theme === "light"} title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}><span className="theme-switch-track"><svg className="theme-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><circle cx="12" cy="12" r="4" /><path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32 1.41 1.41M2 12h2m16 0h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" /></svg><svg className="theme-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3 6.7 6.7 0 0 0 21 12.8Z" /></svg></span><span className="theme-knob" /></button></div>
         </header>
 
-        {page === "coverage" ? (
+        {page === "settings" ? (
+          <SettingsPage
+            aiStatus={aiStatus}
+            onRefreshAiStatus={refreshAiStatus}
+            savedApiCount={savedApis.length}
+            runCount={runHistory.length}
+            onExport={exportWorkspace}
+            onImport={importWorkspace}
+            onDeleteAll={deleteAllData}
+          />
+        ) : page === "coverage" ? (
           <CoveragePage
             overview={overview}
             apiRuns={runsForApi(runHistory, activeApiId, savedApis)}
