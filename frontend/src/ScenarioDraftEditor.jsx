@@ -1,3 +1,4 @@
+import { parameterLabel } from "./categories.js";
 import { parseJsonBody, parseStatusCodes } from "./scenarioDraft.js";
 
 const parameterModeLabels = { default: "Use request details", omit: "Omit", custom: "Custom value" };
@@ -50,7 +51,7 @@ export default function ScenarioDraftEditor({
           const key = `${parameter.location}:${parameter.name}`;
           const setting = draft.parameters[key] ?? { mode: "default", value: "" };
           return <div className="request-input" key={key}>
-            <span>{parameter.name}<small>{parameter.location}{parameter.required ? " · required" : " · optional"}</small></span>
+            <span>{parameter.name}<small>{parameterLabel(parameter)}</small></span>
             <div className="draft-parameter-control">
               <select aria-label={`${parameter.name} value`} value={setting.mode} onChange={(event) => updateParameter(key, { mode: event.target.value })}>
                 {Object.entries(parameterModeLabels).map(([mode, label]) => <option key={mode} value={mode}>{label}</option>)}

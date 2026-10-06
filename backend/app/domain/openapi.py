@@ -26,6 +26,8 @@ class ApiParameter(BaseModel):
     description: str | None = None
     example: Any = None
     field_type: str = "string"
+    # Derived from the operation's security requirement; optional so checks can also run unauthenticated.
+    credential: bool = False
 
 
 class ApiBodyField(BaseModel):
@@ -418,12 +420,16 @@ def _operation_parameters(path_item: Mapping[str, Any], operation: Mapping[str, 
             else:
                 continue
             key = (name, str(location))
+            if key in combined:
+                # An explicitly documented parameter keeps its own required flag.
+                combined[key] = combined[key].model_copy(update={"credential": True})
+                continue
             combined[key] = ApiParameter(
                 name=name,
                 location=str(location),
-                required=True,
                 description=_optional_string(scheme.get("description")) or f"Authentication credential ({scheme.get('scheme', scheme.get('type'))}).",
                 field_type="string",
+                credential=True,
             )
     return list(combined.values())
 

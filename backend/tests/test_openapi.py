@@ -50,7 +50,9 @@ def test_resolves_parameters_and_security_credentials(sample_spec):
     assert list_pets["limit"].example == 10
     assert list_pets["limit"].required is False
     assert list_pets["X-Key"].location == "header"
-    assert list_pets["X-Key"].required is True
+    assert list_pets["X-Key"].required is False
+    assert list_pets["X-Key"].credential is True
+    assert list_pets["limit"].credential is False
 
     create_pet = {param.name for param in operation(overview, "POST", "/pets").parameters}
     assert create_pet == {"Authorization"}
@@ -58,6 +60,26 @@ def test_resolves_parameters_and_security_credentials(sample_spec):
     get_pet = operation(overview, "GET", "/pets/{id}").parameters
     path_param = next(param for param in get_pet if param.name == "id")
     assert (path_param.location, path_param.required, path_param.example) == ("path", True, "p1")
+
+
+def test_documented_credential_parameter_keeps_its_required_flag():
+    document = {
+        "openapi": "3.0.0",
+        "info": {"title": "Keys", "version": "1"},
+        "components": {"securitySchemes": {"key": {"type": "apiKey", "in": "header", "name": "api_key"}}},
+        "paths": {
+            "/items": {
+                "get": {
+                    "security": [{"key": []}],
+                    "parameters": [{"name": "api_key", "in": "header", "required": True, "schema": {"type": "string"}}],
+                    "responses": {"200": {}},
+                }
+            }
+        },
+    }
+
+    (parameter,) = summarize_openapi(document).operations[0].parameters
+    assert (parameter.name, parameter.required, parameter.credential) == ("api_key", True, True)
 
 
 def test_json_body_scenarios_have_runnable_examples(sample_spec):

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { categoryLabels } from "./categories.js";
+import { categoryLabels, parameterLabel } from "./categories.js";
 import Icon from "./Icon.jsx";
 import RunDetail from "./RunDetail.jsx";
 import RunHistoryList from "./RunHistoryList.jsx";
@@ -616,9 +616,9 @@ function App() {
                 {(operationParameters.length > 0 || bodyFields.length > 0 || needsRawJsonBody) && <div className="request-inputs">
                   <div className="request-inputs-heading"><strong>Request details</strong><span>Fill in required values from your test environment.</span></div>
                   {operationParameters.map((parameter) => <label className="request-input" key={`${parameter.location}:${parameter.name}`}>
-                    <span>{parameter.name}<small>{parameter.location}{parameter.required ? " · required" : " · optional"}</small></span>
+                    <span>{parameter.name}<small>{parameterLabel(parameter)}</small></span>
                     <input type={parameter.location === "header" ? "password" : "text"} value={getParameterValue(parameter)} onChange={(event) => updateRequestInput(`parameter:${parameter.location}:${parameter.name}`, event.target.value)} placeholder={parameter.example == null ? `Enter ${parameter.name}` : String(parameter.example)} />
-                    {parameter.description && <small className="request-input-help">{parameter.description}</small>}
+                    {(parameter.description || parameter.credential) && <small className="request-input-help">{[parameter.description, parameter.credential && !parameter.required && "Leave empty to call without credentials."].filter(Boolean).join(" ")}</small>}
                   </label>)}
                   {bodyFields.map((field) => <label className="request-input" key={`body:${field.name}`}>
                     <span>{field.name}<small>{field.is_file ? (field.multiple ? "file · multiple" : "file") : `${isFormBody ? "form field" : "request body"}${field.required ? " · required" : " · optional"}`}</small></span>
