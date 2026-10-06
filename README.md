@@ -95,6 +95,10 @@ Every executed batch is saved in this browser’s Run history, grouped by API wi
 
 The **Coverage** page summarizes, for the active API, how many endpoints have been tested in this browser, which endpoints failed in their latest run, and which data-changing endpoints were never tested. Each endpoint shows its latest status, how many of its runnable checks were executed, and risk flags such as *Changes data, not tested*, *Only happy path tested*, or *Auth not checked*. Select an endpoint to open it in the overview.
 
+### Settings and backups
+
+Saved APIs and Run history live only in this browser’s storage. The **Settings** page shows whether the configured Ollama model is reachable and installed (`GET /api/v1/ai/status`), exports the workspace as a JSON file, imports an export (APIs with the same id are replaced and existing runs are skipped), and can delete all local data after confirmation.
+
 ### Optional AI features
 
 Install and run Ollama with a model. The default model is `qwen3-vl:8b-instruct`, and the default Ollama URL is `http://127.0.0.1:11434`. Override them with `OLLAMA_MODEL` and `OLLAMA_BASE_URL` before starting the backend. In an API overview, choose **Suggest scenarios** to send the selected endpoint’s contract details (operation, parameters, and body field names/types) to the configured model. The model receives no example values, credentials, target URL, or API traffic. Suggestions are review-only and are not runnable until you choose **Convert to check**, state the expected status codes, and decide for each parameter whether to use the request details, omit it, or send a custom value; JSON bodies are sent exactly as written in the editor. Saved checks are labeled **AI idea · edited**, stay in this browser with the saved API, and run only when you select them, with the usual confirmation for data-changing methods. In a run’s details, choose **Analyze with AI** on a failed check to send that check’s redacted evidence for optional, advisory analysis. Read the on-screen disclosure before requesting either AI feature.
