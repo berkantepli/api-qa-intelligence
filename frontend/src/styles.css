@@ -400,6 +400,11 @@ h1, h2, h3, p { margin-top: 0; }
 .duplicate-notice small { color: var(--muted); font-size: 9px; }
 .duplicate-reason { display: block; margin-top: 2px; color: #765f40; }
 .duplicate-actions { display: flex; flex: 0 0 auto; gap: 12px; padding-top: 1px; }
+.scenario-card.just-saved { border-color: var(--green); box-shadow: 0 0 0 3px var(--green-soft); transition: border-color .3s, box-shadow .3s; }
+.saved-check-notice { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0; font-size: 11px; }
+.saved-check-notice span { flex: 1; min-width: 200px; }
+.draft-editor input[aria-invalid="true"], .draft-editor textarea[aria-invalid="true"] { border-color: var(--red); box-shadow: 0 0 0 3px var(--red-soft); }
+.draft-status b { font-weight: 600; }
 .edited-check-summary { margin: 5px 0 0; color: var(--muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 9px; }
 .card-actions { display: flex; gap: 12px; margin-top: 9px; }
 .text-button { padding: 0; border: 0; background: transparent; color: var(--accent); font-size: 10px; font-weight: 600; }

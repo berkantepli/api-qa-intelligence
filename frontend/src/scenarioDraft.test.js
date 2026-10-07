@@ -4,6 +4,7 @@ import {
   createDraft,
   isEditedScenario,
   parseStatusCodes,
+  validateDraftFields,
   statusCodeSuggestions,
   validateDraft,
 } from "./scenarioDraft.js";
@@ -142,5 +143,19 @@ describe("statusCodeSuggestions", () => {
       { label: "Success", codes: [201] },
       { label: "Rejected", codes: [400, 422] },
     ]);
+  });
+});
+
+describe("validateDraftFields", () => {
+  it("keys each problem by the input it belongs to", () => {
+    const draft = readyDraft({
+      title: "",
+      expectedStatusCodes: "",
+      jsonBody: "{broken",
+      parameters: { ...readyDraft().parameters, "query:limit": { mode: "custom", value: " " } },
+    });
+
+    expect(Object.keys(validateDraftFields(draft, jsonContext)).sort()).toEqual(["body", "expected", "query:limit", "title"]);
+    expect(validateDraftFields(readyDraft(), jsonContext)).toEqual({});
   });
 });
