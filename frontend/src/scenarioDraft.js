@@ -9,7 +9,12 @@
 // request details unless the draft omits or overrides them.
 
 export const EDITED_SOURCE = "ai_edited";
-export const PARAMETER_MODES = ["default", "omit", "custom"];
+export const PARAMETER_MODES = ["default", "omit", "empty", "custom"];
+
+// An empty path segment would change the URL itself, so path parameters cannot be sent empty.
+export function parameterModes(parameter) {
+  return parameter.location === "path" ? PARAMETER_MODES.filter((mode) => mode !== "empty") : PARAMETER_MODES;
+}
 
 const parameterKey = (parameter) => `${parameter.location}:${parameter.name}`;
 
@@ -83,6 +88,7 @@ export function buildEditedScenario(draft, { operation, parameters, sendsJsonBod
     const setting = draft.parameters[parameterKey(parameter)];
     if (setting?.mode === "omit") omittedParameters.push({ name: parameter.name, location: parameter.location });
     if (setting?.mode === "custom") parameterValues[parameterKey(parameter)] = setting.value.trim();
+    if (setting?.mode === "empty" && parameter.location !== "path") parameterValues[parameterKey(parameter)] = "";
   }
   return {
     category: draft.category,
@@ -115,4 +121,17 @@ export function statusCodeSuggestions(scenarios = []) {
     { label: "Success", codes: contractCodes.filter((code) => code < 400) },
     { label: "Rejected", codes: contractCodes.filter((code) => code >= 400) },
   ].filter((suggestion) => suggestion.codes.length);
+}
+
+// One-line description of what an edited check sends differently, shown on its card.
+export function editedCheckSummary(example) {
+  const parts = [`Expects HTTP ${(example.expected_status_codes ?? []).join(", ")}`];
+  const omitted = (example.omitted_parameters ?? []).map((parameter) => parameter.name);
+  if (omitted.length) parts.push(`omits ${omitted.join(", ")}`);
+  const values = Object.entries(example.parameter_values ?? {}).map(([key, value]) => [key.split(":").slice(1).join(":"), value]);
+  const empty = values.filter(([, value]) => value === "").map(([name]) => name);
+  const custom = values.filter(([, value]) => value !== "").map(([name]) => name);
+  if (empty.length) parts.push(`${empty.join(", ")} sent empty`);
+  if (custom.length) parts.push(`custom ${custom.join(", ")}`);
+  return parts.join(" · ");
 }

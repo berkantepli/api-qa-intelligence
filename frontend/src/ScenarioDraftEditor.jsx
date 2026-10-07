@@ -1,7 +1,8 @@
 import { useRef, useState } from "react";
 import { parameterLabel } from "./categories.js";
+import { parameterModes } from "./scenarioDraft.js";
 
-const parameterModeLabels = { default: "Use request details", omit: "Omit", custom: "Custom value" };
+const parameterModeLabels = { default: "Use request details", omit: "Omit", empty: "Send empty value", custom: "Custom value" };
 
 function FieldError({ message }) {
   return message ? <small className="request-input-help request-input-error" role="alert">{message}</small> : null;
@@ -77,7 +78,7 @@ export default function ScenarioDraftEditor({
             <span>{parameter.name}<small>{parameterLabel(parameter)}</small></span>
             <div className="draft-parameter-control">
               <select aria-label={`${parameter.name} value`} value={setting.mode} onChange={(event) => updateParameter(key, { mode: event.target.value })}>
-                {Object.entries(parameterModeLabels).map(([mode, label]) => <option key={mode} value={mode}>{label}</option>)}
+                {parameterModes(parameter).map((mode) => <option key={mode} value={mode}>{parameterModeLabels[mode]}</option>)}
               </select>
               {setting.mode === "custom" && <input type={parameter.location === "header" ? "password" : "text"} aria-label={`Custom ${parameter.name}`} aria-invalid={Boolean(visible(key, false))} value={setting.value} placeholder={`Value for ${parameter.name}`} onChange={(event) => updateParameter(key, { value: event.target.value })} />}
             </div>

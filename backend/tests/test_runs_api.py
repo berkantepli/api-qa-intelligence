@@ -34,6 +34,15 @@ def test_base_url_path_prefixes_the_operation_path(client, mock_http, base_url):
     assert result["request_url"] == f"{BASE_URL}/api/v3/pet/findByStatus?status=available"
 
 
+def test_empty_query_and_header_values_are_sent(client, mock_http):
+    result = execute(client, path="/pet/findByStatus", query_params={"status": ""}, headers={"X-Trace": ""}).json()
+
+    sent = mock_http.requests[0]
+    assert str(sent.url) == f"{BASE_URL}/pet/findByStatus?status="
+    assert sent.headers["X-Trace"] == ""
+    assert result["request_url"].endswith("/pet/findByStatus?status=")
+
+
 def test_fail_when_status_does_not_match(client, mock_http):
     mock_http.respond_with(lambda request: httpx.Response(500, text="boom"))
 

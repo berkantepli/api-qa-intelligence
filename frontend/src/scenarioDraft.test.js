@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   buildEditedScenario,
   createDraft,
+  editedCheckSummary,
   isEditedScenario,
+  parameterModes,
   parseStatusCodes,
   validateDraftFields,
   statusCodeSuggestions,
@@ -157,5 +159,29 @@ describe("validateDraftFields", () => {
 
     expect(Object.keys(validateDraftFields(draft, jsonContext)).sort()).toEqual(["body", "expected", "query:limit", "title"]);
     expect(validateDraftFields(readyDraft(), jsonContext)).toEqual({});
+  });
+});
+
+describe("empty parameter values", () => {
+  it("offers sending an empty value for every location except path", () => {
+    expect(parameterModes({ location: "query" })).toContain("empty");
+    expect(parameterModes({ location: "header" })).toContain("empty");
+    expect(parameterModes({ location: "path" })).not.toContain("empty");
+  });
+
+  it("stores an empty override and describes it on the card", () => {
+    const draft = readyDraft({
+      expectedStatusCodes: "400",
+      parameters: {
+        "path:id": { mode: "omit", value: "" },
+        "query:limit": { mode: "empty", value: "" },
+        "header:Authorization": { mode: "custom", value: "Bearer test" },
+      },
+    });
+
+    const example = buildEditedScenario(draft, jsonContext).request_example;
+
+    expect(example.parameter_values).toEqual({ "query:limit": "", "header:Authorization": "Bearer test" });
+    expect(editedCheckSummary(example)).toBe("Expects HTTP 400 · omits id · limit sent empty · custom Authorization");
   });
 });
