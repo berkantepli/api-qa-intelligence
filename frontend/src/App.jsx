@@ -3,7 +3,7 @@ import { categoryLabels, inputHelp, parameterLabel } from "./categories.js";
 import CoveragePage from "./CoveragePage.jsx";
 import DuplicateNotice from "./DuplicateNotice.jsx";
 import { duplicatePairKey, findDuplicateScenarios } from "./duplicates.js";
-import { failingEndpointCount, runsForApi } from "./coverage.js";
+import { runsForApi } from "./coverage.js";
 import { connectionLabel } from "./targetConnection.js";
 import Icon from "./Icon.jsx";
 import RunDetail from "./RunDetail.jsx";
@@ -196,7 +196,6 @@ function App() {
   const draftProblems = editingDraft ? validateDraft(editingDraft.draft, draftContext) : [];
   const selectedCount = selectedScenarios.length;
   const selectedRun = runHistory.find((run) => run.id === selectedRunId);
-  const failingEndpoints = failingEndpointCount(runHistory, savedApis);
   const serviceStatus = aiStatusLabel(aiStatus);
   const connectionView = connectionLabel(connection);
   const methods = useMemo(() => new Set((overview?.operations ?? []).map((item) => item.method)), [overview]);
@@ -723,7 +722,6 @@ function App() {
         </button>}
         <button className={`nav-link ${page === "history" ? "active" : ""}`} onClick={() => openRunHistory()}>
           <Icon name="clock" /><span>Run history</span>
-          {failingEndpoints > 0 && <em className="nav-badge" title={`${failingEndpoints} ${failingEndpoints === 1 ? "endpoint" : "endpoints"} failed in the latest run`} aria-label={`${failingEndpoints} failing`}>{failingEndpoints}</em>}
         </button>
         <div className="sidebar-footer">
           <button className={`sidebar-status connection-${serviceStatus.tone}`} type="button" onClick={() => { openSettingsPage(); runAiDiagnosis(); }} title={`Intelligence service: ${serviceStatus.detail}\nClick to run a diagnosis.`} aria-label={`Service status: ${serviceStatus.text}. Run a diagnosis.`}>
