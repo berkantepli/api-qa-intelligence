@@ -8,10 +8,10 @@ describe("connectionLabel", () => {
     [undefined, "unknown", "No API selected"],
     [{ status: "checking", url: "http://api" }, "checking", "Checking connection"],
     [{ status: "blocked", message: "The target URL must use a public host or localhost." }, "unavailable", "Target not allowed"],
-    [{ status: "error", message: "Failed to fetch" }, "unavailable", "Check failed · retry"],
-    [done({ reachable: false, error: "No response within 5 seconds." }), "unavailable", "API unavailable · retry"],
-    [done({ reachable: true, status_code: 200 }), "connected", "API reachable · 200"],
-    [done({ reachable: true, status_code: 404 }), "connected", "API reachable · 404"],
+    [{ status: "error", message: "Failed to fetch" }, "unavailable", "Check failed"],
+    [done({ reachable: false, error: "No response within 5 seconds." }), "unavailable", "API unavailable"],
+    [done({ reachable: true, status_code: 200 }), "connected", "API reachable"],
+    [done({ reachable: true, status_code: 404 }), "connected", "API reachable"],
     [done({ reachable: true, status_code: 503 }), "warning", "API error · 503"],
   ])("labels %j", (state, tone, text) => {
     expect(connectionLabel(state)).toMatchObject({ tone, text });

@@ -81,7 +81,7 @@ To run one explicit check, use `POST /api/v1/runs/execute`. Provide a base URL (
 }
 ```
 
-The topbar connection indicator asks the backend to probe the target base URL (`POST /api/v1/targets/check`): a read-only `HEAD` request, retried as `GET` when the server rejects `HEAD`, with the same safety rules as check execution. It shows the HTTP status (for example *API reachable · 200*, or *API error · 503* for server errors), explains connection failures, and reports targets the safety rules do not allow.
+The topbar connection indicator asks the backend to probe the target base URL (`POST /api/v1/targets/check`): a read-only `HEAD` request, retried as `GET` when the server rejects `HEAD`, with the same safety rules as check execution. It shows *API reachable* (status code, method, and response time in its tooltip), or the code itself for problems such as *API error · 503*; it also explains connection failures and reports targets the safety rules do not allow.
 
 Only call APIs you own or are authorized to test. Execution does not happen during import, and redirects are not followed.
 
