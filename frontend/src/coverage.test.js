@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { computeCoverage, failingEndpointCount, runsForApi } from "./coverage.js";
+import { computeCoverage, runsForApi } from "./coverage.js";
 
 const happy = { category: "happy_path", title: "Valid request", request_example: {} };
 const negative = { category: "negative", title: "Omit a required parameter", request_example: {} };
@@ -51,17 +51,5 @@ describe("runsForApi", () => {
   it("includes legacy runs matched by a unique title", () => {
     const runs = [{ apiId: "pets", api: "Pets" }, { api: "Pets" }, { api: "Other" }];
     expect(runsForApi(runs, "pets", [{ id: "pets", title: "Pets" }])).toHaveLength(2);
-  });
-});
-
-describe("failingEndpointCount", () => {
-  it("counts endpoints whose latest run failed, per API", () => {
-    const runs = [
-      run("GET /pets", "2026-10-01T10:00:00Z", [{ result: "FAIL" }]),
-      run("GET /pets", "2026-10-02T10:00:00Z", [{ result: "PASS" }]),
-      run("POST /pets", "2026-10-02T10:00:00Z", [{ result: "ERROR" }]),
-      { ...run("POST /pets", "2026-10-02T11:00:00Z", [{ result: "FAIL" }]), apiId: "other", api: "Other" },
-    ];
-    expect(failingEndpointCount(runs, [])).toBe(2);
   });
 });

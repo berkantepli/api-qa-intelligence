@@ -72,14 +72,3 @@ export function computeCoverage(overview, apiRuns = []) {
     },
   };
 }
-
-// Endpoints whose most recent run had a FAIL or ERROR, across every API.
-export function failingEndpointCount(runs = [], savedApis = []) {
-  const idsByTitle = apiIdsByTitle(savedApis);
-  const latestByEndpoint = new Map();
-  for (const run of [...runs].sort(byNewest)) {
-    const key = `${runApiKey(run, idsByTitle)}|${run.endpoint}`;
-    if (!latestByEndpoint.has(key)) latestByEndpoint.set(key, run);
-  }
-  return [...latestByEndpoint.values()].filter((run) => hasProblems(run.results)).length;
-}
