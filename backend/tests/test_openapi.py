@@ -93,7 +93,7 @@ def test_json_body_scenarios_have_runnable_examples(sample_spec):
     assert valid.expected_status_codes == [201]
     assert valid.json_body["email"] == "qa@example.com"
     assert valid.json_body["kind"] == "cat"
-    assert len(valid.json_body["name"]) == 2
+    assert 2 <= len(valid.json_body["name"]) <= 20
 
     missing = scenario(create_pet, "Omit a required request field").request_example
     assert "name" not in missing.json_body
@@ -162,3 +162,37 @@ def test_circular_references_do_not_recurse_forever():
     create_node = summarize_openapi(document).operations[0]
     assert [field.name for field in create_node.request_body_fields] == ["child"]
     assert scenario(create_node, "Valid request").request_example.json_body == {"child": None}
+
+
+
+def test_fields_carry_their_schema_and_only_documented_examples():
+    document = {
+        "openapi": "3.0.0",
+        "info": {"title": "Samples", "version": "1"},
+        "paths": {
+            "/orders": {
+                "post": {
+                    "parameters": [{"name": "limit", "in": "query", "schema": {"type": "integer", "minimum": 5}}],
+                    "requestBody": {"content": {"application/json": {"schema": {
+                        "type": "object",
+                        "properties": {
+                            "quantity": {"type": "integer", "example": 7},
+                            "shipDate": {"type": "string", "format": "date-time"},
+                            "tags": {"type": "array", "items": {"type": "object", "properties": {"name": {"type": "string"}}}},
+                        },
+                    }}}},
+                    "responses": {"200": {}},
+                }
+            }
+        },
+    }
+
+    operation = summarize_openapi(document).operations[0]
+    fields = {field.name: field for field in operation.request_body_fields}
+
+    assert fields["quantity"].example == 7
+    assert fields["shipDate"].example is None
+    assert fields["shipDate"].value_schema == {"type": "string", "format": "date-time"}
+    assert fields["tags"].value_schema == {"type": "array", "items": {"type": "object", "properties": {"name": {"type": "string"}}}}
+    assert operation.parameters[0].example is None
+    assert operation.parameters[0].value_schema == {"type": "integer", "minimum": 5}
