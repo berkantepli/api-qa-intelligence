@@ -14,7 +14,7 @@ import ScenarioDraftEditor from "./ScenarioDraftEditor.jsx";
 import SettingsPage, { aiStatusLabel } from "./SettingsPage.jsx";
 import { version as appVersion } from "../package.json";
 import { buildWorkspaceExport, mergeWorkspace, parseWorkspaceImport, workspaceFileName } from "./workspace.js";
-import { buildEditedScenario, createDraft, isEditedScenario, statusCodeSuggestions, validateDraft } from "./scenarioDraft.js";
+import { buildEditedScenario, createDraft, isEditedScenario, statusCodeSuggestions, validateDraftFields } from "./scenarioDraft.js";
 
 const DEFAULT_TARGET_URL = "http://127.0.0.1:8000";
 const STORAGE_KEYS = {
@@ -128,6 +128,11 @@ function App() {
   const [selectedScenarios, setSelectedScenarios] = useState([]);
   // The one AI idea or edited check currently open in the editor: { scenarioIndex, draft }.
   const [editingDraft, setEditingDraft] = useState(null);
+  // Unsaved drafts survive closing the editor or switching endpoints; keyed by draftKey().
+  const [draftStash, setDraftStash] = useState({});
+  // After "Save as check": { operationKey, title, scenarioIndex } for the notice and highlight.
+  const [savedCheck, setSavedCheck] = useState(null);
+  const [highlightedCheck, setHighlightedCheck] = useState(null);
   const [showExecutionConfirmation, setShowExecutionConfirmation] = useState(false);
   const [results, setResults] = useState({});
   const [requestInputs, setRequestInputs] = useState({});
@@ -193,7 +198,8 @@ function App() {
     ignoredPairs: operation?.ignored_duplicates ?? [],
   });
   const duplicateIndexes = new Set(duplicatePairs.map((pair) => pair.drop));
-  const draftProblems = editingDraft ? validateDraft(editingDraft.draft, draftContext) : [];
+  const draftErrors = editingDraft ? validateDraftFields(editingDraft.draft, draftContext) : {};
+  const draftKey = (scenario) => `${activeApiId}|${operationKey}|${scenario.source ?? "contract"}|${scenario.title}`;
   const selectedCount = selectedScenarios.length;
   const selectedRun = runHistory.find((run) => run.id === selectedRunId);
   const serviceStatus = aiStatusLabel(aiStatus);
@@ -209,6 +215,14 @@ function App() {
   useEffect(() => { localStorage.setItem(STORAGE_KEYS.activeApi, activeApiId); }, [activeApiId]);
   useEffect(() => { localStorage.setItem(STORAGE_KEYS.runHistory, JSON.stringify(runHistory)); }, [runHistory]);
   useEffect(() => { refreshAiStatus(); }, []);
+
+  // Bring a just-saved check into view and highlight it briefly.
+  useEffect(() => {
+    if (highlightedCheck == null) return undefined;
+    document.querySelector(`[data-scenario-index="${highlightedCheck}"]`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    const timer = window.setTimeout(() => setHighlightedCheck(null), 2600);
+    return () => window.clearTimeout(timer);
+  }, [highlightedCheck]);
 
   // The backend probes the target with the same safety rules as check execution.
   useEffect(() => {
@@ -290,16 +304,35 @@ function App() {
 
   function openDraftEditor(scenarioIndex) {
     const scenario = operationScenarios[scenarioIndex];
+    const key = draftKey(scenario);
     const initialFormFields = Object.fromEntries(bodyFields.filter((field) => !field.is_file).map((field) => [field.name, getBodyFieldValue(field)]));
     setShowExecutionConfirmation(false);
-    setEditingDraft({ scenarioIndex, draft: createDraft(scenario, { ...draftContext, initialJsonBody: currentJsonBody(), initialFormFields }) });
+    setEditingDraft({
+      scenarioIndex,
+      key,
+      draft: draftStash[key] ?? createDraft(scenario, { ...draftContext, initialJsonBody: currentJsonBody(), initialFormFields }),
+    });
+  }
+
+  function changeDraft(draft) {
+    setEditingDraft((current) => ({ ...current, draft }));
+    setDraftStash((current) => ({ ...current, [editingDraft.key]: draft }));
+  }
+
+  function discardDraft() {
+    setDraftStash(({ [editingDraft.key]: _discarded, ...rest }) => rest);
+    setEditingDraft(null);
   }
 
   function saveDraft() {
-    if (!editingDraft || draftProblems.length) return;
+    if (!editingDraft || Object.keys(draftErrors).length) return;
     const check = buildEditedScenario(editingDraft.draft, draftContext);
-    updateOperationScenarios((scenarios) => scenarios.map((scenario, index) => index === editingDraft.scenarioIndex ? check : scenario));
+    const { scenarioIndex, key } = editingDraft;
+    updateOperationScenarios((scenarios) => scenarios.map((scenario, index) => index === scenarioIndex ? check : scenario));
+    setDraftStash(({ [key]: _saved, ...rest }) => rest);
     resetRunState();
+    setSavedCheck({ operationKey, title: check.title, scenarioIndex });
+    setHighlightedCheck(scenarioIndex);
   }
 
   function removeEditedCheck(scenarioIndex) {
@@ -349,6 +382,7 @@ function App() {
   function selectOperation(index) {
     setSelectedOperation(index);
     resetRunState();
+    setSavedCheck(null);
   }
 
   async function generateScenarioIdeas() {
@@ -681,15 +715,16 @@ function App() {
 
   const draftEditor = editingDraft && <ScenarioDraftEditor
     draft={editingDraft.draft}
-    problems={draftProblems}
+    errors={draftErrors}
     parameters={operationParameters}
     sendsJsonBody={sendsJsonBody}
     isFormBody={isFormBody}
     statusSuggestions={statusCodeSuggestions(operationScenarios)}
     isDataChangingMethod={isDataChangingMethod}
     saveLabel={isEditedScenario(operationScenarios[editingDraft.scenarioIndex]) ? "Save changes" : "Save as check"}
-    onChange={(draft) => setEditingDraft((current) => ({ ...current, draft }))}
-    onCancel={() => setEditingDraft(null)}
+    onChange={changeDraft}
+    onClose={() => setEditingDraft(null)}
+    onDiscard={discardDraft}
     onSave={saveDraft}
   />;
 
@@ -881,14 +916,14 @@ function App() {
                     const result = results[index];
                     const checked = selectedScenarios.includes(index);
                     return (
-                      <article key={`${scenario.category}-${scenario.title}-${index}`} className={`scenario-card ${checked ? "checked" : ""}`}>
+                      <article key={`${scenario.category}-${scenario.title}-${index}`} data-scenario-index={scenario.scenarioIndex} className={`scenario-card ${checked ? "checked" : ""} ${highlightedCheck === scenario.scenarioIndex ? "just-saved" : ""}`}>
                         <label className="scenario-select">
                           <input type="checkbox" checked={checked} disabled={running} onChange={() => toggleScenario(index)} />
                           <span className="custom-check"><Icon name="check" size={13} /></span>
                         </label>
                         <div className="scenario-content"><div className="scenario-title-row"><span className={`category-pill category-${scenario.category}`}>{categoryLabels[scenario.category] || scenario.category}</span>{isEditedScenario(scenario) && <span className="edited-pill">AI idea · edited</span>}{duplicateIndexes.has(scenario.scenarioIndex) && <span className="duplicate-pill">Possible duplicate</span>}</div><h3>{scenario.title}</h3><p>{scenario.rationale}</p>
                         {isEditedScenario(scenario) && <p className="edited-check-summary">Expects HTTP {scenario.request_example.expected_status_codes.join(", ")}{scenario.request_example.omitted_parameters?.length ? ` · omits ${scenario.request_example.omitted_parameters.map((parameter) => parameter.name).join(", ")}` : ""}</p>}
-                        {isEditedScenario(scenario) && editingDraft?.scenarioIndex !== scenario.scenarioIndex && <div className="card-actions"><button className="text-button" type="button" disabled={running} onClick={() => openDraftEditor(scenario.scenarioIndex)}>Edit</button><button className="text-button danger" type="button" disabled={running} onClick={() => removeEditedCheck(scenario.scenarioIndex)}>Remove</button></div>}
+                        {isEditedScenario(scenario) && editingDraft?.scenarioIndex !== scenario.scenarioIndex && <div className="card-actions"><button className="text-button" type="button" disabled={running} onClick={() => openDraftEditor(scenario.scenarioIndex)}>{draftStash[draftKey(scenario)] ? "Continue editing" : "Edit"}</button><button className="text-button danger" type="button" disabled={running} onClick={() => removeEditedCheck(scenario.scenarioIndex)}>Remove</button></div>}
                         {editingDraft?.scenarioIndex === scenario.scenarioIndex && draftEditor}
                         {result && <div className={`result-box result-${result.result.toLowerCase()}`}><div className="result-heading"><strong>{result.result}</strong>{result.response_status && <span>HTTP {result.response_status}</span>}<small>{result.duration_ms} ms</small></div>{result.error && <p>{result.error}</p>}{result.response_body && <details><summary>Response details</summary><pre>{result.response_body}</pre></details>}</div>}</div>
                       </article>
@@ -899,13 +934,14 @@ function App() {
                 <section className="ai-suggestions">
                   <div className="ai-suggestions-heading"><div><div className="panel-kicker"><Icon name="spark" size={14} /> AI SUGGESTIONS</div><p>Ideas based on this endpoint’s contract. Review them before turning them into checks.</p></div><button className="secondary-button" type="button" disabled={scenarioIdeaStatus.loading} onClick={generateScenarioIdeas}>{scenarioIdeaStatus.loading ? <><span className="spinner" /> Thinking…</> : <><Icon name="spark" size={14} /> {aiScenarioIdeas.length ? "Refresh suggestions" : "Suggest scenarios"}</>}</button></div>
                   <small className="ai-suggestions-note">Sends endpoint details to your configured AI model. No credentials or API requests are sent.</small>
+                  {savedCheck?.operationKey === operationKey && <div className="alert success-alert saved-check-notice" role="status"><Icon name="check" size={16} /><span>“{savedCheck.title}” was saved as a check under Runnable checks{inputsReady ? "." : "; complete the request details above to run it."}</span>{inputsReady && <button className="text-button" type="button" onClick={() => setHighlightedCheck(savedCheck.scenarioIndex)}>Show it</button>}</div>}
                   {scenarioIdeaStatus.error && <div className="alert error-alert" role="alert">{scenarioIdeaStatus.error}</div>}
                   {aiScenarioIdeas.length ? <div className="ai-suggestions-list">{aiScenarioIdeas.map(({ scenario, scenarioIndex }) => <article className="ai-suggestion-card" key={`${scenario.title}-${scenarioIndex}`}>
-                    <div className="scenario-title-row"><span className={`category-pill category-${scenario.category}`}>{categoryLabels[scenario.category] || scenario.category}</span><span className="review-pill">Review · not runnable</span>{duplicateIndexes.has(scenarioIndex) && <span className="duplicate-pill">Possible duplicate</span>}</div>
+                    <div className="scenario-title-row"><span className={`category-pill category-${scenario.category}`}>{categoryLabels[scenario.category] || scenario.category}</span><span className="review-pill">Review · not runnable</span>{duplicateIndexes.has(scenarioIndex) && <span className="duplicate-pill">Possible duplicate</span>}{draftStash[draftKey(scenario)] && editingDraft?.scenarioIndex !== scenarioIndex && <span className="edited-pill">Draft in progress</span>}</div>
                     <h3>{scenario.title}</h3><p>{scenario.rationale}</p>
                     {editingDraft?.scenarioIndex === scenarioIndex
                       ? draftEditor
-                      : <div className="card-actions"><button className="text-button" type="button" disabled={running} onClick={() => openDraftEditor(scenarioIndex)}>Convert to check</button></div>}
+                      : <div className="card-actions"><button className="text-button" type="button" disabled={running} onClick={() => openDraftEditor(scenarioIndex)}>{draftStash[draftKey(scenario)] ? "Continue draft" : "Convert to check"}</button></div>}
                   </article>)}</div> : <div className="ai-suggestions-empty">No AI ideas yet. Generate suggestions when you want a second QA perspective.</div>}
                 </section>
                 {showExecutionConfirmation && <div className="execution-confirmation" role="alert">

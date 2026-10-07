@@ -53,20 +53,26 @@ export function parseJsonBody(text) {
   catch { return { value: null, error: "Request body must be valid JSON, or empty to send no body." }; }
 }
 
-export function validateDraft(draft, { parameters, sendsJsonBody }) {
-  const problems = [];
-  if (!draft.title.trim()) problems.push("Give the check a title.");
+// Problems keyed by the input they belong to: "title", "expected", "body", or a parameter key.
+export function validateDraftFields(draft, { parameters, sendsJsonBody }) {
+  const errors = {};
+  if (!draft.title.trim()) errors.title = "Give the check a title.";
   const status = parseStatusCodes(draft.expectedStatusCodes);
-  if (status.error) problems.push(status.error);
+  if (status.error) errors.expected = status.error;
   for (const parameter of parameters) {
-    const setting = draft.parameters[parameterKey(parameter)];
-    if (setting?.mode === "custom" && !setting.value.trim()) problems.push(`Enter a custom value for ${parameter.name} or choose another option.`);
+    const key = parameterKey(parameter);
+    const setting = draft.parameters[key];
+    if (setting?.mode === "custom" && !setting.value.trim()) errors[key] = `Enter a custom value for ${parameter.name} or choose another option.`;
   }
   if (sendsJsonBody) {
     const body = parseJsonBody(draft.jsonBody);
-    if (body.error) problems.push(body.error);
+    if (body.error) errors.body = body.error;
   }
-  return problems;
+  return errors;
+}
+
+export function validateDraft(draft, context) {
+  return Object.values(validateDraftFields(draft, context));
 }
 
 export function buildEditedScenario(draft, { operation, parameters, sendsJsonBody, isFormBody }) {
