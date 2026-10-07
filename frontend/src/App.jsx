@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { categoryLabels, parameterLabel } from "./categories.js";
 import CoveragePage from "./CoveragePage.jsx";
 import { failingEndpointCount, runsForApi } from "./coverage.js";
+import { connectionLabel } from "./targetConnection.js";
 import Icon from "./Icon.jsx";
 import RunDetail from "./RunDetail.jsx";
 import RunHistoryList from "./RunHistoryList.jsx";
@@ -41,7 +42,13 @@ async function postJson(url, body, fallbackMessage) {
 
 async function readJsonResponse(response, fallbackMessage) {
   const payload = await response.json();
-  if (!response.ok) throw new Error(payload.detail || fallbackMessage);
+  if (!response.ok) {
+    // FastAPI validation errors arrive as a list of { msg } objects.
+    const detail = Array.isArray(payload.detail) ? payload.detail.map((item) => item.msg).join("; ") : payload.detail;
+    const error = new Error(detail || fallbackMessage);
+    error.status = response.status;
+    throw error;
+  }
   return payload;
 }
 
@@ -119,7 +126,7 @@ function App() {
   const [requestInputs, setRequestInputs] = useState({});
   const [requestFiles, setRequestFiles] = useState({});
   const [targetUrl, setTargetUrl] = useState(() => resolveApiTarget(savedApis.find((api) => api.id === activeApiId)) || DEFAULT_TARGET_URL);
-  const [connectionStatus, setConnectionStatus] = useState("checking");
+  const [connection, setConnection] = useState({ status: "checking", url: "" });
   const [connectionCheckId, setConnectionCheckId] = useState(0);
   const [loading, setLoading] = useState(false);
   const [running, setRunning] = useState(false);
@@ -175,6 +182,7 @@ function App() {
   const selectedRun = runHistory.find((run) => run.id === selectedRunId);
   const failingEndpoints = failingEndpointCount(runHistory, savedApis);
   const serviceStatus = aiStatusLabel(aiStatus);
+  const connectionView = connectionLabel(connection);
   const methods = useMemo(() => new Set((overview?.operations ?? []).map((item) => item.method)), [overview]);
 
   useEffect(() => {
@@ -187,19 +195,32 @@ function App() {
   useEffect(() => { localStorage.setItem(STORAGE_KEYS.runHistory, JSON.stringify(runHistory)); }, [runHistory]);
   useEffect(() => { refreshAiStatus(); }, []);
 
+  // The backend probes the target with the same safety rules as check execution.
   useEffect(() => {
-    if (!activeApiId || !targetUrl.trim()) {
-      setConnectionStatus("unknown");
+    const url = targetUrl.trim();
+    if (!activeApiId || !url) {
+      setConnection({ status: "unknown" });
       return undefined;
     }
     const controller = new AbortController();
-    const timeout = window.setTimeout(() => controller.abort(), 4000);
-    setConnectionStatus("checking");
-    fetch(targetUrl.trim(), { method: "HEAD", mode: "no-cors", cache: "no-store", signal: controller.signal })
-      .then(() => setConnectionStatus("connected"))
-      .catch(() => setConnectionStatus("unavailable"))
-      .finally(() => window.clearTimeout(timeout));
-    return () => { window.clearTimeout(timeout); controller.abort(); };
+    setConnection({ status: "checking", url });
+    // Wait briefly so typing in the target field does not send a probe per keystroke.
+    const delay = window.setTimeout(async () => {
+      try {
+        const response = await fetch("/api/v1/targets/check", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ base_url: url }),
+          signal: controller.signal,
+        });
+        const result = await readJsonResponse(response, "The connection check could not be completed.");
+        setConnection({ status: "done", url, result });
+      } catch (caught) {
+        if (controller.signal.aborted) return;
+        setConnection({ status: caught.status === 422 ? "blocked" : "error", url, message: caught.message });
+      }
+    }, 400);
+    return () => { window.clearTimeout(delay); controller.abort(); };
   }, [activeApiId, targetUrl, connectionCheckId]);
 
   function updateSavedApi(id, changes) {
@@ -656,9 +677,9 @@ function App() {
               const selectedApi = savedApis.find((api) => api.id === event.target.value);
               if (selectedApi) openSavedApi(selectedApi);
             }}>{savedApis.map((api) => <option key={api.id} value={api.id}>{api.title}</option>)}</select></label>
-            <button className={`connection-status connection-${connectionStatus}`} type="button" onClick={() => setConnectionCheckId((current) => current + 1)} disabled={connectionStatus === "checking"} title={`Check ${targetUrl}`}>
+            <button className={`connection-status connection-${connectionView.tone}`} type="button" onClick={() => setConnectionCheckId((current) => current + 1)} disabled={connection.status === "checking"} title={`${connectionView.title}\nClick to check again.`}>
               <span className="connection-dot" aria-hidden="true" />
-              {connectionStatus === "checking" ? "Checking connection" : connectionStatus === "connected" ? "API reachable" : connectionStatus === "unavailable" ? "API unavailable · retry" : "No API selected"}
+              {connectionView.text}
             </button>
           </div> : <nav className="breadcrumbs" aria-label="Current page"><strong>{page === "history" ? "Run history" : page === "import" ? "Import API" : "API specs"}</strong></nav>}
           <div className="topbar-right"><button className="theme-switch" type="button" onClick={() => setTheme((current) => current === "dark" ? "light" : "dark")} aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`} aria-pressed={theme === "light"} title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}><span className="theme-switch-track"><svg className="theme-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><circle cx="12" cy="12" r="4" /><path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32 1.41 1.41M2 12h2m16 0h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" /></svg><svg className="theme-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3 6.7 6.7 0 0 0 21 12.8Z" /></svg></span><span className="theme-knob" /></button></div>
