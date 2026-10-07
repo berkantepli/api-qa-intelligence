@@ -3,6 +3,17 @@ from typing import Any
 
 from pydantic import AnyHttpUrl, BaseModel, Field
 
+STRING_FORMAT_SAMPLES = {
+    "email": "qa@example.com",
+    "date": "2026-01-01",
+    "date-time": "2026-01-01T12:00:00Z",
+    "uuid": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+    "uri": "https://example.com",
+    "url": "https://example.com",
+    "hostname": "example.com",
+    "ipv4": "192.0.2.1",
+    "ipv6": "2001:db8::1",
+}
 HTTP_METHODS = {"get", "post", "put", "patch", "delete", "head", "options", "trace"}
 FORM_MEDIA_TYPES = ("multipart/form-data", "application/x-www-form-urlencoded")
 BOUNDARY_KEYS = ("minimum", "maximum", "minLength", "maxLength", "minItems", "maxItems")
@@ -26,6 +37,8 @@ class ApiParameter(BaseModel):
     description: str | None = None
     example: Any = None
     field_type: str = "string"
+    # The resolved schema, used to request and validate sample values on demand.
+    value_schema: dict[str, Any] | None = None
     # Derived from the operation's security requirement; optional so checks can also run unauthenticated.
     credential: bool = False
 
@@ -36,6 +49,7 @@ class ApiBodyField(BaseModel):
     field_type: str = "string"
     description: str | None = None
     example: Any = None
+    value_schema: dict[str, Any] | None = None
     is_file: bool = False
     multiple: bool = False
 
@@ -169,7 +183,7 @@ def _generate_scenarios(
     success_codes = _status_codes(operation.get("responses"), 2) or [200]
     error_codes = _status_codes(operation.get("responses"), 4) or [400, 422]
     request_is_supported = operation.get("requestBody") is None or body_schema is not None or is_form_body
-    valid_body = _example_from_schema(body_schema) if body_schema is not None else None
+    valid_body = example_from_schema(body_schema) if body_schema is not None else None
     form_fields = {
         field.name: str(field.example)
         for field in body_fields
@@ -365,16 +379,18 @@ def _request_body_fields(request_body: Any, document: Mapping[str, Any]) -> list
         if not isinstance(name, str) or not isinstance(property_schema, Mapping):
             continue
         property_schema = _resolve_schema(property_schema, document) or property_schema
+        is_file = property_schema.get("format") == "binary" or (
+            isinstance(property_schema.get("items"), Mapping)
+            and property_schema["items"].get("format") == "binary"
+        )
         fields.append(ApiBodyField(
             name=name,
             required=name in required,
             field_type=str(property_schema.get("type", "string")),
             description=_optional_string(property_schema.get("description")),
             example=_documented_example(property_schema),
-            is_file=property_schema.get("format") == "binary" or (
-                isinstance(property_schema.get("items"), Mapping)
-                and property_schema["items"].get("format") == "binary"
-            ),
+            value_schema=_compact_schema(property_schema),
+            is_file=is_file,
             multiple=property_schema.get("type") == "array",
         ))
     return fields
@@ -403,6 +419,7 @@ def _operation_parameters(path_item: Mapping[str, Any], operation: Mapping[str, 
                 required=location == "path" or parameter.get("required") is True,
                 description=_optional_string(parameter.get("description")),
                 example=example,
+                value_schema=_compact_schema(schema) if isinstance(schema, Mapping) else None,
                 field_type=str((schema or {}).get("type", "string")) if isinstance(schema, Mapping) else "string",
             )
     security = operation.get("security", global_security)
@@ -432,6 +449,34 @@ def _operation_parameters(path_item: Mapping[str, Any], operation: Mapping[str, 
                 credential=True,
             )
     return list(combined.values())
+
+
+SCHEMA_KEYS = (
+    "type", "format", "enum", "minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum",
+    "minLength", "maxLength", "pattern", "minItems", "maxItems", "required", "description",
+)
+
+
+def _compact_schema(schema: Mapping[str, Any], depth: int = 0) -> dict[str, Any] | None:
+    """Keeps the parts of a resolved schema that describe valid values, a few levels deep."""
+    if not isinstance(schema, Mapping) or depth > 3:
+        return None
+    compact = {key: schema[key] for key in SCHEMA_KEYS if key in schema}
+    if isinstance(compact.get("enum"), list):
+        compact["enum"] = compact["enum"][:20]
+    if isinstance(compact.get("description"), str):
+        compact["description"] = compact["description"][:200]
+    if isinstance(schema.get("properties"), Mapping):
+        compact["properties"] = {
+            name: nested
+            for name, value in list(schema["properties"].items())[:30]
+            if isinstance(name, str) and (nested := _compact_schema(value, depth + 1)) is not None
+        }
+    if isinstance(schema.get("items"), Mapping):
+        items = _compact_schema(schema["items"], depth + 1)
+        if items is not None:
+            compact["items"] = items
+    return compact
 
 
 def _documented_example(schema: Mapping[str, Any]) -> Any:
@@ -489,7 +534,7 @@ def _status_codes(responses: Any, first_digit: int) -> list[int]:
     return [int(code) for code in responses if isinstance(code, str) and len(code) == 3 and code[0] == str(first_digit) and code.isdigit()]
 
 
-def _example_from_schema(schema: Mapping[str, Any] | None) -> Any:
+def example_from_schema(schema: Mapping[str, Any] | None) -> Any:
     if schema is None:
         return None
     if "example" in schema:
@@ -504,28 +549,29 @@ def _example_from_schema(schema: Mapping[str, Any] | None) -> Any:
     if schema_type == "object" or isinstance(schema.get("properties"), Mapping):
         properties = schema.get("properties", {})
         return {
-            name: _example_from_schema(value)
+            name: example_from_schema(value)
             for name, value in properties.items()
             if isinstance(name, str) and isinstance(value, Mapping)
         }
     if schema_type == "array":
         item = schema.get("items")
-        return [_example_from_schema(item)] if isinstance(item, Mapping) else []
+        return [example_from_schema(item)] if isinstance(item, Mapping) else []
     if schema_type == "integer":
         return schema.get("minimum", schema.get("exclusiveMinimum", 1))
     if schema_type == "number":
         return schema.get("minimum", schema.get("exclusiveMinimum", 1.0))
     if schema_type == "boolean":
         return True
-    if schema_type == "string":
-        if schema.get("format") == "email":
-            return "qa@example.com"
-        if schema.get("format") == "date":
-            return "2026-01-01"
-        if schema.get("format") == "date-time":
-            return "2026-01-01T12:00:00Z"
-        min_length = schema.get("minLength", 1)
-        return "x" * min(min_length, 32) if isinstance(min_length, int) else "sample"
+    if schema_type == "string" or (schema_type is None and schema.get("format")):
+        sample = STRING_FORMAT_SAMPLES.get(schema.get("format"))
+        if sample:
+            return sample
+        min_length, max_length = schema.get("minLength"), schema.get("maxLength")
+        if isinstance(min_length, int) and min_length > len("sample"):
+            return "x" * min(min_length, 32)
+        if isinstance(max_length, int) and max_length < len("sample"):
+            return "x" * max(min_length if isinstance(min_length, int) else 1, 1)
+        return "sample"
     return None
 
 
@@ -544,7 +590,7 @@ def _boundary_value(schema: Mapping[str, Any]) -> Any:
         return "x" * min(schema["minLength"], 32)
     if "maxLength" in schema and isinstance(schema["maxLength"], int):
         return "x" * min(schema["maxLength"], 32)
-    return _example_from_schema(schema)
+    return example_from_schema(schema)
 
 
 def _invalid_value(schema: Mapping[str, Any]) -> Any:
