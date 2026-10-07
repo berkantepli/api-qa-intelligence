@@ -46,19 +46,33 @@ function mentionedTargets(scenario, targetNames) {
   return new Set(targetNames.filter((name) => new RegExp(`\\b${name.toLowerCase().replace(/[^a-z0-9_]/g, "")}\\b`).test(text)));
 }
 
+// Empty objects and lists mean "nothing different", the same as a missing value.
+const orNull = (value) => (value == null || (typeof value === "object" && Object.keys(value).length === 0) ? null : value);
+const stable = (value) => JSON.stringify(value ?? null, (key, item) => (item && typeof item === "object" && !Array.isArray(item)
+  ? Object.fromEntries(Object.entries(item).sort(([a], [b]) => a.localeCompare(b)))
+  : item));
+
+function requestParts(example) {
+  return {
+    query: orNull(example.query_params),
+    form: orNull(example.form_fields),
+    omitted: orNull([...(example.omitted_parameters ?? [])].map((parameter) => `${parameter.location}:${parameter.name}`).sort()),
+    values: orNull(example.parameter_values),
+    body: example.json_body ?? null,
+  };
+}
+
 function requestSignature(example) {
   if (!example) return null;
-  const sorted = (value) => JSON.stringify(value ?? null, (key, item) => (item && typeof item === "object" && !Array.isArray(item)
-    ? Object.fromEntries(Object.entries(item).sort(([a], [b]) => a.localeCompare(b)))
-    : item));
-  return sorted({
-    query: example.query_params,
-    form: example.form_fields,
-    omitted: [...(example.omitted_parameters ?? [])].map((parameter) => `${parameter.location}:${parameter.name}`).sort(),
-    values: example.parameter_values,
-    body: example.json_body,
-    expected: [...(example.expected_status_codes ?? [])].sort(),
-  });
+  return stable({ ...requestParts(example), expected: [...(example.expected_status_codes ?? [])].sort() });
+}
+
+// The runnable scenario that sends exactly the same request as `example`, ignoring expected status.
+export function findSameRequest(example, scenarios = [], excludeIndex = -1) {
+  if (!example) return null;
+  const target = stable(requestParts(example));
+  return scenarios.find((scenario, index) => index !== excludeIndex && scenario.request_example
+    && stable(requestParts(scenario.request_example)) === target) ?? null;
 }
 
 const SOURCE_RANK = { contract: 0, ai_edited: 1, ai: 2 };
