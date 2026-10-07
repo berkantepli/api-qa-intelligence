@@ -362,7 +362,14 @@ h1, h2, h3, p { margin-top: 0; }
 .target-field input { width: 100%; min-width: 0; border: 0; outline: 0; background: transparent; color: #535665; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10px; }
 .target-field input:focus-visible { outline: 0; }
 .request-inputs { display: grid; gap: 10px; margin: 0 12px 13px; padding: 13px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-soft); }
-.request-inputs-heading { display: grid; gap: 4px; padding-bottom: 2px; }
+.request-inputs-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding-bottom: 2px; }
+.request-inputs-heading > div { display: grid; gap: 4px; }
+.fill-button { flex: 0 0 auto; min-height: 30px; padding: 0 11px; font-size: 10px; }
+.fill-button .spinner { border-color: var(--line); border-top-color: var(--accent); }
+.fill-summary { margin: -2px 0 2px; color: var(--muted); font-size: 10px; }
+.fill-hint-ai { color: var(--accent); }
+.fill-hint-schema { color: var(--muted); }
+.fill-hint-needs-user { color: #9a6b19; font-weight: 600; }
 .request-inputs-heading strong { color: var(--text); font-size: 11px; }
 .request-inputs-heading span { color: var(--muted); font-size: 9px; }
 .request-input { display: grid; grid-template-columns: minmax(105px, .65fr) minmax(0, 1fr); align-items: center; gap: 7px 12px; color: var(--text); font-size: 10px; }
@@ -545,7 +552,7 @@ h1, h2, h3, p { margin-top: 0; }
 :root[data-theme="dark"] .target-field input { color: #e4e8ef; }
 :root[data-theme="dark"] .scenario-card { border-color: #2b303a; background: #171a21; }
 :root[data-theme="dark"] .review-pill { background: #3a301c; color: #eac578; }
-:root[data-theme="dark"] .draft-warning { color: #eac578; }
+:root[data-theme="dark"] .draft-warning, :root[data-theme="dark"] .fill-hint-needs-user { color: #eac578; }
 :root[data-theme="dark"] .duplicate-pill { background: #3a301c; color: #eac578; }
 :root[data-theme="dark"] .duplicate-notice { border-color: #5a4628; background: #241d12; }
 :root[data-theme="dark"] .duplicate-notice-heading { color: #eac578; }

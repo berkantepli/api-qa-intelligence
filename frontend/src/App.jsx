@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { categoryLabels, parameterLabel } from "./categories.js";
+import { categoryLabels, inputHelp, parameterLabel } from "./categories.js";
 import CoveragePage from "./CoveragePage.jsx";
 import DuplicateNotice from "./DuplicateNotice.jsx";
 import { duplicatePairKey, findDuplicateScenarios } from "./duplicates.js";
@@ -8,6 +8,7 @@ import { connectionLabel } from "./targetConnection.js";
 import Icon from "./Icon.jsx";
 import RunDetail from "./RunDetail.jsx";
 import RunHistoryList from "./RunHistoryList.jsx";
+import { applySampleValues, bodyInputKey, collectEmptyFields, fillHint, parameterInputKey } from "./sampleFill.js";
 import { removeSavedApi } from "./savedApis.js";
 import ScenarioDraftEditor from "./ScenarioDraftEditor.jsx";
 import SettingsPage, { aiStatusLabel } from "./SettingsPage.jsx";
@@ -101,6 +102,10 @@ function getRawBodyValue(inputs = {}, fallback) {
   return fallback == null ? "" : JSON.stringify(fallback, null, 2);
 }
 
+function FillHint({ hint }) {
+  return hint ? <small className={`request-input-help fill-hint fill-hint-${hint.tone}`}>{hint.text}</small> : null;
+}
+
 function App() {
   const [theme, setTheme] = useState(() => localStorage.getItem(STORAGE_KEYS.theme) || "dark");
   const [savedApis, setSavedApis] = useState(() => readStoredJson(STORAGE_KEYS.savedApis, []));
@@ -127,6 +132,8 @@ function App() {
   const [results, setResults] = useState({});
   const [requestInputs, setRequestInputs] = useState({});
   const [requestFiles, setRequestFiles] = useState({});
+  // Per endpoint: { loading, summary, error, marks: { [inputKey]: { kind, reason } } } from "Fill with AI".
+  const [sampleFill, setSampleFill] = useState({});
   const [targetUrl, setTargetUrl] = useState(() => resolveApiTarget(savedApis.find((api) => api.id === activeApiId)) || DEFAULT_TARGET_URL);
   const [connection, setConnection] = useState({ status: "checking", url: "" });
   const [connectionCheckId, setConnectionCheckId] = useState(0);
@@ -143,6 +150,8 @@ function App() {
   const contractScenarios = operationScenarios.filter((scenario) => !isEditedScenario(scenario));
   const scenarioIdeaStatus = scenarioIdeaState[`${activeApiId}:${operationKey}`] ?? {};
   const operationInputs = requestInputs[operationKey] ?? {};
+  const operationFill = sampleFill[operationKey] ?? {};
+  const fillMarkFor = (inputKey) => fillHint(operationFill.marks?.[inputKey]);
   const parameters = operation?.parameters ?? [];
   const pathParameters = [...(operation?.path?.matchAll(/\{([^}]+)\}/g) ?? [])].map((match) => match[1]);
   const knownParameterNames = new Set(parameters.filter((parameter) => parameter.location === "path").map((parameter) => parameter.name));
@@ -365,11 +374,22 @@ function App() {
       : [...current, index]);
   }
 
+  // Editing an input replaces any "AI-filled" or "fill this in yourself" marker on it.
+  function clearFillMark(inputKey) {
+    setSampleFill((current) => {
+      const state = current[operationKey];
+      if (!state?.marks?.[inputKey]) return current;
+      const { [inputKey]: _removed, ...marks } = state.marks;
+      return { ...current, [operationKey]: { ...state, marks } };
+    });
+  }
+
   function updateRequestInput(name, value) {
     setRequestInputs((current) => ({
       ...current,
       [operationKey]: { ...(current[operationKey] ?? {}), [name]: value },
     }));
+    clearFillMark(name);
   }
 
   function updateRequestFiles(name, files) {
@@ -377,6 +397,36 @@ function App() {
       ...current,
       [operationKey]: { ...(current[operationKey] ?? {}), [name]: files },
     }));
+    clearFillMark(`body:${name}`);
+  }
+
+  async function fillWithAi() {
+    if (!operation || operationFill.loading) return;
+    const key = operationKey;
+    const fields = collectEmptyFields({
+      parameters: operationParameters,
+      bodyFields,
+      parameterValue: getParameterValue,
+      bodyFieldValue: getBodyFieldValue,
+      fileCount: (field) => requestFiles[key]?.[field.name]?.length ?? 0,
+    });
+    if (!fields.length) {
+      setSampleFill((current) => ({ ...current, [key]: { ...current[key], summary: "Every field already has a value.", error: "" } }));
+      return;
+    }
+    setSampleFill((current) => ({ ...current, [key]: { ...current[key], loading: true, error: "" } }));
+    try {
+      const answer = await postJson(
+        "/api/v1/specs/sample-values",
+        { operation: { method: operation.method, path: operation.path, summary: operation.summary ?? null }, fields },
+        "Sample values could not be generated.",
+      );
+      const { inputs, marks, summary } = applySampleValues(answer, fields);
+      setRequestInputs((current) => ({ ...current, [key]: { ...(current[key] ?? {}), ...inputs } }));
+      setSampleFill((current) => ({ ...current, [key]: { loading: false, error: "", summary, marks: { ...current[key]?.marks, ...marks } } }));
+    } catch (caught) {
+      setSampleFill((current) => ({ ...current, [key]: { ...current[key], loading: false, error: caught.message || "Sample values could not be generated." } }));
+    }
   }
 
   async function runSelected() {
@@ -423,7 +473,7 @@ function App() {
             const validValue = validBodyTemplate?.[field.name];
             const scenarioValue = example.json_body?.[field.name];
             if (JSON.stringify(scenarioValue) === JSON.stringify(validValue)) {
-              if (!value.trim() && field.example == null) delete jsonBody[field.name];
+              if (!value.trim()) delete jsonBody[field.name];
               else {
                 try { jsonBody[field.name] = JSON.parse(value); }
                 catch { jsonBody[field.name] = value; }
@@ -807,16 +857,22 @@ function App() {
                 <div className="panel-header scenario-header"><div><div className="panel-kicker"><Icon name="spark" size={15} /> RUNNABLE CHECKS {isDataChangingMethod && <span className="mutation-badge">May change data</span>}</div><h2>{operation?.method} <span>{operation?.path}</span></h2><p>These checks include a complete request and can be executed now.</p></div></div>
                 <label className="target-field"><span>Target API base URL</span><input value={targetUrl} onChange={(event) => updateTargetUrl(event.target.value)} placeholder="http://127.0.0.1:8000" /></label>
                 {(operationParameters.length > 0 || bodyFields.length > 0 || needsRawJsonBody) && <div className="request-inputs">
-                  <div className="request-inputs-heading"><strong>Request details</strong><span>Fill in required values from your test environment.</span></div>
+                  <div className="request-inputs-heading">
+                    <div><strong>Request details</strong><span>Fill in required values from your test environment.</span></div>
+                    <button className="secondary-button fill-button" type="button" onClick={fillWithAi} disabled={operationFill.loading || running} title="Fill empty fields with schema-valid sample values. Only field names and schemas are sent to your AI model.">{operationFill.loading ? <><span className="spinner" /> Filling…</> : <><Icon name="spark" size={14} /> Fill with AI</>}</button>
+                  </div>
+                  {(operationFill.summary || operationFill.error) && <p className={`fill-summary ${operationFill.error ? "request-input-error" : ""}`} role="status">{operationFill.error || operationFill.summary}</p>}
                   {operationParameters.map((parameter) => <label className="request-input" key={`${parameter.location}:${parameter.name}`}>
                     <span>{parameter.name}<small>{parameterLabel(parameter)}</small></span>
                     <input type={parameter.location === "header" ? "password" : "text"} value={getParameterValue(parameter)} onChange={(event) => updateRequestInput(`parameter:${parameter.location}:${parameter.name}`, event.target.value)} placeholder={parameter.example == null ? `Enter ${parameter.name}` : String(parameter.example)} />
-                    {(parameter.description || parameter.credential) && <small className="request-input-help">{[parameter.description, parameter.credential && !parameter.required && "Leave empty to call without credentials."].filter(Boolean).join(" ")}</small>}
+                    {inputHelp(parameter) && <small className="request-input-help">{inputHelp(parameter)}</small>}
+                    <FillHint hint={fillMarkFor(parameterInputKey(parameter))} />
                   </label>)}
                   {bodyFields.map((field) => <label className="request-input" key={`body:${field.name}`}>
                     <span>{field.name}<small>{field.is_file ? (field.multiple ? "file · multiple" : "file") : `${isFormBody ? "form field" : "request body"}${field.required ? " · required" : " · optional"}`}</small></span>
                     {field.is_file ? <><input type="file" multiple={field.multiple} onChange={(event) => updateRequestFiles(field.name, Array.from(event.target.files ?? []))} /><small className="request-input-help">{requestFiles[operationKey]?.[field.name]?.map((item) => item.name).join(", ") || (field.required ? "Choose a file to run this check." : "Optional file upload.")}</small></> : field.field_type === "object" || field.field_type === "array" ? <textarea rows="3" value={getBodyFieldValue(field)} onChange={(event) => updateRequestInput(`body:${field.name}`, event.target.value)} placeholder={`Enter ${field.name}${field.required ? " (required)" : ""}`} /> : <input type="text" value={getBodyFieldValue(field)} onChange={(event) => updateRequestInput(`body:${field.name}`, event.target.value)} placeholder={field.example == null ? `Enter ${field.name}${field.required ? " (required)" : ""}` : String(field.example)} />}
-                    {field.description && <small className="request-input-help">{field.description}</small>}
+                    {inputHelp(field) && <small className="request-input-help">{inputHelp(field)}</small>}
+                    <FillHint hint={fillMarkFor(bodyInputKey(field))} />
                     {hasInvalidJsonValue(field) && <small className="request-input-help request-input-error">Enter valid JSON for this field.</small>}
                   </label>)}
                   {needsRawJsonBody && <label className="request-input"><span>Request body JSON<small>required</small></span><textarea rows="6" value={rawJsonBodyValue} onChange={(event) => updateRequestInput("body:__raw", event.target.value)} placeholder="Enter a complete JSON request body" />{rawJsonBodyValue.trim() && !rawJsonBodyIsValid && <small className="request-input-help request-input-error">Enter valid JSON before running checks.</small>}</label>}
