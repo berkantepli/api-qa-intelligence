@@ -89,6 +89,10 @@ For a selected set of checks, use `POST /api/v1/runs/execute-batch` with a `scen
 
 Saved APIs can be deleted from the API specs page (trash icon, then confirm). Deleting removes the API’s contract, scenarios, and edited AI checks from this browser; its Run history is kept.
 
+### Duplicate scenarios
+
+The API overview flags scenarios on the same endpoint that seem to test the same thing, so AI ideas do not pile up on top of contract checks. A pair is flagged when both send the same request and expect the same status, when both test the same idea (a missing required input, authentication, an invalid or boundary value, injection, or rate limiting) on the same field, or when their wording is very similar. Scenarios aimed at different fields are never flagged. Contract checks are kept; choose **Dismiss idea** / **Remove check** for the copy, or **Keep both** to stop flagging that pair.
+
 ### Run history
 
 Every executed batch is saved in this browser’s Run history, grouped by API with pass/fail/error totals and the most recently used API first. Groups start collapsed; open one to see its runs. Open a run to see its target, PASS/FAIL/ERROR counts, and, for each check, the expected and received status, duration, the request line with headers and body, and the response status, headers, and body. Failed and errored checks open expanded. Delete a single run with the trash icon on its row, or every run for an API with the trash icon on the group header; both ask for confirmation and cannot be undone. Evidence is stored already redacted; uploaded file contents are never stored.

@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { categoryLabels, parameterLabel } from "./categories.js";
 import CoveragePage from "./CoveragePage.jsx";
+import DuplicateNotice from "./DuplicateNotice.jsx";
+import { duplicatePairKey, findDuplicateScenarios } from "./duplicates.js";
 import { failingEndpointCount, runsForApi } from "./coverage.js";
 import { connectionLabel } from "./targetConnection.js";
 import Icon from "./Icon.jsx";
@@ -177,6 +179,11 @@ function App() {
     .filter((scenario) => scenario.request_example);
   const availableScenarios = inputsReady ? scenarioTemplates : [];
   const draftContext = { operation, parameters: operationParameters, bodyFields, sendsJsonBody, isFormBody };
+  const duplicatePairs = findDuplicateScenarios(operationScenarios, {
+    targetNames: [...operationParameters.map((parameter) => parameter.name), ...bodyFields.map((field) => field.name)],
+    ignoredPairs: operation?.ignored_duplicates ?? [],
+  });
+  const duplicateIndexes = new Set(duplicatePairs.map((pair) => pair.drop));
   const draftProblems = editingDraft ? validateDraft(editingDraft.draft, draftContext) : [];
   const selectedCount = selectedScenarios.length;
   const selectedRun = runHistory.find((run) => run.id === selectedRunId);
@@ -235,15 +242,27 @@ function App() {
     setEditingDraft(null);
   }
 
-  function updateOperationScenarios(updateScenarios) {
+  function updateSelectedOperation(updateOperation) {
     updateSavedApi(activeApiId, {
       overview: {
         ...overview,
-        operations: overview.operations.map((item, index) => index === selectedOperation
-          ? { ...item, scenarios: updateScenarios(item.scenarios) }
-          : item),
+        operations: overview.operations.map((item, index) => index === selectedOperation ? updateOperation(item) : item),
       },
     });
+  }
+
+  function updateOperationScenarios(updateScenarios) {
+    updateSelectedOperation((item) => ({ ...item, scenarios: updateScenarios(item.scenarios) }));
+  }
+
+  function dropDuplicate(pair) {
+    updateOperationScenarios((scenarios) => scenarios.filter((_, index) => index !== pair.drop));
+    resetRunState();
+  }
+
+  function keepDuplicatePair(pair) {
+    const key = duplicatePairKey(operationScenarios[pair.keep], operationScenarios[pair.drop]);
+    updateSelectedOperation((item) => ({ ...item, ignored_duplicates: [...new Set([...(item.ignored_duplicates ?? []), key])] }));
   }
 
   // The body the user has prepared in the request details, used as the starting point for a draft.
@@ -802,6 +821,7 @@ function App() {
                   </label>)}
                   {needsRawJsonBody && <label className="request-input"><span>Request body JSON<small>required</small></span><textarea rows="6" value={rawJsonBodyValue} onChange={(event) => updateRequestInput("body:__raw", event.target.value)} placeholder="Enter a complete JSON request body" />{rawJsonBodyValue.trim() && !rawJsonBodyIsValid && <small className="request-input-help request-input-error">Enter valid JSON before running checks.</small>}</label>}
                 </div>}
+                <DuplicateNotice pairs={duplicatePairs} scenarios={operationScenarios} disabled={running} onDrop={dropDuplicate} onKeepBoth={keepDuplicatePair} />
                 <div className="scenario-list">
                   {availableScenarios.map((scenario, index) => {
                     const result = results[index];
@@ -812,7 +832,7 @@ function App() {
                           <input type="checkbox" checked={checked} disabled={running} onChange={() => toggleScenario(index)} />
                           <span className="custom-check"><Icon name="check" size={13} /></span>
                         </label>
-                        <div className="scenario-content"><div className="scenario-title-row"><span className={`category-pill category-${scenario.category}`}>{categoryLabels[scenario.category] || scenario.category}</span>{isEditedScenario(scenario) && <span className="edited-pill">AI idea · edited</span>}</div><h3>{scenario.title}</h3><p>{scenario.rationale}</p>
+                        <div className="scenario-content"><div className="scenario-title-row"><span className={`category-pill category-${scenario.category}`}>{categoryLabels[scenario.category] || scenario.category}</span>{isEditedScenario(scenario) && <span className="edited-pill">AI idea · edited</span>}{duplicateIndexes.has(scenario.scenarioIndex) && <span className="duplicate-pill">Possible duplicate</span>}</div><h3>{scenario.title}</h3><p>{scenario.rationale}</p>
                         {isEditedScenario(scenario) && <p className="edited-check-summary">Expects HTTP {scenario.request_example.expected_status_codes.join(", ")}{scenario.request_example.omitted_parameters?.length ? ` · omits ${scenario.request_example.omitted_parameters.map((parameter) => parameter.name).join(", ")}` : ""}</p>}
                         {isEditedScenario(scenario) && editingDraft?.scenarioIndex !== scenario.scenarioIndex && <div className="card-actions"><button className="text-button" type="button" disabled={running} onClick={() => openDraftEditor(scenario.scenarioIndex)}>Edit</button><button className="text-button danger" type="button" disabled={running} onClick={() => removeEditedCheck(scenario.scenarioIndex)}>Remove</button></div>}
                         {editingDraft?.scenarioIndex === scenario.scenarioIndex && draftEditor}
@@ -827,7 +847,7 @@ function App() {
                   <small className="ai-suggestions-note">Sends endpoint details to your configured AI model. No credentials or API requests are sent.</small>
                   {scenarioIdeaStatus.error && <div className="alert error-alert" role="alert">{scenarioIdeaStatus.error}</div>}
                   {aiScenarioIdeas.length ? <div className="ai-suggestions-list">{aiScenarioIdeas.map(({ scenario, scenarioIndex }) => <article className="ai-suggestion-card" key={`${scenario.title}-${scenarioIndex}`}>
-                    <div className="scenario-title-row"><span className={`category-pill category-${scenario.category}`}>{categoryLabels[scenario.category] || scenario.category}</span><span className="review-pill">Review · not runnable</span></div>
+                    <div className="scenario-title-row"><span className={`category-pill category-${scenario.category}`}>{categoryLabels[scenario.category] || scenario.category}</span><span className="review-pill">Review · not runnable</span>{duplicateIndexes.has(scenarioIndex) && <span className="duplicate-pill">Possible duplicate</span>}</div>
                     <h3>{scenario.title}</h3><p>{scenario.rationale}</p>
                     {editingDraft?.scenarioIndex === scenarioIndex
                       ? draftEditor
