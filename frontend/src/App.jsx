@@ -14,7 +14,7 @@ import ScenarioDraftEditor from "./ScenarioDraftEditor.jsx";
 import SettingsPage, { aiStatusLabel } from "./SettingsPage.jsx";
 import { version as appVersion } from "../package.json";
 import { buildWorkspaceExport, mergeWorkspace, parseWorkspaceImport, workspaceFileName } from "./workspace.js";
-import { buildEditedScenario, createDraft, isEditedScenario, statusCodeSuggestions, validateDraftFields } from "./scenarioDraft.js";
+import { buildEditedScenario, createDraft, editedCheckSummary, isEditedScenario, statusCodeSuggestions, validateDraftFields } from "./scenarioDraft.js";
 
 const DEFAULT_TARGET_URL = "http://127.0.0.1:8000";
 const STORAGE_KEYS = {
@@ -482,8 +482,10 @@ function App() {
         const cookieValues = [];
         for (const parameter of operationParameters) {
           if (omittedParameters.has(`${parameter.location}:${parameter.name}`)) continue;
-          const value = parameterValue(parameter).trim();
-          if (!value) continue;
+          // An explicit override (including "send empty value") is always sent; otherwise empty inputs are skipped.
+          const override = example.parameter_values?.[`${parameter.location}:${parameter.name}`];
+          const value = override ?? getParameterValue(parameter).trim();
+          if (override === undefined && !value) continue;
           if (parameter.location === "query") queryParams[parameter.name] = value;
           if (parameter.location === "header") headers[parameter.name] = value;
           if (parameter.location === "cookie") cookieValues.push(`${parameter.name}=${encodeURIComponent(value)}`);
@@ -922,7 +924,7 @@ function App() {
                           <span className="custom-check"><Icon name="check" size={13} /></span>
                         </label>
                         <div className="scenario-content"><div className="scenario-title-row"><span className={`category-pill category-${scenario.category}`}>{categoryLabels[scenario.category] || scenario.category}</span>{isEditedScenario(scenario) && <span className="edited-pill">AI idea · edited</span>}{duplicateIndexes.has(scenario.scenarioIndex) && <span className="duplicate-pill">Possible duplicate</span>}</div><h3>{scenario.title}</h3><p>{scenario.rationale}</p>
-                        {isEditedScenario(scenario) && <p className="edited-check-summary">Expects HTTP {scenario.request_example.expected_status_codes.join(", ")}{scenario.request_example.omitted_parameters?.length ? ` · omits ${scenario.request_example.omitted_parameters.map((parameter) => parameter.name).join(", ")}` : ""}</p>}
+                        {isEditedScenario(scenario) && <p className="edited-check-summary">{editedCheckSummary(scenario.request_example)}</p>}
                         {isEditedScenario(scenario) && editingDraft?.scenarioIndex !== scenario.scenarioIndex && <div className="card-actions"><button className="text-button" type="button" disabled={running} onClick={() => openDraftEditor(scenario.scenarioIndex)}>{draftStash[draftKey(scenario)] ? "Continue editing" : "Edit"}</button><button className="text-button danger" type="button" disabled={running} onClick={() => removeEditedCheck(scenario.scenarioIndex)}>Remove</button></div>}
                         {editingDraft?.scenarioIndex === scenario.scenarioIndex && draftEditor}
                         {result && <div className={`result-box result-${result.result.toLowerCase()}`}><div className="result-heading"><strong>{result.result}</strong>{result.response_status && <span>HTTP {result.response_status}</span>}<small>{result.duration_ms} ms</small></div>{result.error && <p>{result.error}</p>}{result.response_body && <details><summary>Response details</summary><pre>{result.response_body}</pre></details>}</div>}</div>
