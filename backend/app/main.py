@@ -8,6 +8,7 @@ from app.api.ai_status import router as ai_status_router
 from app.api.failure_analysis import router as failure_analysis_router
 from app.api.runs import router as runs_router
 from app.api.specs import router as specs_router
+from app.api.targets import router as targets_router
 
 app = FastAPI(
     title="API QA Intelligence",
@@ -26,6 +27,7 @@ app.include_router(runs_router)
 app.include_router(failure_analysis_router)
 app.include_router(ai_scenarios_router)
 app.include_router(ai_status_router)
+app.include_router(targets_router)
 
 
 frontend_dist = Path(__file__).resolve().parents[2] / "frontend" / "dist"
