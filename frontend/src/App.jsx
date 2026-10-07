@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { categoryLabels, inputHelp, parameterLabel } from "./categories.js";
 import CoveragePage from "./CoveragePage.jsx";
 import DuplicateNotice from "./DuplicateNotice.jsx";
-import { duplicatePairKey, findDuplicateScenarios } from "./duplicates.js";
+import { duplicatePairKey, findDuplicateScenarios, findSameRequest } from "./duplicates.js";
 import { runsForApi } from "./coverage.js";
 import { connectionLabel } from "./targetConnection.js";
 import Icon from "./Icon.jsx";
@@ -199,6 +199,10 @@ function App() {
   });
   const duplicateIndexes = new Set(duplicatePairs.map((pair) => pair.drop));
   const draftErrors = editingDraft ? validateDraftFields(editingDraft.draft, draftContext) : {};
+  // A complete draft that would send exactly the request of another check tests nothing new.
+  const draftSameRequest = editingDraft && !Object.keys(draftErrors).length
+    ? findSameRequest(buildEditedScenario(editingDraft.draft, draftContext).request_example, operationScenarios, editingDraft.scenarioIndex)
+    : null;
   const draftKey = (scenario) => `${activeApiId}|${operationKey}|${scenario.source ?? "contract"}|${scenario.title}`;
   const selectedCount = selectedScenarios.length;
   const selectedRun = runHistory.find((run) => run.id === selectedRunId);
@@ -718,6 +722,7 @@ function App() {
   const draftEditor = editingDraft && <ScenarioDraftEditor
     draft={editingDraft.draft}
     errors={draftErrors}
+    sameRequestAs={draftSameRequest?.title}
     parameters={operationParameters}
     sendsJsonBody={sendsJsonBody}
     isFormBody={isFormBody}

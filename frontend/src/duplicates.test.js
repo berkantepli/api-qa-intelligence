@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { duplicatePairKey, findDuplicateScenarios, scenarioConcept } from "./duplicates.js";
+import { duplicatePairKey, findDuplicateScenarios, findSameRequest, scenarioConcept } from "./duplicates.js";
 
 const contract = (title, rationale, extra = {}) => ({ source: "contract", category: "negative", title, rationale, ...extra });
 const idea = (title, rationale, category = "negative") => ({ source: "ai", category, title, rationale, request_example: null });
@@ -93,5 +93,27 @@ describe("scenarioConcept", () => {
     ["Valid request", null],
   ])("classifies %s", (title, concept) => {
     expect(scenarioConcept({ title, rationale: "" })?.id ?? null).toBe(concept);
+  });
+});
+
+describe("findSameRequest", () => {
+  const valid = { source: "contract", title: "Valid request", request_example: { query_params: {}, form_fields: {}, omitted_parameters: [], json_body: null, expected_status_codes: [200] } };
+
+  it("matches a request that changes nothing, whatever status it expects", () => {
+    const edited = { query_params: {}, form_fields: {}, omitted_parameters: [], parameter_values: {}, json_body: null, expected_status_codes: [401] };
+
+    expect(findSameRequest(edited, [valid])?.title).toBe("Valid request");
+  });
+
+  it("does not match once a parameter is sent empty, omitted, or overridden", () => {
+    const base = { query_params: {}, form_fields: {}, json_body: null, expected_status_codes: [200] };
+
+    expect(findSameRequest({ ...base, parameter_values: { "query:status": "" } }, [valid])).toBeNull();
+    expect(findSameRequest({ ...base, omitted_parameters: [{ name: "status", location: "query" }] }, [valid])).toBeNull();
+    expect(findSameRequest({ ...base, parameter_values: { "query:status": "sold" } }, [valid])).toBeNull();
+  });
+
+  it("skips the scenario being edited", () => {
+    expect(findSameRequest(valid.request_example, [valid], 0)).toBeNull();
   });
 });

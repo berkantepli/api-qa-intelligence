@@ -11,6 +11,7 @@ function FieldError({ message }) {
 export default function ScenarioDraftEditor({
   draft,
   errors,
+  sameRequestAs,
   parameters,
   sendsJsonBody,
   isFormBody,
@@ -103,6 +104,8 @@ export default function ScenarioDraftEditor({
       </fieldset>}
 
       {isDataChangingMethod && <small className="draft-note draft-warning">This endpoint may change data. You will be asked to confirm before it runs.</small>}
+
+      {sameRequestAs && <p className="draft-note draft-warning" role="status">This sends the same request as “{sameRequestAs}”. Change a parameter or the body so it tests something different.</p>}
 
       <div className="draft-actions">
         <span className="draft-status">
