@@ -7,6 +7,7 @@ from app.api.ai_scenarios import router as ai_scenarios_router
 from app.api.ai_status import router as ai_status_router
 from app.api.failure_analysis import router as failure_analysis_router
 from app.api.runs import router as runs_router
+from app.api.sample_values import router as sample_values_router
 from app.api.specs import router as specs_router
 from app.api.targets import router as targets_router
 
@@ -28,6 +29,7 @@ app.include_router(failure_analysis_router)
 app.include_router(ai_scenarios_router)
 app.include_router(ai_status_router)
 app.include_router(targets_router)
+app.include_router(sample_values_router)
 
 
 frontend_dist = Path(__file__).resolve().parents[2] / "frontend" / "dist"
