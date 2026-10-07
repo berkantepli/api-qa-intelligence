@@ -10,7 +10,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import AnyHttpUrl, BaseModel, Field, field_validator
 
 from app.domain.evidence import redact_headers, redact_text, redact_value, sanitize_url
-from app.domain.network import ensure_safe_target_host
+from app.domain.network import parse_target_base_url
 
 router = APIRouter(prefix="/api/v1/runs", tags=["Scenario execution"])
 MAX_RESPONSE_SIZE_BYTES = 250_000
@@ -120,18 +120,7 @@ async def execute_scenario_batch(payload: ScenarioBatchRequest) -> ScenarioBatch
 
 
 async def _execute_scenario(payload: ScenarioExecutionRequest) -> ScenarioExecutionResult:
-    base = httpx.URL(str(payload.base_url))
-    if base.username or base.password:
-        raise HTTPException(
-            status_code=422,
-            detail="Target URLs with embedded credentials are not supported; use a request header instead.",
-        )
-    if base.query or base.fragment:
-        raise HTTPException(
-            status_code=422,
-            detail="Base URL cannot contain a query or fragment, for example https://api.example.com/v1.",
-        )
-    ensure_safe_target_host(base)
+    base = parse_target_base_url(str(payload.base_url))
 
     # OpenAPI servers often carry a base path (e.g. /api/v3); operation paths are relative to it.
     target = base.copy_with(path=base.path.rstrip("/") + payload.path, query=None)
