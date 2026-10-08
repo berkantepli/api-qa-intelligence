@@ -49,7 +49,7 @@ function AiDiagnosis({ diagnosis }) {
   </div>;
 }
 
-export default function SettingsPage({ aiStatus, onRefreshAiStatus, aiDiagnosis, onRunDiagnosis, savedApiCount, runCount, onExport, onImport, onDeleteAll }) {
+export default function SettingsPage({ aiStatus, onRefreshAiStatus, aiDiagnosis, onRunDiagnosis, storageMode, savedApiCount, runCount, onExport, onImport, onDeleteAll }) {
   const fileInput = useRef(null);
   const [importMessage, setImportMessage] = useState(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -93,7 +93,9 @@ export default function SettingsPage({ aiStatus, onRefreshAiStatus, aiDiagnosis,
 
     <section className="settings-card">
       <div className="settings-card-heading">
-        <div><h2>Workspace data</h2><p>{savedApiCount} saved {savedApiCount === 1 ? "API" : "APIs"} and {runCount} {runCount === 1 ? "run" : "runs"} are stored only in this browser. Export them to keep a backup or move them to another browser.</p></div>
+        <div><h2>Workspace data</h2><p>{savedApiCount} saved {savedApiCount === 1 ? "API" : "APIs"} and {runCount} {runCount === 1 ? "run" : "runs"} {storageMode === "browser"
+          ? "are stored only in this browser, because the backend could not be reached. Export them to keep a backup."
+          : <>are saved in the app’s workspace database (<code>data/workspace.db</code>, or <code>API_QA_DATA_DIR</code>) and survive clearing this browser. Export them to keep a backup or move them to another machine.</>}</p></div>
       </div>
       <div className="settings-actions">
         <button className="primary-button" type="button" onClick={onExport}><Icon name="arrow" size={15} /> Export workspace</button>
@@ -106,7 +108,7 @@ export default function SettingsPage({ aiStatus, onRefreshAiStatus, aiDiagnosis,
 
     <section className="settings-card settings-danger">
       <div className="settings-card-heading">
-        <div><h2>Delete all local data</h2><p>Removes every saved API, edited AI check, and run from this browser. Export first if you may need them again.</p></div>
+        <div><h2>Delete all saved data</h2><p>Removes every saved API, edited AI check, run, and saved request detail from the workspace database and this browser. Export first if you may need them again.</p></div>
         {!confirmingDelete && <button className="danger-button" type="button" onClick={() => setConfirmingDelete(true)} disabled={!savedApiCount && !runCount}><Icon name="trash" size={15} /> Delete all</button>}
       </div>
       {confirmingDelete && <div className="history-confirm settings-confirm" role="group" aria-label="Confirm deleting all local data">

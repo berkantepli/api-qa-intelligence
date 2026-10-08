@@ -244,6 +244,7 @@ h1, h2, h3, p { margin-top: 0; }
 .run-detail-heading { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px; }
 .run-detail-heading .secondary-button { min-height: 34px; font-size: 12px; }
 .sample-hint { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 10px 0 0; color: var(--muted); font-size: 12px; }
+.storage-alert { margin: 12px 32px 0; }
 .coverage-empty { margin: 0; padding: 24px 18px; border-top: 1px solid var(--line); color: var(--muted); font-size: 13px; text-align: center; }
 .history-confirm span { flex: 1; min-width: 200px; color: var(--text); font-size: 13px; }
 .history-confirm .secondary-button, .history-confirm .danger-button { min-height: 32px; font-size: 13px; }
