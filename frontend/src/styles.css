@@ -172,6 +172,9 @@ h1, h2, h3, p { margin-top: 0; }
 .coverage-meter span { display: block; height: 100%; border-radius: inherit; background: var(--green); }
 .coverage-warning { color: #b7791f; }
 .coverage-list { margin-top: 18px; }
+.coverage-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+.coverage-export { display: flex; flex-wrap: wrap; gap: 8px; }
+.coverage-export .secondary-button { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; }
 .coverage-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 18px; }
 .coverage-filters { display: flex; flex-wrap: wrap; gap: 6px; }
 .coverage-filters button { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border: 1px solid var(--line); border-radius: 999px; background: transparent; color: var(--muted); font-size: 11px; }

@@ -123,3 +123,61 @@ export function computeCoverage(overview, apiRuns = [], now = Date.now()) {
     },
   };
 }
+
+const CATEGORY_MARKS = { passing: "pass", failing: "FAIL", not_run: "not run", none: "–" };
+
+function reportSlug(title) {
+  return String(title || "api").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "api";
+}
+
+export function coverageReportFileName(title, extension, date = new Date()) {
+  return `coverage-${reportSlug(title)}-${date.toISOString().slice(0, 10)}.${extension}`;
+}
+
+// A shareable snapshot of the Coverage & Risk page; it contains no request or response evidence.
+export function coverageReportJson(overview, coverage, generatedAt = new Date()) {
+  return {
+    api: { title: overview.title, version: overview.version },
+    generated_at: generatedAt.toISOString(),
+    totals: coverage.totals,
+    endpoints: coverage.endpoints.map((endpoint) => ({
+      method: endpoint.method,
+      path: endpoint.path,
+      status: endpoint.status,
+      checks: { covered: endpoint.coveredChecks, runnable: endpoint.runnableChecks },
+      last_run_at: endpoint.lastRunAt ?? null,
+      categories: Object.fromEntries(endpoint.categories.map((category) => [category.id, category.state])),
+      flaky_checks: endpoint.flakyChecks,
+      risks: endpoint.risks.map((risk) => risk.label),
+    })),
+  };
+}
+
+export function coverageReportMarkdown(overview, coverage, generatedAt = new Date()) {
+  const { totals } = coverage;
+  const cell = (text) => String(text).replace(/\|/g, "\\|");
+  const lines = [
+    `# Coverage & Risk: ${overview.title} ${overview.version ?? ""}`.trimEnd(),
+    "",
+    `Generated ${generatedAt.toISOString()} from the checks run in this browser.`,
+    "",
+    `- Endpoints tested: ${totals.tested} / ${totals.endpoints} (${totals.coveragePercent}%)`,
+    `- Failing endpoints: ${totals.failing}`,
+    `- Untested write endpoints: ${totals.untestedWrites}`,
+    `- Flaky endpoints: ${totals.flaky}`,
+    `- Stale endpoints (not run in ${STALE_AFTER_DAYS}+ days): ${totals.stale}`,
+    `- Checks executed: ${totals.checksExecuted}`,
+    "",
+    `| Endpoint | Status | Checks | ${Object.values(categoryLabels).join(" | ")} | Risks |`,
+    `| --- | --- | --- | ${Object.keys(categoryLabels).map(() => "---").join(" | ")} | --- |`,
+    ...coverage.endpoints.map((endpoint) => [
+      `\`${endpoint.method} ${cell(endpoint.path)}\``,
+      endpoint.status,
+      `${endpoint.coveredChecks}/${endpoint.runnableChecks}`,
+      ...endpoint.categories.map((category) => CATEGORY_MARKS[category.state]),
+      cell(endpoint.risks.map((risk) => risk.label).join(", ") || "–"),
+    ].join(" | ")).map((row) => `| ${row} |`),
+    "",
+  ];
+  return lines.join("\n");
+}

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { computeCoverage } from "./coverage.js";
+import { computeCoverage, coverageReportFileName, coverageReportJson, coverageReportMarkdown } from "./coverage.js";
 import Icon from "./Icon.jsx";
 
 const statusLabels = { failing: "Failing", untested: "Not tested", passing: "Passing" };
@@ -14,6 +14,15 @@ const filters = [
 const categoryStates = { passing: "passed", failing: "has failures", not_run: "not run yet", none: "no runnable check" };
 const categoryShort = { happy_path: "Happy", negative: "Negative", boundary: "Boundary", invalid_value: "Invalid", security_minded: "Auth" };
 
+function download(content, fileName, type) {
+  const url = URL.createObjectURL(new Blob([content], { type }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
 export default function CoveragePage({ overview, apiRuns, onOpenEndpoint, onGoToSpecs }) {
   const [filterId, setFilterId] = useState("all");
   if (!overview) {
@@ -27,11 +36,22 @@ export default function CoveragePage({ overview, apiRuns, onOpenEndpoint, onGoTo
   const { endpoints, totals } = computeCoverage(overview, apiRuns);
   const filter = filters.find((item) => item.id === filterId) ?? filters[0];
   const visible = endpoints.filter(filter.matches);
+  const exportReport = (format) => {
+    const coverage = { endpoints, totals };
+    if (format === "md") download(coverageReportMarkdown(overview, coverage), coverageReportFileName(overview.title, "md"), "text/markdown");
+    else download(JSON.stringify(coverageReportJson(overview, coverage), null, 2), coverageReportFileName(overview.title, "json"), "application/json");
+  };
 
   return <section className="history-page coverage-page">
     <div className="page-eyebrow">TEST COVERAGE</div>
     <h1>Coverage &amp; Risk</h1>
-    <p className="page-lede">{overview.title} · based on the checks run in this browser.</p>
+    <div className="coverage-heading">
+      <p className="page-lede">{overview.title} · based on the checks run in this browser.</p>
+      <div className="coverage-export">
+        <button className="secondary-button" type="button" onClick={() => exportReport("md")}><Icon name="arrow" size={14} /> Export Markdown</button>
+        <button className="secondary-button" type="button" onClick={() => exportReport("json")}><Icon name="arrow" size={14} /> Export JSON</button>
+      </div>
+    </div>
 
     <div className="stats-row coverage-stats">
       <div className="stat-card"><span className="stat-label">Endpoints tested</span><strong>{totals.tested} / {totals.endpoints}</strong><span className="stat-note">{totals.coveragePercent}% coverage</span><span className="coverage-meter" aria-hidden="true"><span style={{ width: `${totals.coveragePercent}%` }} /></span></div>
