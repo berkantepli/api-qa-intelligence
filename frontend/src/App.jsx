@@ -348,14 +348,17 @@ function App() {
       const failureMessage = "The specification could not be imported.";
       let payload;
       if (sourceMode === "url") {
-        payload = await postJson("/api/v1/specs/import-url", { url: specUrl }, failureMessage);
+        const url = specUrl.trim();
+        if (!url) throw new Error("Enter an OpenAPI URL first.");
+        if (!/^https?:\/\/\S+$/i.test(url)) throw new Error("Enter a full URL that starts with http:// or https://.");
+        payload = await postJson("/api/v1/specs/import-url", { url }, failureMessage);
       } else {
         if (!file) throw new Error("Choose an OpenAPI JSON or YAML file first.");
         const data = new FormData();
         data.append("file", file);
         payload = await readJsonResponse(await fetch("/api/v1/specs/import", { method: "POST", body: data }), failureMessage);
       }
-      const source = sourceMode === "url" ? specUrl : file.name;
+      const source = sourceMode === "url" ? specUrl.trim() : file.name;
       const id = `${payload.title || "API"}::${source}`;
       const importedTargetUrl = resolveApiTarget({ source, overview: payload });
       const savedApi = { id, title: payload.title || "Imported API", source, importedAt: new Date().toISOString(), overview: payload, targetUrl: importedTargetUrl };
@@ -828,7 +831,7 @@ function App() {
             <div className="page-eyebrow">YOUR API QA WORKSPACE</div>
             <h1>Start with an API contract</h1>
             <p className="page-lede">Import an OpenAPI spec to understand your endpoints and get a first set of QA scenarios.</p>
-            <form className="import-card" onSubmit={importSpec}>
+            <form className="import-card" onSubmit={importSpec} noValidate>
               <div className="card-heading">
                 <span className="card-icon"><Icon name="file" size={20} /></span>
                 <div><h2>Import OpenAPI specification</h2><p>Use a spec URL or choose a local JSON/YAML file.</p></div>
@@ -838,7 +841,7 @@ function App() {
                 <button type="button" role="tab" aria-selected={sourceMode === "file"} className={sourceMode === "file" ? "selected" : ""} onClick={() => changeSourceMode("file")}><Icon name="upload" size={16} /> Upload file</button>
               </div>
               {sourceMode === "url" ? (
-                <label className="field-wrap"><span className="field-label">OpenAPI URL</span><span className="input-with-icon"><Icon name="link" size={17} /><input autoComplete="url" type="url" value={specUrl} onChange={(event) => setSpecUrl(event.target.value)} placeholder="https://api.example.com/openapi.json" required /></span></label>
+                <label className="field-wrap"><span className="field-label">OpenAPI URL</span><span className="input-with-icon"><Icon name="link" size={17} /><input autoComplete="url" type="url" value={specUrl} onChange={(event) => setSpecUrl(event.target.value)} placeholder="https://api.example.com/openapi.json" /></span></label>
               ) : (
                 <label className={`upload-box ${file ? "has-file" : ""}`}>
                   <span className="upload-icon"><Icon name={file ? "check" : "upload"} size={21} /></span>
