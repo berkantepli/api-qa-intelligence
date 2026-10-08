@@ -2,6 +2,16 @@
 
 The version lives in the [`VERSION`](VERSION) file and follows [Semantic Versioning](https://semver.org/). Before 1.0.0, a new feature raises the minor number (0.**x**.0) and a fix or visual change raises the patch number (0.x.**y**).
 
+## 0.4.0 — 2026-10-08
+
+### Command line for CI
+- New `api-qa run` command runs a contract's checks without the web app, so a CI pipeline can test an API on every change. It is installed with the package (`pip install "git+https://github.com/berkantepli/api-qa-intelligence@v0.4.0"`).
+- Writes a JUnit XML report that GitHub Actions, GitLab, and Jenkins show as test results, and a JSON report with redacted evidence; exits `0` when every check passed, `1` on a failure, `2` on a usage problem.
+- Safe by default: POST, PUT, PATCH, and DELETE run only with `--include-writes`, private-network targets only with `--allow-private-network`, and AI features are never used.
+- Request inputs come from the contract's examples, `--param`, or an `--inputs` file; endpoints still missing inputs are reported as skipped with the missing names.
+- Credentials passed with `--header` are left out of checks that test missing authentication and are redacted everywhere in the reports.
+- A ready-to-copy GitHub Actions job is in `docs/examples/github-actions-api-qa.yml`.
+
 ## 0.3.0 — 2026-10-08
 
 ### Response schema checks
