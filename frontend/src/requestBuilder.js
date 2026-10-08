@@ -150,3 +150,21 @@ export function buildCheckRequest(described, inputs, scenario, { targetUrl, file
     base_url: targetUrl,
   };
 }
+
+// Reads the chosen files for each file field as base64 uploads.
+export async function readFileUploads(fileFields, files = {}) {
+  const uploads = {};
+  for (const field of fileFields) {
+    const chosen = files?.[field.name] ?? [];
+    if (!chosen.length) continue;
+    uploads[field.name] = await Promise.all(chosen.map(async (fileItem) => {
+      const bytes = new Uint8Array(await fileItem.arrayBuffer());
+      let binary = "";
+      for (let offset = 0; offset < bytes.length; offset += 0x8000) {
+        binary += String.fromCharCode(...bytes.subarray(offset, Math.min(offset + 0x8000, bytes.length)));
+      }
+      return { filename: fileItem.name, content_type: fileItem.type || "application/octet-stream", content_base64: btoa(binary) };
+    }));
+  }
+  return uploads;
+}

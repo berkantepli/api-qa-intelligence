@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { computeCoverage, coverageReportFileName, coverageReportJson, coverageReportMarkdown } from "./coverage.js";
+import BulkRunPanel from "./BulkRunPanel.jsx";
 import Icon from "./Icon.jsx";
 
 const statusLabels = { failing: "Failing", untested: "Not tested", passing: "Passing" };
@@ -23,8 +24,12 @@ function download(content, fileName, type) {
   URL.revokeObjectURL(url);
 }
 
-export default function CoveragePage({ overview, apiRuns, onOpenEndpoint, onGoToSpecs }) {
+export default function CoveragePage({
+  overview, apiRuns, onOpenEndpoint, onGoToSpecs,
+  inputsByOperation, filesByOperation, targetUrl, bulkRun, onBulkRun, onStopBulkRun, onDismissBulkRun,
+}) {
   const [filterId, setFilterId] = useState("all");
+  const [planning, setPlanning] = useState(false);
   if (!overview) {
     return <section className="history-page coverage-page">
       <div className="page-eyebrow">TEST COVERAGE</div>
@@ -60,6 +65,20 @@ export default function CoveragePage({ overview, apiRuns, onOpenEndpoint, onGoTo
       <div className="stat-card"><span className="stat-label">Checks executed</span><strong>{totals.checksExecuted}</strong><span className="stat-note">across all runs</span></div>
     </div>
 
+    {(planning || bulkRun) && <BulkRunPanel
+      overview={overview}
+      endpoints={visible}
+      filterLabel={filter.label}
+      inputsByOperation={inputsByOperation}
+      filesByOperation={filesByOperation}
+      targetUrl={targetUrl}
+      bulkRun={bulkRun}
+      onRun={onBulkRun}
+      onStop={onStopBulkRun}
+      onClose={() => { setPlanning(false); onDismissBulkRun(); }}
+      onOpenEndpoint={onOpenEndpoint}
+    />}
+
     <section className="history-group coverage-list">
       <div className="coverage-toolbar">
         <div className="coverage-filters" role="tablist" aria-label="Filter endpoints">
@@ -69,6 +88,7 @@ export default function CoveragePage({ overview, apiRuns, onOpenEndpoint, onGoTo
             return <button key={item.id} type="button" role="tab" aria-selected={item.id === filter.id} className={item.id === filter.id ? "selected" : ""} onClick={() => setFilterId(item.id)}>{item.label}<span>{count}</span></button>;
           })}
         </div>
+        <button className="secondary-button coverage-run-button" type="button" disabled={planning || Boolean(bulkRun) || !visible.length} onClick={() => setPlanning(true)}><Icon name="run" size={13} /> Run checks</button>
         <span className="coverage-legend" aria-hidden="true"><i className="coverage-category coverage-category-passing">Passed</i><i className="coverage-category coverage-category-failing">Failures</i><i className="coverage-category coverage-category-not_run">Not run</i><i className="coverage-category coverage-category-none">No check</i></span>
       </div>
       {visible.length ? <ul className="history-runs">{visible.map((endpoint) => <li key={endpoint.key}>
