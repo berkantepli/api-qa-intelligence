@@ -4,9 +4,20 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
+from app.api.workspace import get_store
+from app.domain.store import WorkspaceStore
 from app.main import app
 
 Handler = Callable[[httpx.Request], httpx.Response]
+
+
+@pytest.fixture(autouse=True)
+def workspace_store():
+    """Every test gets an empty in-memory workspace database instead of the real data/ file."""
+    store = WorkspaceStore(":memory:")
+    app.dependency_overrides[get_store] = lambda: store
+    yield store
+    app.dependency_overrides.pop(get_store, None)
 
 
 @pytest.fixture
