@@ -2,6 +2,21 @@
 
 The version lives in the [`VERSION`](VERSION) file and follows [Semantic Versioning](https://semver.org/). Before 1.0.0, a new feature raises the minor number (0.**x**.0) and a fix or visual change raises the patch number (0.x.**y**).
 
+## 0.3.0 — 2026-10-08
+
+### Response schema checks
+- A check now also fails when the status is the expected one but the JSON body does not match the schema the contract documents for that status (an exact code, a range such as `4XX`, or `default`).
+- The check covers types (including `nullable` and type lists), `enum`/`const`, required and documented properties, `additionalProperties: false`, array items, numeric and length bounds, and `allOf`/`anyOf`/`oneOf`. `format` and `pattern` are not enforced.
+- Results list the differences by JSON path, for example `$[31].name: required property is missing`, in the overview and in Run history; **Analyze with AI** receives them too.
+- APIs imported before this version need to be imported again to get response schemas.
+
+### Fixes
+- Headers such as `X-Key` or `Subscription-Key` are now redacted in run evidence like other credentials.
+- `pip install -e ".[dev]"` works on a clean machine: the Python package is declared explicitly.
+
+### Development
+- GitHub Actions runs backend lint and tests and frontend tests and build for every pull request.
+
 ## 0.2.1 — 2026-10-08
 
 ### Fixes
