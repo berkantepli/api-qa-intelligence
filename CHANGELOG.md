@@ -2,6 +2,14 @@
 
 The version lives in the [`VERSION`](VERSION) file and follows [Semantic Versioning](https://semver.org/). Before 1.0.0, a new feature raises the minor number (0.**x**.0) and a fix or visual change raises the patch number (0.x.**y**).
 
+## 0.4.1 — 2026-10-08
+
+### Fixes
+- A failed check in the overview now says what was expected, for example "Expected HTTP 401 or 403, received HTTP 200.", instead of only the received status.
+- In the dark theme, the endpoint path in the checks header no longer looks disabled.
+- The Runnable checks card says how many checks can run now and how many still need request details, instead of calling every check "ready to execute".
+- On phones, the AI Suggestions button stays inside its card.
+
 ## 0.4.0 — 2026-10-08
 
 ### Command line for CI
