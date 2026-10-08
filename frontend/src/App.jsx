@@ -21,6 +21,7 @@ import { buildEditedScenario, createDraft, editedCheckSummary, isEditedScenario,
 
 const DEFAULT_TARGET_URL = "http://127.0.0.1:8000";
 const APP_VERSION = __APP_VERSION__;
+const SAMPLE_SPEC_URL = "https://petstore3.swagger.io/api/v3/openapi.json";
 const RELEASES_URL = "https://github.com/berkantepli/api-qa-intelligence/releases";
 const STORAGE_KEYS = {
   theme: "api-qa-intelligence-theme",
@@ -122,6 +123,8 @@ function App() {
   const [file, setFile] = useState(null);
   const [selectedOperation, setSelectedOperation] = useState(() => firstRunnableOperationIndex(overview));
   const [selectedScenarios, setSelectedScenarios] = useState([]);
+  // "Re-run in overview": the checks to select once the run's endpoint is open.
+  const [pendingSelection, setPendingSelection] = useState(null);
   // The one AI idea or edited check currently open in the editor: { scenarioIndex, draft }.
   const [editingDraft, setEditingDraft] = useState(null);
   // Unsaved drafts survive closing the editor or switching endpoints; keyed by draftKey().
@@ -188,6 +191,9 @@ function App() {
   const selectedRun = runHistory.find((run) => run.id === selectedRunId);
   const serviceStatus = aiStatusLabel(aiStatus);
   const connectionView = connectionLabel(connection);
+  const apiCoverage = useMemo(() => computeCoverage(overview, runsForApi(runHistory, activeApiId, savedApis)), [overview, runHistory, activeApiId, savedApis]);
+  const endpointStatus = useMemo(() => new Map(apiCoverage.endpoints.map((endpoint) => [endpoint.key, endpoint.status])), [apiCoverage]);
+  const allSelected = availableScenarios.length > 0 && selectedScenarios.length === availableScenarios.length;
   // How many runnable checks can run with the request details entered so far.
   const checkReadiness = useMemo(() => (overview?.operations ?? []).reduce((counts, item) => {
     const checks = runnableCheckCount(item);
@@ -195,7 +201,6 @@ function App() {
     const ready = requestReadiness(describeOperation(item), apiInputs[key], requestFiles[key]).ready;
     return { total: counts.total + checks, needDetails: counts.needDetails + (ready ? 0 : checks) };
   }, { total: 0, needDetails: 0 }), [overview, apiInputs, requestFiles]);
-  const methods = useMemo(() => new Set((overview?.operations ?? []).map((item) => item.method)), [overview]);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -213,6 +218,13 @@ function App() {
     localStorage.setItem(STORAGE_KEYS.requestInputs, JSON.stringify(stored));
   }, [requestInputs, savedApis]);
   useEffect(() => { refreshAiStatus(); }, []);
+
+  useEffect(() => {
+    // Wait for missing request details: the checks are selected once they become runnable.
+    if (!pendingSelection || pendingSelection.apiId !== activeApiId || pendingSelection.operationKey !== operationKey || !inputsReady) return;
+    setSelectedScenarios(availableScenarios.map((scenario, index) => pendingSelection.titles.includes(scenario.title) ? index : -1).filter((index) => index >= 0));
+    setPendingSelection(null);
+  }, [pendingSelection, activeApiId, operationKey, availableScenarios, inputsReady]);
 
   // Bring a just-saved check into view and highlight it briefly.
   useEffect(() => {
@@ -349,16 +361,18 @@ function App() {
     setError("");
   }
 
-  async function importSpec(event) {
+  async function importSpec(event, sampleUrl) {
     event?.preventDefault();
+    const urlToImport = sampleUrl ?? specUrl;
+    const fromUrl = Boolean(sampleUrl) || sourceMode === "url";
     setLoading(true);
     setError("");
     setNotice("");
     try {
       const failureMessage = "The specification could not be imported.";
       let payload;
-      if (sourceMode === "url") {
-        const url = specUrl.trim();
+      if (fromUrl) {
+        const url = urlToImport.trim();
         if (!url) throw new Error("Enter an OpenAPI URL first.");
         if (!/^https?:\/\/\S+$/i.test(url)) throw new Error("Enter a full URL that starts with http:// or https://.");
         payload = await postJson("/api/v1/specs/import-url", { url }, failureMessage);
@@ -368,7 +382,7 @@ function App() {
         data.append("file", file);
         payload = await readJsonResponse(await fetch("/api/v1/specs/import", { method: "POST", body: data }), failureMessage);
       }
-      const source = sourceMode === "url" ? specUrl.trim() : file.name;
+      const source = fromUrl ? urlToImport.trim() : file.name;
       const id = `${payload.title || "API"}::${source}`;
       const importedTargetUrl = resolveApiTarget({ source, overview: payload });
       const savedApi = { id, title: payload.title || "Imported API", source, importedAt: new Date().toISOString(), overview: payload, targetUrl: importedTargetUrl };
@@ -407,6 +421,24 @@ function App() {
     } catch (caught) {
       setScenarioIdeaState((current) => ({ ...current, [key]: { loading: false, error: caught.message || "AI scenario suggestions could not be generated." } }));
     }
+  }
+
+  function toggleAllScenarios() {
+    setShowExecutionConfirmation(false);
+    setSelectedScenarios(allSelected ? [] : availableScenarios.map((_, index) => index));
+  }
+
+  // Opens a saved run's endpoint with the same checks selected, ready to run again.
+  function rerunInOverview(run) {
+    const api = savedApis.find((item) => item.id === run.apiId) ?? savedApis.find((item) => item.title === run.api);
+    const index = api?.overview.operations.findIndex((item) => `${item.method} ${item.path}` === run.endpoint) ?? -1;
+    if (!api || index < 0) return;
+    if (api.id !== activeApiId) openSavedApi(api);
+    setSelectedOperation(index);
+    resetRunState();
+    setSavedCheck(null);
+    setPendingSelection({ apiId: api.id, operationKey: run.endpoint, titles: run.results.map((result) => result.title) });
+    openOverviewPage();
   }
 
   function toggleScenario(index) {
@@ -811,7 +843,7 @@ function App() {
             onDismissBulkRun={() => setBulkRun(null)}
           />
         ) : page === "history" && selectedRun ? (
-          <RunDetail run={selectedRun} analysisState={analysisState} onAnalyze={analyzeFailure} onBack={() => openRunHistory()} />
+          <RunDetail run={selectedRun} analysisState={analysisState} onAnalyze={analyzeFailure} onBack={() => openRunHistory()} onRerun={() => rerunInOverview(selectedRun)} canRerun={savedApis.some((api) => api.id === selectedRun.apiId || api.title === selectedRun.api)} />
         ) : page === "history" ? (
           <RunHistoryList
             runs={runHistory}
@@ -850,9 +882,10 @@ function App() {
                 <button type="button" role="tab" aria-selected={sourceMode === "url"} className={sourceMode === "url" ? "selected" : ""} onClick={() => changeSourceMode("url")}><Icon name="link" size={16} /> Spec URL</button>
                 <button type="button" role="tab" aria-selected={sourceMode === "file"} className={sourceMode === "file" ? "selected" : ""} onClick={() => changeSourceMode("file")}><Icon name="upload" size={16} /> Upload file</button>
               </div>
-              {sourceMode === "url" ? (
+              {sourceMode === "url" ? (<>
                 <label className="field-wrap"><span className="field-label">OpenAPI URL</span><span className="input-with-icon"><Icon name="link" size={17} /><input autoComplete="url" type="url" value={specUrl} onChange={(event) => setSpecUrl(event.target.value)} placeholder="https://api.example.com/openapi.json" /></span></label>
-              ) : (
+                  <p className="sample-hint">No spec at hand? <button className="text-button" type="button" disabled={loading} onClick={() => { setSpecUrl(SAMPLE_SPEC_URL); importSpec(null, SAMPLE_SPEC_URL); }}>Try the Swagger Petstore sample</button></p>
+              </>) : (
                 <label className={`upload-box ${file ? "has-file" : ""}`}>
                   <span className="upload-icon"><Icon name={file ? "check" : "upload"} size={21} /></span>
                   <strong>{file ? file.name : "Choose an OpenAPI file"}</strong>
@@ -881,7 +914,7 @@ function App() {
             </div>
             <div className="stats-row">
               <div className="stat-card"><span className="stat-label">Endpoints</span><strong>{overview.operation_count}</strong><span className="stat-note">available to review</span></div>
-              <div className="stat-card"><span className="stat-label">Methods</span><strong className="method-stat">{[...methods].join(" · ") || "—"}</strong><span className="stat-note">found in this API</span></div>
+              <button className="stat-card stat-card-link" type="button" onClick={openCoveragePage} title="Open Coverage & Risk"><span className="stat-label">Endpoints tested</span><strong>{apiCoverage.totals.tested} / {apiCoverage.totals.endpoints}</strong><span className="stat-note">{apiCoverage.totals.tested ? (apiCoverage.totals.failing ? <span className="history-fail">{apiCoverage.totals.failing} failing in latest run</span> : "all passing in latest run") : "run checks to start"}</span></button>
               <div className="stat-card"><span className="stat-label">Runnable checks</span><strong>{checkReadiness.total}</strong><span className="stat-note">{checkReadiness.needDetails ? `${checkReadiness.total - checkReadiness.needDetails} ready now · ${checkReadiness.needDetails} need request details` : "all ready to run"}</span></div>
             </div>
             <div className="workspace-grid">
@@ -893,6 +926,7 @@ function App() {
                       <span className={`method-tag method-${item.method.toLowerCase()}`}>{item.method}</span>
                       <span className="endpoint-copy"><strong>{item.path}</strong><small>{item.summary || item.operation_id || item.tags?.[0] || "API endpoint"}</small></span>
                       <span className="scenario-count">{runnableCheckCount(item)}<span>checks</span></span>
+                      {endpointStatus.get(`${item.method} ${item.path}`) !== "untested" && <span className={`endpoint-status endpoint-status-${endpointStatus.get(`${item.method} ${item.path}`)}`} title={endpointStatus.get(`${item.method} ${item.path}`) === "failing" ? "Failing in its latest run" : "Passed in its latest run"} aria-label={endpointStatus.get(`${item.method} ${item.path}`) === "failing" ? "Failing in its latest run" : "Passed in its latest run"} />}
                     </button>
                   ))}
                 </div>
@@ -963,7 +997,7 @@ function App() {
                   <div><strong>This request may change data.</strong><p>You are about to run {selectedCount} {operation.method} {operation.path} check{selectedCount === 1 ? "" : "s"} against {targetUrl}. This can create, update, or delete data in the target API.</p></div>
                   <div className="execution-confirmation-actions"><button className="secondary-button" type="button" onClick={() => setShowExecutionConfirmation(false)}>Cancel</button><button className="primary-button" type="button" onClick={confirmRun}>Confirm and run</button></div>
                 </div>}
-                <div className="run-footer">{lastRunId && !running && <button className="text-button" type="button" onClick={() => openRunHistory(lastRunId)}>View run details</button>}<span>{inputsReady ? `${availableScenarios.length} ${availableScenarios.length === 1 ? "check" : "checks"} ready to run` : "Complete required request details first"}</span><button className="primary-button" disabled={!inputsReady || selectedCount === 0 || running} onClick={requestRun}>{running ? <><span className="spinner" /> Running…</> : <><Icon name="run" size={15} /> Run selected{selectedCount ? ` (${selectedCount})` : ""}</>}</button></div>
+                <div className="run-footer">{inputsReady && availableScenarios.length > 1 && <button className="text-button" type="button" disabled={running} onClick={toggleAllScenarios}>{allSelected ? "Clear selection" : "Select all"}</button>}{lastRunId && !running && <button className="text-button" type="button" onClick={() => openRunHistory(lastRunId)}>View run details</button>}<span>{inputsReady ? `${availableScenarios.length} ${availableScenarios.length === 1 ? "check" : "checks"} ready to run` : "Complete required request details first"}</span><button className="primary-button" disabled={!inputsReady || selectedCount === 0 || running} onClick={requestRun}>{running ? <><span className="spinner" /> Running…</> : <><Icon name="run" size={15} /> Run selected{selectedCount ? ` (${selectedCount})` : ""}</>}</button></div>
                 {error && <div className="alert error-alert run-error" role="alert"><Icon name="close" size={17} />{error}</div>}
               </section>
             </div>

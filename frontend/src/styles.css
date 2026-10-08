@@ -236,6 +236,14 @@ h1, h2, h3, p { margin-top: 0; }
 .bulk-endpoints .link-button { margin-left: auto; padding: 0; border: 0; background: none; color: var(--accent); font-size: 13px; font-weight: 600; cursor: pointer; }
 .bulk-run-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .bulk-run-actions .primary-button, .bulk-run-actions .secondary-button { min-height: 34px; font-size: 13px; }
+.endpoint-status { width: 8px; height: 8px; flex: 0 0 auto; border-radius: 50%; }
+.endpoint-status-passing { background: var(--green); }
+.endpoint-status-failing { background: var(--red); }
+.stat-card-link { border: 1px solid var(--line); color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.stat-card-link:hover { border-color: var(--accent); }
+.run-detail-heading { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px; }
+.run-detail-heading .secondary-button { min-height: 34px; font-size: 12px; }
+.sample-hint { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 10px 0 0; color: var(--muted); font-size: 12px; }
 .coverage-empty { margin: 0; padding: 24px 18px; border-top: 1px solid var(--line); color: var(--muted); font-size: 13px; text-align: center; }
 .history-confirm span { flex: 1; min-width: 200px; color: var(--text); font-size: 13px; }
 .history-confirm .secondary-button, .history-confirm .danger-button { min-height: 32px; font-size: 13px; }
@@ -382,7 +390,6 @@ h1, h2, h3, p { margin-top: 0; }
 .stat-card { display: flex; min-height: 105px; flex-direction: column; align-items: flex-start; padding: 15px 17px; border: 1px solid #e8e8f0; border-radius: 10px; background: white; box-shadow: var(--shadow); }
 .stat-label { color: #777b8b; font-size: 13px; }
 .stat-card strong { margin-top: 5px; color: #292b35; font-family: Manrope, sans-serif; font-size: 25px; font-weight: 600; letter-spacing: -.5px; }
-.stat-card .method-stat { font-size: 17px; letter-spacing: -.2px; }
 .stat-note { margin-top: auto; color: #9b9daa; font-size: 12px; }
 .workspace-grid { display: grid; grid-template-columns: minmax(300px, .83fr) minmax(440px, 1.17fr); align-items: stretch; gap: 15px; margin-top: 17px; }
 .panel { min-width: 0; overflow: hidden; border: 1px solid #e8e8f0; border-radius: 11px; background: white; box-shadow: var(--shadow); }
@@ -724,7 +731,6 @@ h1, h2, h3, p { margin-top: 0; }
   .stat-card { min-height: 94px; padding: 11px 9px; }
   .stat-label { font-size: 11px; }
   .stat-card strong { font-size: 21px; }
-  .stat-card .method-stat { font-size: 12px; }
   .stat-note { font-size: 10px; }
   .target-field { align-items: flex-start; flex-direction: column; gap: 7px; }
   .target-field input { min-height: 20px; }
