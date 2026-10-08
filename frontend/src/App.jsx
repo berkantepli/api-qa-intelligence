@@ -8,6 +8,7 @@ import CoverageRing from "./CoverageRing.jsx";
 import { connectionLabel } from "./targetConnection.js";
 import Icon from "./Icon.jsx";
 import RunDetail, { SchemaDifferences } from "./RunDetail.jsx";
+import { outcomeSummary } from "./runDetail.js";
 import RunHistoryList from "./RunHistoryList.jsx";
 import { applySampleValues, bodyInputKey, collectEmptyFields, fillHint, parameterInputKey } from "./sampleFill.js";
 import { removeSavedApi } from "./savedApis.js";
@@ -187,6 +188,13 @@ function App() {
   const selectedRun = runHistory.find((run) => run.id === selectedRunId);
   const serviceStatus = aiStatusLabel(aiStatus);
   const connectionView = connectionLabel(connection);
+  // How many runnable checks can run with the request details entered so far.
+  const checkReadiness = useMemo(() => (overview?.operations ?? []).reduce((counts, item) => {
+    const checks = runnableCheckCount(item);
+    const key = `${item.method} ${item.path}`;
+    const ready = requestReadiness(describeOperation(item), apiInputs[key], requestFiles[key]).ready;
+    return { total: counts.total + checks, needDetails: counts.needDetails + (ready ? 0 : checks) };
+  }, { total: 0, needDetails: 0 }), [overview, apiInputs, requestFiles]);
   const methods = useMemo(() => new Set((overview?.operations ?? []).map((item) => item.method)), [overview]);
 
   useEffect(() => {
@@ -874,7 +882,7 @@ function App() {
             <div className="stats-row">
               <div className="stat-card"><span className="stat-label">Endpoints</span><strong>{overview.operation_count}</strong><span className="stat-note">available to review</span></div>
               <div className="stat-card"><span className="stat-label">Methods</span><strong className="method-stat">{[...methods].join(" · ") || "—"}</strong><span className="stat-note">found in this API</span></div>
-              <div className="stat-card"><span className="stat-label">Runnable checks</span><strong>{overview.operations.reduce((sum, item) => sum + runnableCheckCount(item), 0)}</strong><span className="stat-note">ready to execute</span></div>
+              <div className="stat-card"><span className="stat-label">Runnable checks</span><strong>{checkReadiness.total}</strong><span className="stat-note">{checkReadiness.needDetails ? `${checkReadiness.total - checkReadiness.needDetails} ready now · ${checkReadiness.needDetails} need request details` : "all ready to run"}</span></div>
             </div>
             <div className="workspace-grid">
               <section className="panel endpoints-panel">
@@ -928,7 +936,7 @@ function App() {
                         {isEditedScenario(scenario) && <p className="edited-check-summary">{editedCheckSummary(scenario.request_example)}</p>}
                         {isEditedScenario(scenario) && editingDraft?.scenarioIndex !== scenario.scenarioIndex && <div className="card-actions"><button className="text-button" type="button" disabled={running} onClick={() => openDraftEditor(scenario.scenarioIndex)}>{draftStash[draftKey(scenario)] ? "Continue editing" : "Edit"}</button><button className="text-button danger" type="button" disabled={running} onClick={() => removeEditedCheck(scenario.scenarioIndex)}>Remove</button></div>}
                         {editingDraft?.scenarioIndex === scenario.scenarioIndex && draftEditor}
-                        {result && <div className={`result-box result-${result.result.toLowerCase()}`}><div className="result-heading"><strong>{result.result}</strong>{result.response_status && <span>HTTP {result.response_status}</span>}<small>{result.duration_ms} ms</small></div>{result.schema_check?.status === "passed" && <p className="schema-note">Body matches the documented schema.</p>}<SchemaDifferences check={result.schema_check} />{result.error && <p>{result.error}</p>}{result.response_body && <details><summary>Response details</summary><pre>{result.response_body}</pre></details>}</div>}</div>
+                        {result && <div className={`result-box result-${result.result.toLowerCase()}`}><div className="result-heading"><strong>{result.result}</strong>{result.response_status && <span>HTTP {result.response_status}</span>}<small>{result.duration_ms} ms</small></div>{result.result === "FAIL" && result.schema_check?.status !== "failed" && <p className="result-reason">{outcomeSummary(result)}</p>}{result.schema_check?.status === "passed" && <p className="schema-note">Body matches the documented schema.</p>}<SchemaDifferences check={result.schema_check} />{result.error && <p>{result.error}</p>}{result.response_body && <details><summary>Response details</summary><pre>{result.response_body}</pre></details>}</div>}</div>
                       </article>
                     );
                   })}
