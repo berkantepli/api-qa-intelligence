@@ -51,6 +51,12 @@ describe("outcomeSummary", () => {
     expect(outcomeSummary({ result: "ERROR", expected_status_codes: [200] }))
       .toBe("Expected HTTP 200, but no response was received.");
   });
+  it("explains the response schema result when the status matched", () => {
+    expect(outcomeSummary({ result: "PASS", response_status: 200, expected_status_codes: [200], schema_check: { status: "passed" } }))
+      .toBe("Received HTTP 200, as expected, and the body matches the documented schema.");
+    expect(outcomeSummary({ result: "FAIL", response_status: 200, expected_status_codes: [200], schema_check: { status: "failed", detail: "2 differences from the documented schema." } }))
+      .toBe("Received HTTP 200, as expected, but the body does not match the documented schema: 2 differences from the documented schema.");
+  });
 });
 
 describe("evidence presence", () => {

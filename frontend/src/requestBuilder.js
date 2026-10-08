@@ -147,6 +147,8 @@ export function buildCheckRequest(described, inputs, scenario, { targetUrl, file
     file_uploads: fileUploads,
     json_body: jsonBody,
     expected_status_codes: example.expected_status_codes,
+    // When the contract documents JSON response schemas, the backend also checks the response body.
+    response_schemas: operation.response_schemas ?? {},
     base_url: targetUrl,
   };
 }

@@ -22,7 +22,13 @@ export function requestLine(result) {
 export function outcomeSummary(result) {
   const expected = result.expected_status_codes?.length ? result.expected_status_codes.join(" or ") : "a documented status";
   if (result.response_status == null) return `Expected HTTP ${expected}, but no response was received.`;
-  if ((result.result || "ERROR") === "PASS") return `Received HTTP ${result.response_status}, as expected.`;
+  const schema = result.schema_check;
+  if ((result.result || "ERROR") === "PASS") {
+    return schema?.status === "passed"
+      ? `Received HTTP ${result.response_status}, as expected, and the body matches the documented schema.`
+      : `Received HTTP ${result.response_status}, as expected.`;
+  }
+  if (schema?.status === "failed") return `Received HTTP ${result.response_status}, as expected, but the body does not match the documented schema: ${schema.detail}`;
   return `Expected HTTP ${expected}, received HTTP ${result.response_status}.`;
 }
 

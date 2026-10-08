@@ -48,6 +48,7 @@ describe("buildCheckRequest", () => {
       file_uploads: {},
       json_body: { name: "Max", age: 3 },
       expected_status_codes: [201],
+      response_schemas: {},
       base_url: "http://api.test",
     });
   });
