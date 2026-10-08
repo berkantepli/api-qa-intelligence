@@ -115,6 +115,26 @@ Saved APIs and Run history live only in this browser’s storage. The **Settings
 
 Install and run Ollama with a model. The default model is `qwen3-vl:8b-instruct`, and the default Ollama URL is `http://127.0.0.1:11434`. Override them with `OLLAMA_MODEL` and `OLLAMA_BASE_URL` before starting the backend. In an API overview, choose **Suggest scenarios** to send the selected endpoint’s contract details (operation, parameters, and body field names/types) to the configured model. The model receives no example values, credentials, target URL, or API traffic. It also receives the titles of the endpoint’s existing checks and is asked not to repeat them; ideas that still repeat an existing check are skipped. On endpoints without parameters or a request body, ideas stay review notes because a check made from them would repeat the contract check. Suggestions are review-only and are not runnable until you choose **Convert to check**, state the expected status codes, and decide for each parameter whether to use the request details, omit it, send it with an empty value (not available for path parameters), or send a custom value; the editor warns when a draft would send exactly the same request as another check; JSON bodies are sent exactly as written in the editor. Saved checks are labeled **AI idea · edited**, stay in this browser with the saved API, and run only when you select them, with the usual confirmation for data-changing methods. In a run’s details, choose **Analyze with AI** on a failed check to send that check’s redacted evidence for optional, advisory analysis. Read the on-screen disclosure before requesting either AI feature.
 
+## Running checks in CI
+
+The `api-qa` command runs a contract's runnable checks without the web app, so a CI pipeline can test an API on every change. It is installed with the backend (`pip install -e .`, or `pip install "git+https://github.com/berkantepli/api-qa-intelligence"`).
+
+```bash
+api-qa run --spec openapi.yaml --target https://staging.example.com \
+  --header "Authorization: Bearer $API_TOKEN" --param petId=10 \
+  --junit report.xml --json report.json
+```
+
+- **What runs:** the contract-based checks of every endpoint, with the response body checked against the documented schema. AI features are never used, so results are repeatable. `--smoke` runs only each endpoint's valid request; `--endpoint 'GET /pet/*'` narrows the endpoints.
+- **Data-changing methods** (POST, PUT, PATCH, DELETE) are skipped unless you pass `--include-writes`.
+- **Request inputs:** parameters fall back to the contract's examples. Give missing ones with `--param name=value` (or `path:name=value`), or put them in a JSON file passed with `--inputs`, keyed by `"METHOD /path"` (or `"*"` for all endpoints) with the web app's input keys, for example `{"GET /pet/{petId}": {"parameter:path:petId": "10"}}`. An endpoint whose required inputs are still missing is reported as skipped, with the missing names; `--fail-on-skipped` turns that into a failure.
+- **Credentials:** pass them with `--header`. They are sent with every check except one that deliberately leaves them out (such as *Call without authentication*), and their values are replaced with `[REDACTED]` everywhere in the reports.
+- **Target:** defaults to the contract's first server. Private-network hosts (for example a Docker service name) are blocked unless you pass `--allow-private-network`.
+- **Reports:** `--junit` writes JUnit XML (one test suite per endpoint, one test case per check, skipped checks marked as skipped), which GitHub Actions, GitLab, and Jenkins display as test results; `--json` writes the full results with redacted evidence.
+- **Exit codes:** `0` when every check passed, `1` when a check failed or errored (or was skipped, with `--fail-on-skipped`), `2` for a usage or contract problem.
+
+A ready-to-copy GitHub Actions job is in [`docs/examples/github-actions-api-qa.yml`](docs/examples/github-actions-api-qa.yml).
+
 ## Running tests
 
 ```bash
