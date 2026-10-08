@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { categoryLabels, inputHelp, parameterLabel } from "./categories.js";
 import CoveragePage from "./CoveragePage.jsx";
 import DuplicateNotice from "./DuplicateNotice.jsx";
-import { duplicatePairKey, findDuplicateScenarios, findSameRequest } from "./duplicates.js";
+import { duplicatePairKey, filterNewIdeas, findDuplicateScenarios, findSameRequest } from "./duplicates.js";
 import { runsForApi } from "./coverage.js";
 import { connectionLabel } from "./targetConnection.js";
 import Icon from "./Icon.jsx";
@@ -193,10 +193,13 @@ function App() {
     .filter((scenario) => scenario.request_example);
   const availableScenarios = inputsReady ? scenarioTemplates : [];
   const draftContext = { operation, parameters: operationParameters, bodyFields, sendsJsonBody, isFormBody };
+  const duplicateTargetNames = [...operationParameters.map((parameter) => parameter.name), ...bodyFields.map((field) => field.name)];
   const duplicatePairs = findDuplicateScenarios(operationScenarios, {
-    targetNames: [...operationParameters.map((parameter) => parameter.name), ...bodyFields.map((field) => field.name)],
+    targetNames: duplicateTargetNames,
     ignoredPairs: operation?.ignored_duplicates ?? [],
   });
+  // Without parameters or a body, every check would send the same request as the contract check.
+  const hasInputsToVary = operationParameters.length > 0 || bodyFields.length > 0 || Boolean(operation?.request_body_content_type);
   const duplicateIndexes = new Set(duplicatePairs.map((pair) => pair.drop));
   const draftErrors = editingDraft ? validateDraftFields(editingDraft.draft, draftContext) : {};
   // A complete draft that would send exactly the request of another check tests nothing new.
@@ -395,10 +398,12 @@ function App() {
     setScenarioIdeaState((current) => ({ ...current, [key]: { loading: true, error: "" } }));
     try {
       const payload = await postJson("/api/v1/specs/scenario-ideas", { operation }, "AI scenario suggestions could not be generated.");
-      // Saved edited checks stay; only unconverted ideas are replaced.
-      updateOperationScenarios((scenarios) => [...scenarios.filter((scenario) => scenario.source !== "ai"), ...(payload.scenarios ?? [])]);
+      // Saved edited checks stay; only unconverted ideas are replaced, minus any that repeat a kept scenario.
+      const existing = operationScenarios.filter((scenario) => scenario.source !== "ai");
+      const { kept, skipped } = filterNewIdeas(existing, payload.scenarios ?? [], { targetNames: duplicateTargetNames });
+      updateOperationScenarios((scenarios) => [...scenarios.filter((scenario) => scenario.source !== "ai"), ...kept]);
       resetRunState();
-      setScenarioIdeaState((current) => ({ ...current, [key]: { loading: false, error: "" } }));
+      setScenarioIdeaState((current) => ({ ...current, [key]: { loading: false, error: "", skipped } }));
     } catch (caught) {
       setScenarioIdeaState((current) => ({ ...current, [key]: { loading: false, error: caught.message || "AI scenario suggestions could not be generated." } }));
     }
@@ -943,12 +948,14 @@ function App() {
                   <small className="ai-suggestions-note">Sends endpoint details to your configured AI model. No credentials or API requests are sent.</small>
                   {savedCheck?.operationKey === operationKey && <div className="alert success-alert saved-check-notice" role="status"><Icon name="check" size={16} /><span>“{savedCheck.title}” was saved as a check under Runnable checks{inputsReady ? "." : "; complete the request details above to run it."}</span>{inputsReady && <button className="text-button" type="button" onClick={() => setHighlightedCheck(savedCheck.scenarioIndex)}>Show it</button>}</div>}
                   {scenarioIdeaStatus.error && <div className="alert error-alert" role="alert">{scenarioIdeaStatus.error}</div>}
+                  {scenarioIdeaStatus.skipped > 0 && <small className="ai-suggestions-note">Skipped {scenarioIdeaStatus.skipped} {scenarioIdeaStatus.skipped === 1 ? "idea that repeats" : "ideas that repeat"} an existing check.</small>}
+                  {!hasInputsToVary && aiScenarioIdeas.length > 0 && <small className="ai-suggestions-note">This endpoint has no parameters or request body, so these ideas stay as review notes: a check made from them would repeat “Valid request”.</small>}
                   {aiScenarioIdeas.length ? <div className="ai-suggestions-list">{aiScenarioIdeas.map(({ scenario, scenarioIndex }) => <article className="ai-suggestion-card" key={`${scenario.title}-${scenarioIndex}`}>
                     <div className="scenario-title-row"><span className={`category-pill category-${scenario.category}`}>{categoryLabels[scenario.category] || scenario.category}</span><span className="review-pill">Review · not runnable</span>{duplicateIndexes.has(scenarioIndex) && <span className="duplicate-pill">Possible duplicate</span>}{draftStash[draftKey(scenario)] && editingDraft?.scenarioIndex !== scenarioIndex && <span className="edited-pill">Draft in progress</span>}</div>
                     <h3>{scenario.title}</h3><p>{scenario.rationale}</p>
                     {editingDraft?.scenarioIndex === scenarioIndex
                       ? draftEditor
-                      : <div className="card-actions"><button className="text-button" type="button" disabled={running} onClick={() => openDraftEditor(scenarioIndex)}>{draftStash[draftKey(scenario)] ? "Continue draft" : "Convert to check"}</button></div>}
+                      : hasInputsToVary && <div className="card-actions"><button className="text-button" type="button" disabled={running} onClick={() => openDraftEditor(scenarioIndex)}>{draftStash[draftKey(scenario)] ? "Continue draft" : "Convert to check"}</button></div>}
                   </article>)}</div> : <div className="ai-suggestions-empty">No AI ideas yet. Generate suggestions when you want a second QA perspective.</div>}
                 </section>
                 {showExecutionConfirmation && <div className="execution-confirmation" role="alert">

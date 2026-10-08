@@ -136,3 +136,12 @@ export function findDuplicateScenarios(scenarios = [], { targetNames = [], ignor
   }
   return pairs;
 }
+
+// Keeps only new AI ideas that do not repeat an existing scenario or an earlier new idea.
+export function filterNewIdeas(existing = [], ideas = [], options = {}) {
+  const candidates = [...existing, ...ideas];
+  const repeated = new Set(findDuplicateScenarios(candidates, options)
+    .filter((pair) => pair.drop >= existing.length)
+    .map((pair) => pair.drop - existing.length));
+  return { kept: ideas.filter((_, index) => !repeated.has(index)), skipped: repeated.size };
+}
