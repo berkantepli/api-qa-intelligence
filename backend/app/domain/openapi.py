@@ -138,6 +138,7 @@ def summarize_openapi(document: Any) -> ApiOverview:
             request_body = details.get("requestBody")
             body_content_type = _request_body_content_type(request_body, document)
             body_fields = _request_body_fields(request_body, document)
+            parameters = _operation_parameters(path_item, details, global_security, document)
             operations.append(
                 ApiOperation(
                     method=method.upper(),
@@ -145,12 +146,13 @@ def summarize_openapi(document: Any) -> ApiOverview:
                     operation_id=_optional_string(details.get("operationId")),
                     summary=_optional_string(details.get("summary")),
                     tags=[tag for tag in tags if isinstance(tag, str)] if isinstance(tags, list) else [],
-                    parameters=_operation_parameters(path_item, details, global_security, document),
+                    parameters=parameters,
                     request_body_content_type=body_content_type,
                     request_body_required=_request_body_required(request_body, document),
                     request_body_fields=body_fields,
                     scenarios=_generate_scenarios(
-                        method.upper(), path, details, global_security, document, body_content_type, body_fields
+                        method.upper(), path, details, global_security, document, body_content_type, body_fields,
+                        [parameter for parameter in parameters if parameter.credential],
                     ),
                 )
             )
@@ -177,6 +179,7 @@ def _generate_scenarios(
     document: Mapping[str, Any],
     body_content_type: str | None,
     body_fields: list[ApiBodyField],
+    credentials: list[ApiParameter],
 ) -> list[QaScenario]:
     body_schema = _request_body_schema(operation.get("requestBody"), document)
     is_form_body = bool(body_content_type and body_content_type.lower().startswith(FORM_MEDIA_TYPES))
@@ -317,14 +320,30 @@ def _generate_scenarios(
 
     security = operation.get("security", global_security)
     if isinstance(security, list) and security:
-        scenarios.append(
-            QaScenario(
-                category="security_minded",
-                title="Call without authentication",
-                rationale="Omit the documented authentication credentials and verify that protected data or actions are not exposed.",
-                review_required=True,
-            )
+        # An empty requirement ({}) makes authentication optional, so an anonymous call may succeed.
+        auth_required = all(isinstance(requirement, Mapping) and requirement for requirement in security)
+        auth_codes = [code for code in _status_codes(operation.get("responses"), 4) if code in {401, 403}] or [401, 403]
+        unauthenticated = QaScenario(
+            category="security_minded",
+            title="Call without authentication",
+            rationale="Omit the documented authentication credentials and verify that protected data or actions are not exposed.",
+            review_required=True,
+            request_example=(
+                ScenarioRequestExample(
+                    method=method,
+                    path=path,
+                    form_body=is_form_body,
+                    form_fields=form_fields if is_form_body else {},
+                    omitted_parameters=[{"name": item.name, "location": item.location} for item in credentials],
+                    json_body=valid_body,
+                    expected_status_codes=auth_codes,
+                )
+                if request_is_supported and auth_required and credentials
+                else None
+            ),
         )
+        # Keep the authentication check even when many field checks fill the list.
+        return [*scenarios[:11], unauthenticated]
 
     return scenarios[:12]
 
