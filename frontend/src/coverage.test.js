@@ -19,7 +19,7 @@ describe("computeCoverage", () => {
     run("GET /pets", "2026-10-02T10:00:00Z", [{ title: "Valid request", category: "happy_path", result: "PASS" }, { title: "Omit a required parameter", category: "negative", result: "PASS" }]),
     run("GET /pets/{id}", "2026-10-03T10:00:00Z", [{ title: "Valid request", category: "happy_path", result: "ERROR" }]),
   ];
-  const coverage = computeCoverage(overview, runs);
+  const coverage = computeCoverage(overview, runs, Date.parse("2026-10-04T10:00:00Z"));
   const byKey = Object.fromEntries(coverage.endpoints.map((endpoint) => [endpoint.key, endpoint]));
 
   it("uses the latest run for status and counts covered runnable checks", () => {
@@ -39,11 +39,42 @@ describe("computeCoverage", () => {
   });
 
   it("summarizes totals", () => {
-    expect(coverage.totals).toEqual({ endpoints: 4, tested: 2, coveragePercent: 50, failing: 1, untestedWrites: 2, checksExecuted: 4 });
+    expect(coverage.totals).toEqual({ endpoints: 4, tested: 2, coveragePercent: 50, failing: 1, untestedWrites: 2, flaky: 0, stale: 0, checksExecuted: 4 });
+  });
+
+  it("shows each category by its checks' latest outcome", () => {
+    const states = Object.fromEntries(byKey["GET /pets"].categories.map((category) => [category.id, category.state]));
+    expect(states).toEqual({ happy_path: "passing", negative: "passing", boundary: "none", invalid_value: "none", security_minded: "none" });
+    expect(byKey["GET /pets/{id}"].categories[0].state).toBe("failing");
+    expect(byKey["DELETE /pets/{id}"].categories[0].state).toBe("not_run");
   });
 
   it("handles a missing overview", () => {
     expect(computeCoverage(null, []).totals.coveragePercent).toBe(0);
+  });
+});
+
+describe("flaky and stale endpoints", () => {
+  const outcomes = (...results) => results.map((result, index) => run("GET /pets", `2026-10-0${index + 1}T10:00:00Z`, [{ title: "Valid request", category: "happy_path", result }]));
+
+  it("flags a check whose outcome flips at least twice, not a single fix", () => {
+    const flipping = computeCoverage(overview, outcomes("PASS", "FAIL", "PASS"), Date.parse("2026-10-04T00:00:00Z"));
+    const fixed = computeCoverage(overview, outcomes("FAIL", "FAIL", "PASS"), Date.parse("2026-10-04T00:00:00Z"));
+    const pets = (coverage) => coverage.endpoints.find((endpoint) => endpoint.key === "GET /pets");
+
+    expect(pets(flipping).flakyChecks).toEqual(["Valid request"]);
+    expect(pets(flipping).risks.map((risk) => risk.id)).toContain("flaky");
+    expect(pets(fixed).flakyChecks).toEqual([]);
+    expect(flipping.totals.flaky).toBe(1);
+  });
+
+  it("marks endpoints whose latest run is older than a week", () => {
+    const coverage = computeCoverage(overview, outcomes("PASS"), Date.parse("2026-10-09T10:00:00Z"));
+    const pets = coverage.endpoints.find((endpoint) => endpoint.key === "GET /pets");
+
+    expect(pets.stale).toBe(true);
+    expect(pets.risks.map((risk) => risk.id)).toContain("stale");
+    expect(coverage.totals.stale).toBe(1);
   });
 });
 
