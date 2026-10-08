@@ -7,7 +7,7 @@ import { computeCoverage, runsForApi } from "./coverage.js";
 import CoverageRing from "./CoverageRing.jsx";
 import { connectionLabel } from "./targetConnection.js";
 import Icon from "./Icon.jsx";
-import RunDetail from "./RunDetail.jsx";
+import RunDetail, { SchemaDifferences } from "./RunDetail.jsx";
 import RunHistoryList from "./RunHistoryList.jsx";
 import { applySampleValues, bodyInputKey, collectEmptyFields, fillHint, parameterInputKey } from "./sampleFill.js";
 import { removeSavedApi } from "./savedApis.js";
@@ -507,7 +507,7 @@ function App() {
     try {
       const payload = await postJson(
         "/api/v1/runs/analyze-failure",
-        { ...result, result: "FAIL", scenario_title: result.title || `Check ${resultIndex + 1}` },
+        { ...result, result: "FAIL", scenario_title: result.title || `Check ${resultIndex + 1}`, schema_errors: result.schema_check?.errors ?? [] },
         "AI analysis could not be completed.",
       );
       setRunHistory((current) => current.map((run) => run.id === runId
@@ -890,7 +890,7 @@ function App() {
                 </div>
               </section>
               <section className="panel scenario-panel">
-                <div className="panel-header scenario-header"><div><div className="panel-kicker"><Icon name="spark" size={15} /> RUNNABLE CHECKS {isDataChangingMethod && <span className="mutation-badge">May change data</span>}</div><h2>{operation?.method} <span>{operation?.path}</span></h2><p>These checks include a complete request and can be executed now.</p></div></div>
+                <div className="panel-header scenario-header"><div><div className="panel-kicker"><Icon name="spark" size={15} /> RUNNABLE CHECKS {isDataChangingMethod && <span className="mutation-badge">May change data</span>}</div><h2>{operation?.method} <span>{operation?.path}</span></h2><p>These checks include a complete request and can be executed now.</p>{operation && !operation.response_schemas && <p className="schema-note">Import this API again to also check response bodies against the contract.</p>}</div></div>
                 <label className="target-field"><span>Target API base URL</span><input value={targetUrl} onChange={(event) => updateTargetUrl(event.target.value)} placeholder="http://127.0.0.1:8000" /></label>
                 {(operationParameters.length > 0 || bodyFields.length > 0 || needsRawJsonBody) && <div className="request-inputs">
                   <div className="request-inputs-heading">
@@ -928,7 +928,7 @@ function App() {
                         {isEditedScenario(scenario) && <p className="edited-check-summary">{editedCheckSummary(scenario.request_example)}</p>}
                         {isEditedScenario(scenario) && editingDraft?.scenarioIndex !== scenario.scenarioIndex && <div className="card-actions"><button className="text-button" type="button" disabled={running} onClick={() => openDraftEditor(scenario.scenarioIndex)}>{draftStash[draftKey(scenario)] ? "Continue editing" : "Edit"}</button><button className="text-button danger" type="button" disabled={running} onClick={() => removeEditedCheck(scenario.scenarioIndex)}>Remove</button></div>}
                         {editingDraft?.scenarioIndex === scenario.scenarioIndex && draftEditor}
-                        {result && <div className={`result-box result-${result.result.toLowerCase()}`}><div className="result-heading"><strong>{result.result}</strong>{result.response_status && <span>HTTP {result.response_status}</span>}<small>{result.duration_ms} ms</small></div>{result.error && <p>{result.error}</p>}{result.response_body && <details><summary>Response details</summary><pre>{result.response_body}</pre></details>}</div>}</div>
+                        {result && <div className={`result-box result-${result.result.toLowerCase()}`}><div className="result-heading"><strong>{result.result}</strong>{result.response_status && <span>HTTP {result.response_status}</span>}<small>{result.duration_ms} ms</small></div>{result.schema_check?.status === "passed" && <p className="schema-note">Body matches the documented schema.</p>}<SchemaDifferences check={result.schema_check} />{result.error && <p>{result.error}</p>}{result.response_body && <details><summary>Response details</summary><pre>{result.response_body}</pre></details>}</div>}</div>
                       </article>
                     );
                   })}

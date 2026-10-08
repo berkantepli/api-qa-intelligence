@@ -34,6 +34,15 @@ function FailureAnalysis({ analysis }) {
   </div>;
 }
 
+// The documented-schema differences behind a FAIL whose status code was the expected one.
+export function SchemaDifferences({ check }) {
+  if (check?.status !== "failed" || !check.errors?.length) return null;
+  return <div className="schema-differences">
+    <strong>Response body differs from the contract</strong>
+    <ul>{check.errors.map((error) => <li key={error}><code>{error}</code></li>)}</ul>
+  </div>;
+}
+
 function CheckDetail({ result, index, analysisStatus, onAnalyze }) {
   const outcome = result.result || "ERROR";
   return <details className={`run-check run-check-${outcome.toLowerCase()}`} open={outcome !== "PASS"}>
@@ -59,6 +68,7 @@ function CheckDetail({ result, index, analysisStatus, onAnalyze }) {
       </dl>
       <p className={`run-outcome run-outcome-${outcome.toLowerCase()}`}>{outcomeSummary(result)}</p>
       {result.error && <p className="history-error">{result.error}</p>}
+      <SchemaDifferences check={result.schema_check} />
 
       <div className="evidence-grid">
         <section className="evidence-panel" aria-label="Request evidence">

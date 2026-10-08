@@ -243,6 +243,10 @@ h1, h2, h3, p { margin-top: 0; }
 .history-fail { color: var(--red); }
 .history-status { padding: 4px 7px; border-radius: 5px; background: var(--green-soft); color: var(--green); font-size: 11px; font-weight: 700; }
 .history-status.status-fail, .history-status.status-error { background: var(--red-soft); color: var(--red); }
+.schema-differences { display: grid; gap: 6px; margin-top: 10px; padding: 10px 12px; border: 1px solid var(--red-soft); border-radius: 7px; background: var(--red-soft); color: var(--red); font-size: 12px; }
+.schema-differences ul { display: grid; gap: 4px; margin: 0; padding-left: 16px; }
+.schema-differences code { color: var(--text); font-size: 12px; overflow-wrap: anywhere; }
+.schema-note { margin: 6px 0 0; color: var(--muted); font-size: 12px; }
 .history-error { margin: 10px 0 0; color: var(--red); font-size: 13px; line-height: 1.5; }
 .failure-analysis-action { display: grid; justify-items: start; gap: 7px; margin-top: 12px; }
 .failure-analysis-action .secondary-button { display: inline-flex; align-items: center; gap: 7px; min-height: 34px; }
