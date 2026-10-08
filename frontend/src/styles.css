@@ -315,6 +315,7 @@ h1, h2, h3, p { margin-top: 0; }
 .settings-facts dt { color: var(--muted); font-size: 10px; }
 .settings-facts dd { margin: 6px 0 0; overflow-wrap: anywhere; color: var(--text); font-size: 11px; }
 .settings-facts .connection-status { padding: 3px 8px; }
+.settings-facts dd small { display: block; margin-top: 5px; color: var(--muted); font-size: 10px; line-height: 1.45; }
 .settings-buttons { display: flex; flex: 0 0 auto; flex-wrap: wrap; gap: 8px; }
 .diagnosis { margin-top: 14px; padding: 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-soft); }
 .diagnosis-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; font-size: 11px; }

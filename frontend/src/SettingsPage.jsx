@@ -83,10 +83,10 @@ export default function SettingsPage({ aiStatus, onRefreshAiStatus, aiDiagnosis,
       <dl className="settings-facts">
         <div><dt>Status</dt><dd><span className={`connection-status connection-${status.tone}`}><span className="connection-dot" aria-hidden="true" />{status.text}</span></dd></div>
         <div><dt>Provider</dt><dd>Ollama</dd></div>
-        <div><dt>Server</dt><dd><code>{aiStatus?.base_url || "—"}</code></dd></div>
+        <div><dt>Ollama server</dt><dd><code>{aiStatus?.base_url || "—"}</code><small>The local model server the backend calls; the app itself runs at <code>{window.location.host}</code>.</small></dd></div>
         <div><dt>Model</dt><dd><code>{aiStatus?.model || "—"}</code></dd></div>
       </dl>
-      {aiStatus?.reachable && !aiStatus.model_available && <p className="settings-note">The server is running but <code>{aiStatus.model}</code> is not installed. Installed models: {aiStatus.available_models?.length ? aiStatus.available_models.join(", ") : "none"}.</p>}
+      {aiStatus?.reachable && !aiStatus.model_available && <p className="settings-note">The Ollama server is running but <code>{aiStatus.model}</code> is not installed. Installed models: {aiStatus.available_models?.length ? aiStatus.available_models.join(", ") : "none"}.</p>}
       {aiStatus && !aiStatus.loading && !aiStatus.reachable && <p className="settings-note">Start Ollama or check <code>OLLAMA_BASE_URL</code>. Everything except the AI features keeps working without it.</p>}
       {aiDiagnosis && <AiDiagnosis diagnosis={aiDiagnosis} />}
     </section>
