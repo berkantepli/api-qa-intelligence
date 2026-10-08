@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { computeCoverage, runsForApi } from "./coverage.js";
+import { computeCoverage, coverageReportFileName, coverageReportJson, coverageReportMarkdown, runsForApi } from "./coverage.js";
 
 const happy = { category: "happy_path", title: "Valid request", request_example: {} };
 const negative = { category: "negative", title: "Omit a required parameter", request_example: {} };
@@ -82,5 +82,32 @@ describe("runsForApi", () => {
   it("includes legacy runs matched by a unique title", () => {
     const runs = [{ apiId: "pets", api: "Pets" }, { api: "Pets" }, { api: "Other" }];
     expect(runsForApi(runs, "pets", [{ id: "pets", title: "Pets" }])).toHaveLength(2);
+  });
+});
+
+describe("coverage report", () => {
+  const generatedAt = new Date("2026-10-04T10:00:00Z");
+  const api = { ...overview, title: "Pets | Store", version: "1.0" };
+  const coverage = computeCoverage(api, [run("GET /pets", "2026-10-03T10:00:00Z", [{ title: "Valid request", category: "happy_path", result: "FAIL" }])], generatedAt.getTime());
+
+  it("exports totals and per-endpoint state as JSON", () => {
+    const report = coverageReportJson(api, coverage, generatedAt);
+
+    expect(report.api).toEqual({ title: "Pets | Store", version: "1.0" });
+    expect(report.endpoints[0]).toMatchObject({ method: "GET", path: "/pets", status: "failing", checks: { covered: 1, runnable: 2 } });
+    expect(report.endpoints[0].categories.happy_path).toBe("failing");
+    expect(report.endpoints[0].risks).toContain("Failing in latest run");
+  });
+
+  it("renders a Markdown table with escaped cells", () => {
+    const markdown = coverageReportMarkdown(api, coverage, generatedAt);
+
+    expect(markdown).toContain("# Coverage & Risk: Pets | Store 1.0");
+    expect(markdown).toContain("- Endpoints tested: 1 / 4 (25%)");
+    expect(markdown).toContain("| `GET /pets` | failing | 1/2 | FAIL | not run | – | – | – | Failing in latest run, Only happy path tested |");
+  });
+
+  it("names files after the API and date", () => {
+    expect(coverageReportFileName("Swagger Petstore - OpenAPI 3.0", "md", generatedAt)).toBe("coverage-swagger-petstore-openapi-3-0-2026-10-04.md");
   });
 });

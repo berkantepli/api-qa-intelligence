@@ -99,7 +99,7 @@ Every executed batch is saved in this browser’s Run history, grouped by API wi
 
 ### Coverage & Risk
 
-The **Coverage** page summarizes, for the active API, how many endpoints have been tested in this browser, which endpoints failed in their latest run, and which data-changing endpoints were never tested. Each endpoint shows its latest status, how many of its runnable checks were executed, and risk flags such as *Changes data, not tested*, *Only happy path tested*, or *Auth not checked*. Select an endpoint to open it in the overview.
+The **Coverage** page summarizes, for the active API, how many endpoints have been tested in this browser, which endpoints failed in their latest run, and which data-changing endpoints were never tested. Each endpoint shows its latest status, how many of its runnable checks were executed, and risk flags such as *Changes data, not tested*, *Only happy path tested*, *Auth not checked*, *Flaky results* (a check's outcome flipped at least twice in its last five results), or *Not run in 7+ days*. A strip under each endpoint shows which check categories (happy path, negative, boundary, invalid value, auth) passed, have failures, have not run, or have no runnable check. **Export Markdown** and **Export JSON** download the same summary as a shareable report; it contains no request or response evidence. Select an endpoint to open it in the overview.
 
 ### Settings and backups
 
@@ -138,7 +138,7 @@ See [docs/MVP_ROADMAP.md](docs/MVP_ROADMAP.md) for the staged plan and product b
 
 ## Project status
 
-Early MVP. The app can import and summarize an OpenAPI 3.x file or URL, suggest contract-based scenarios, request additional review-only AI scenario ideas, execute selected checks, retain redacted run evidence, and optionally analyze failed checks. Coverage/risk summaries and broader provider support remain future work.
+Early MVP. The app can import and summarize an OpenAPI 3.x file or URL, suggest contract-based scenarios, request additional review-only AI scenario ideas, execute selected checks, retain redacted run evidence, and optionally analyze failed checks, and summarize coverage and risk per endpoint with an exportable report. Broader provider support remains future work.
 
 ## License
 
