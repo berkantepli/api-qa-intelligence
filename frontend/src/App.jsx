@@ -16,6 +16,7 @@ import ScenarioDraftEditor from "./ScenarioDraftEditor.jsx";
 import SettingsPage, { aiStatusLabel } from "./SettingsPage.jsx";
 import { buildWorkspaceExport, mergeWorkspace, parseWorkspaceImport, workspaceFileName } from "./workspace.js";
 import { persistableInputs } from "./bulkRun.js";
+import { isEmptyWorkspace, workspaceRequests } from "./workspaceSync.js";
 import { buildCheckRequest, describeOperation, isValidJson, readFileUploads, requestReadiness, requestValues } from "./requestBuilder.js";
 import { buildEditedScenario, createDraft, editedCheckSummary, isEditedScenario, statusCodeSuggestions, validateDraftFields } from "./scenarioDraft.js";
 
@@ -34,6 +35,12 @@ const STORAGE_KEYS = {
 function readStoredJson(key, fallback) {
   try { return JSON.parse(localStorage.getItem(key)) ?? fallback; }
   catch { return fallback; }
+}
+
+// The browser copy is a fallback for when the backend is unreachable; a full quota must not break the app.
+function writeStored(key, value) {
+  try { localStorage.setItem(key, value); }
+  catch { /* the backend database still has the data */ }
 }
 
 async function postJson(url, body, fallbackMessage) {
@@ -137,6 +144,11 @@ function App() {
   // Request details per saved API and endpoint: { [apiId]: { "METHOD /path": inputs } }.
   // Non-credential values are kept in this browser; credentials live only in memory.
   const [requestInputs, setRequestInputs] = useState(() => readStoredJson(STORAGE_KEYS.requestInputs, {}));
+  // Where saved data lives: "loading", "backend" (the SQLite workspace database), or "browser" when
+  // the backend cannot be reached. `synced` is the state the backend last received.
+  const [storage, setStorage] = useState({ mode: "loading", error: "" });
+  const synced = useRef(null);
+  const syncQueue = useRef(Promise.resolve());
   const [requestFiles, setRequestFiles] = useState({});
   // Per endpoint: { loading, summary, error, marks: { [inputKey]: { kind, reason } } } from "Fill with AI".
   const [sampleFill, setSampleFill] = useState({});
@@ -207,16 +219,65 @@ function App() {
     localStorage.setItem(STORAGE_KEYS.theme, theme);
   }, [theme]);
 
-  useEffect(() => { localStorage.setItem(STORAGE_KEYS.savedApis, JSON.stringify(savedApis)); }, [savedApis]);
-  useEffect(() => { localStorage.setItem(STORAGE_KEYS.activeApi, activeApiId); }, [activeApiId]);
-  useEffect(() => { localStorage.setItem(STORAGE_KEYS.runHistory, JSON.stringify(runHistory)); }, [runHistory]);
+  // Request details without credentials; deleted APIs drop out, so their details are not kept either.
+  const storedInputs = useMemo(() => Object.fromEntries(savedApis
+    .map((api) => [api.id, persistableInputs(api.overview, requestInputs[api.id])])
+    .filter(([, inputs]) => Object.keys(inputs).length)), [requestInputs, savedApis]);
+
+  useEffect(() => { writeStored(STORAGE_KEYS.savedApis, JSON.stringify(savedApis)); }, [savedApis]);
+  useEffect(() => { writeStored(STORAGE_KEYS.activeApi, activeApiId); }, [activeApiId]);
+  useEffect(() => { writeStored(STORAGE_KEYS.runHistory, JSON.stringify(runHistory)); }, [runHistory]);
+  useEffect(() => { writeStored(STORAGE_KEYS.requestInputs, JSON.stringify(storedInputs)); }, [storedInputs]);
+
+  // Load the workspace database once. On its first use, this browser's saved data moves into it.
   useEffect(() => {
-    // Deleted APIs drop out here, so their request details are not kept either.
-    const stored = Object.fromEntries(savedApis
-      .map((api) => [api.id, persistableInputs(api.overview, requestInputs[api.id])])
-      .filter(([, inputs]) => Object.keys(inputs).length));
-    localStorage.setItem(STORAGE_KEYS.requestInputs, JSON.stringify(stored));
-  }, [requestInputs, savedApis]);
+    let cancelled = false;
+    (async () => {
+      try {
+        const remote = await readJsonResponse(await fetch("/api/v1/workspace"), "The saved workspace could not be loaded.");
+        if (cancelled) return;
+        if (isEmptyWorkspace(remote) && (savedApis.length || runHistory.length)) {
+          synced.current = { savedApis: [], runHistory: [], requestInputs: {} };
+          setStorage({ mode: "backend", error: "" });
+          return;
+        }
+        synced.current = { savedApis: remote.savedApis, runHistory: remote.runHistory, requestInputs: remote.requestInputs };
+        setSavedApis(remote.savedApis);
+        setRunHistory(remote.runHistory);
+        setRequestInputs(remote.requestInputs);
+        const active = remote.savedApis.find((api) => api.id === activeApiId) ?? remote.savedApis[0];
+        setActiveApiId(active?.id ?? "");
+        setTargetUrl(resolveApiTarget(active) || DEFAULT_TARGET_URL);
+        setSelectedOperation(firstRunnableOperationIndex(active?.overview));
+        // The first screen was chosen from this browser's copy; follow what the database holds instead.
+        if (!remote.savedApis.length) setPage("import");
+        else if (!savedApis.length) setPage("specs");
+        setStorage({ mode: "backend", error: "" });
+      } catch {
+        if (!cancelled) setStorage({ mode: "browser", error: "The backend could not be reached, so saved data stays in this browser for now." });
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  // Send each change to the workspace database, in order.
+  useEffect(() => {
+    if (storage.mode !== "backend" || !synced.current) return;
+    const next = { savedApis, runHistory, requestInputs: storedInputs };
+    const requests = workspaceRequests(synced.current, next);
+    synced.current = next;
+    if (!requests.length) return;
+    syncQueue.current = syncQueue.current.then(async () => {
+      for (const request of requests) {
+        const response = await fetch(request.url, {
+          method: request.method,
+          headers: request.body ? { "Content-Type": "application/json" } : undefined,
+          body: request.body ? JSON.stringify(request.body) : undefined,
+        });
+        if (!response.ok) throw new Error(`${request.method} ${request.url} returned ${response.status}`);
+      }
+    }).catch(() => setStorage((current) => ({ ...current, error: "Some changes could not be saved to the workspace database. They are kept in this browser; reload to try again." })));
+  }, [savedApis, runHistory, storedInputs, storage.mode]);
   useEffect(() => { refreshAiStatus(); }, []);
 
   useEffect(() => {
@@ -675,6 +736,10 @@ function App() {
   }
 
   function deleteAllData() {
+    if (storage.mode === "backend") {
+      synced.current = { savedApis: [], runHistory: [], requestInputs: {} };
+      syncQueue.current = syncQueue.current.then(() => fetch("/api/v1/workspace", { method: "DELETE" }));
+    }
     setSavedApis([]);
     setRunHistory([]);
     setRequestInputs({});
@@ -802,6 +867,7 @@ function App() {
       </aside>
 
       <main className="main-area">
+        {storage.error && <div className="alert error-alert storage-alert" role="alert"><Icon name="close" size={16} />{storage.error}</div>}
         <header className="topbar">
           {savedApis.length && page !== "import" ? <div className="api-context">
             <label className="api-context-picker"><span>ACTIVE API</span><select aria-label="Active API" value={activeApiId} onChange={(event) => {
@@ -822,6 +888,7 @@ function App() {
             onRefreshAiStatus={refreshAiStatus}
             aiDiagnosis={aiDiagnosis}
             onRunDiagnosis={runAiDiagnosis}
+            storageMode={storage.mode}
             savedApiCount={savedApis.length}
             runCount={runHistory.length}
             onExport={exportWorkspace}
