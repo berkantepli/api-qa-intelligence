@@ -13,13 +13,14 @@ import { applySampleValues, bodyInputKey, collectEmptyFields, fillHint, paramete
 import { removeSavedApi } from "./savedApis.js";
 import ScenarioDraftEditor from "./ScenarioDraftEditor.jsx";
 import SettingsPage, { aiStatusLabel } from "./SettingsPage.jsx";
-import { version as appVersion } from "../package.json";
 import { buildWorkspaceExport, mergeWorkspace, parseWorkspaceImport, workspaceFileName } from "./workspace.js";
 import { persistableInputs } from "./bulkRun.js";
 import { buildCheckRequest, describeOperation, isValidJson, readFileUploads, requestReadiness, requestValues } from "./requestBuilder.js";
 import { buildEditedScenario, createDraft, editedCheckSummary, isEditedScenario, statusCodeSuggestions, validateDraftFields } from "./scenarioDraft.js";
 
 const DEFAULT_TARGET_URL = "http://127.0.0.1:8000";
+const APP_VERSION = __APP_VERSION__;
+const RELEASES_URL = "https://github.com/berkantepli/api-qa-intelligence/releases";
 const STORAGE_KEYS = {
   theme: "api-qa-intelligence-theme",
   savedApis: "api-qa-intelligence-saved-apis",
@@ -756,7 +757,7 @@ function App() {
           <button className={`nav-link ${page === "settings" ? "active" : ""}`} onClick={openSettingsPage}>
             <Icon name="settings" /><span>Settings</span>
           </button>
-          <span className="sidebar-version">v{appVersion}</span>
+          <a className="sidebar-version" href={`${RELEASES_URL}/tag/v${APP_VERSION}`} target="_blank" rel="noreferrer" title="What's new in this version">v{APP_VERSION}</a>
         </div>
       </aside>
 

@@ -11,16 +11,19 @@ from app.api.sample_values import router as sample_values_router
 from app.api.specs import router as specs_router
 from app.api.targets import router as targets_router
 
+# The repository's VERSION file is the single source of the app version.
+APP_VERSION = (Path(__file__).resolve().parents[2] / "VERSION").read_text(encoding="utf-8").strip()
+
 app = FastAPI(
     title="API QA Intelligence",
     description="Import an OpenAPI contract and inspect its operations for QA planning.",
-    version="0.1.0",
+    version=APP_VERSION,
 )
 
 
 @app.get("/health", tags=["Health"])
 async def health() -> dict[str, str]:
-    return {"status": "ok"}
+    return {"status": "ok", "version": APP_VERSION}
 
 
 app.include_router(specs_router)

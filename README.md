@@ -142,6 +142,8 @@ See [docs/MVP_ROADMAP.md](docs/MVP_ROADMAP.md) for the staged plan and product b
 
 Early MVP. The app can import and summarize an OpenAPI 3.x file or URL, suggest contract-based scenarios, request additional review-only AI scenario ideas, execute selected checks, retain redacted run evidence, and optionally analyze failed checks, and summarize coverage and risk per endpoint with an exportable report. Broader provider support remains future work.
 
+The current version is in [`VERSION`](VERSION) (shown in the sidebar and returned by `GET /health`); see [CHANGELOG.md](CHANGELOG.md) for what changed in each release.
+
 ## License
 
 Personal learning and portfolio project.
