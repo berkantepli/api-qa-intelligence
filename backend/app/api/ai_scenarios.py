@@ -52,6 +52,13 @@ async def generate_scenario_ideas(payload: ScenarioIdeasRequest) -> ScenarioIdea
                 for field in operation.request_body_fields[:50]
             ],
         },
+        # Checks that already exist; a refresh replaces previous review-only ideas, so those are not listed.
+        "existing_checks": [
+            {"title": scenario.title[:200], "category": scenario.category[:40]}
+            for scenario in operation.scenarios[:40]
+            if scenario.source != "ai"
+        ],
+        "has_inputs_to_vary": bool(operation.parameters or operation.request_body_fields or operation.request_body_content_type),
     }
     try:
         ideas = await propose_scenarios(context)
