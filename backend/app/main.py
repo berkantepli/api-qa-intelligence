@@ -10,9 +10,7 @@ from app.api.runs import router as runs_router
 from app.api.sample_values import router as sample_values_router
 from app.api.specs import router as specs_router
 from app.api.targets import router as targets_router
-
-# The repository's VERSION file is the single source of the app version.
-APP_VERSION = (Path(__file__).resolve().parents[2] / "VERSION").read_text(encoding="utf-8").strip()
+from app.version import APP_VERSION
 
 app = FastAPI(
     title="API QA Intelligence",

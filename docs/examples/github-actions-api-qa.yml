@@ -1,0 +1,32 @@
+# Example: run API QA Intelligence checks against a staging API on every pull request.
+# Copy this into .github/workflows/ in the repository whose API you want to test.
+name: API contract checks
+
+on:
+  pull_request:
+
+jobs:
+  api-qa:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install API QA Intelligence
+        run: pip install "git+https://github.com/berkantepli/api-qa-intelligence@v0.4.0"
+      - name: Run checks
+        run: >
+          api-qa run
+          --spec openapi.yaml
+          --target "${{ vars.STAGING_API_URL }}"
+          --header "Authorization: Bearer ${{ secrets.STAGING_API_TOKEN }}"
+          --inputs api-qa-inputs.json
+          --junit api-qa-report.xml
+          --json api-qa-report.json
+      - name: Keep the reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-qa-reports
+          path: api-qa-report.*
