@@ -3,6 +3,8 @@ from typing import Any
 
 from pydantic import AnyHttpUrl, BaseModel, Field
 
+from app.domain.schema_check import response_schemas
+
 STRING_FORMAT_SAMPLES = {
     "email": "qa@example.com",
     "date": "2026-01-01",
@@ -73,6 +75,8 @@ class ApiOperation(BaseModel):
     request_body_content_type: str | None = None
     request_body_required: bool = False
     request_body_fields: list[ApiBodyField] = Field(default_factory=list)
+    # Resolved JSON response schemas keyed by response code ("200", "4XX", "DEFAULT").
+    response_schemas: dict[str, dict[str, Any]] = Field(default_factory=dict)
     scenarios: list[QaScenario] = Field(default_factory=list)
 
 
@@ -150,6 +154,7 @@ def summarize_openapi(document: Any) -> ApiOverview:
                     request_body_content_type=body_content_type,
                     request_body_required=_request_body_required(request_body, document),
                     request_body_fields=body_fields,
+                    response_schemas=response_schemas(details.get("responses"), document),
                     scenarios=_generate_scenarios(
                         method.upper(), path, details, global_security, document, body_content_type, body_fields,
                         [parameter for parameter in parameters if parameter.credential],
