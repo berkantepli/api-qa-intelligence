@@ -2,6 +2,15 @@
 
 The version lives in the [`VERSION`](VERSION) file and follows [Semantic Versioning](https://semver.org/). Before 1.0.0, a new feature raises the minor number (0.**x**.0) and a fix or visual change raises the patch number (0.x.**y**).
 
+## 0.7.0 — 2026-10-08
+
+### Swagger 2.0
+- Swagger 2.0 contracts can now be imported (file or URL, and with the CLI). They are converted to OpenAPI 3 on import, so scenarios, schema checks, and reports work the same; the overview shows the original version.
+- Array parameters such as `?status=` are prefilled with a documented value.
+
+### Bulk runs that change data
+- **Run checks** on the Coverage page can include POST, PUT, PATCH, and DELETE endpoints when **Include data-changing endpoints** is turned on. They run after read-only checks (creates first, deletes last) and only after a second confirmation naming how many data-changing checks go to which target.
+
 ## 0.6.0 — 2026-10-08
 
 ### Saved data survives the browser
