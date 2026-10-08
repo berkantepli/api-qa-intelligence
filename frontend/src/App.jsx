@@ -14,6 +14,7 @@ import ScenarioDraftEditor from "./ScenarioDraftEditor.jsx";
 import SettingsPage, { aiStatusLabel } from "./SettingsPage.jsx";
 import { version as appVersion } from "../package.json";
 import { buildWorkspaceExport, mergeWorkspace, parseWorkspaceImport, workspaceFileName } from "./workspace.js";
+import { buildCheckRequest, describeOperation, isValidJson, requestReadiness, requestValues } from "./requestBuilder.js";
 import { buildEditedScenario, createDraft, editedCheckSummary, isEditedScenario, statusCodeSuggestions, validateDraftFields } from "./scenarioDraft.js";
 
 const DEFAULT_TARGET_URL = "http://127.0.0.1:8000";
@@ -27,11 +28,6 @@ const STORAGE_KEYS = {
 function readStoredJson(key, fallback) {
   try { return JSON.parse(localStorage.getItem(key)) ?? fallback; }
   catch { return fallback; }
-}
-
-function isValidJson(value) {
-  try { JSON.parse(value); return true; }
-  catch { return false; }
 }
 
 async function postJson(url, body, fallbackMessage) {
@@ -97,11 +93,6 @@ function resolveApiTarget(api) {
   catch { return ""; }
 }
 
-function getRawBodyValue(inputs = {}, fallback) {
-  if (Object.hasOwn(inputs, "body:__raw")) return inputs["body:__raw"];
-  return fallback == null ? "" : JSON.stringify(fallback, null, 2);
-}
-
 function FillHint({ hint }) {
   return hint ? <small className={`request-input-help fill-hint fill-hint-${hint.tone}`}>{hint.text}</small> : null;
 }
@@ -157,37 +148,12 @@ function App() {
   const operationInputs = requestInputs[operationKey] ?? {};
   const operationFill = sampleFill[operationKey] ?? {};
   const fillMarkFor = (inputKey) => fillHint(operationFill.marks?.[inputKey]);
-  const parameters = operation?.parameters ?? [];
-  const pathParameters = [...(operation?.path?.matchAll(/\{([^}]+)\}/g) ?? [])].map((match) => match[1]);
-  const knownParameterNames = new Set(parameters.filter((parameter) => parameter.location === "path").map((parameter) => parameter.name));
-  const operationParameters = [
-    ...parameters,
-    ...pathParameters.filter((name) => !knownParameterNames.has(name)).map((name) => ({ name, location: "path", required: true })),
-  ];
-  const bodyFields = operation?.request_body_fields ?? [];
-  const isFormBody = /^(multipart\/form-data|application\/x-www-form-urlencoded)/i.test(operation?.request_body_content_type || "");
-  const fileFields = bodyFields.filter((field) => field.is_file);
-  const sendsJsonBody = Boolean(operation?.request_body_content_type) && !isFormBody;
-  const rawJsonFallback = contractScenarios.find((scenario) => scenario.request_example?.json_body != null)?.request_example?.json_body;
-  const validBodyTemplate = contractScenarios.find((scenario) => scenario.category === "happy_path" && scenario.request_example?.json_body != null)?.request_example?.json_body
-    ?? rawJsonFallback
-    ?? {};
-  const needsRawJsonBody = Boolean(operation?.request_body_required && !isFormBody && bodyFields.length === 0);
-  const rawJsonBodyValue = getRawBodyValue(requestInputs[operationKey], rawJsonFallback);
-  const rawJsonBodyIsValid = Boolean(rawJsonBodyValue.trim()) && isValidJson(rawJsonBodyValue);
-  const getInputValue = (key, fallback = "") => Object.hasOwn(operationInputs, key) ? operationInputs[key] : fallback;
-  const getParameterValue = (parameter) => getInputValue(`parameter:${parameter.location}:${parameter.name}`, parameter.example == null ? "" : String(parameter.example));
-  const getBodyFieldValue = (field) => getInputValue(`body:${field.name}`, field.example == null ? "" : typeof field.example === "object" ? JSON.stringify(field.example) : String(field.example));
-  const requiredParametersMissing = operationParameters.some((parameter) => parameter.required && !getParameterValue(parameter).trim());
+  const describedOperation = describeOperation(operation);
+  const { operationParameters, bodyFields, isFormBody, fileFields, sendsJsonBody, rawJsonFallback, validBodyTemplate, needsRawJsonBody } = describedOperation;
+  const { getParameterValue, getBodyFieldValue, rawJsonBodyValue, rawJsonBodyIsValid } = requestValues(describedOperation, operationInputs);
+  const { ready: inputsReady } = requestReadiness(describedOperation, operationInputs, requestFiles[operationKey]);
   const hasInvalidJsonValue = (field) => !field.is_file && ["object", "array"].includes(field.field_type)
     && Boolean(getBodyFieldValue(field).trim()) && !isValidJson(getBodyFieldValue(field));
-  const invalidStructuredBodyValue = bodyFields.some(hasInvalidJsonValue);
-  const requiredBodyFieldsMissing = operation?.request_body_required && bodyFields.some((field) => field.required && (field.is_file
-    ? !(requestFiles[operationKey]?.[field.name]?.length)
-    : !getBodyFieldValue(field).trim()));
-  const bodyReady = (!needsRawJsonBody || rawJsonBodyIsValid)
-    && !(operation?.request_body_required && !isFormBody && bodyFields.some((field) => field.required && !getBodyFieldValue(field).trim()));
-  const inputsReady = !requiredParametersMissing && !requiredBodyFieldsMissing && !invalidStructuredBodyValue && bodyReady;
   const scenarioTemplates = operationScenarios
     .map((scenario, scenarioIndex) => ({ ...scenario, scenarioIndex }))
     .filter((scenario) => scenario.request_example);
@@ -482,49 +448,6 @@ function App() {
         const scenario = availableScenarios[index];
         const example = scenario.request_example;
         if (!example) continue;
-        const isEditedCheck = isEditedScenario(scenario);
-        const omittedParameters = new Set((example.omitted_parameters ?? []).map((parameter) => `${parameter.location}:${parameter.name}`));
-        const parameterValue = (parameter) => example.parameter_values?.[`${parameter.location}:${parameter.name}`] ?? getParameterValue(parameter);
-        const path = operation.path.replace(/\{([^}]+)\}/g, (_, name) => omittedParameters.has(`path:${name}`) ? "" : encodeURIComponent(parameterValue({ location: "path", name })));
-        const queryParams = { ...example.query_params };
-        const headers = {};
-        const cookieValues = [];
-        for (const parameter of operationParameters) {
-          if (omittedParameters.has(`${parameter.location}:${parameter.name}`)) continue;
-          // An explicit override (including "send empty value") is always sent; otherwise empty inputs are skipped.
-          const override = example.parameter_values?.[`${parameter.location}:${parameter.name}`];
-          const value = override ?? getParameterValue(parameter).trim();
-          if (override === undefined && !value) continue;
-          if (parameter.location === "query") queryParams[parameter.name] = value;
-          if (parameter.location === "header") headers[parameter.name] = value;
-          if (parameter.location === "cookie") cookieValues.push(`${parameter.name}=${encodeURIComponent(value)}`);
-        }
-        if (cookieValues.length) headers.Cookie = cookieValues.join("; ");
-        const formFields = { ...example.form_fields };
-        // Edited AI checks send the body exactly as the user wrote it in the editor.
-        const jsonBody = isEditedCheck
-          ? example.json_body ?? null
-          : needsRawJsonBody
-          ? JSON.parse(rawJsonBodyValue)
-          : example.json_body && typeof example.json_body === "object" && !Array.isArray(example.json_body)
-            ? { ...example.json_body }
-            : example.json_body ?? (bodyFields.length ? {} : null);
-        for (const field of bodyFields) {
-          const value = getBodyFieldValue(field);
-          if (field.is_file || isEditedCheck) continue;
-          if (isFormBody) formFields[field.name] = value;
-          else if (jsonBody && typeof jsonBody === "object" && Object.hasOwn(jsonBody, field.name)) {
-            const validValue = validBodyTemplate?.[field.name];
-            const scenarioValue = example.json_body?.[field.name];
-            if (JSON.stringify(scenarioValue) === JSON.stringify(validValue)) {
-              if (!value.trim()) delete jsonBody[field.name];
-              else {
-                try { jsonBody[field.name] = JSON.parse(value); }
-                catch { jsonBody[field.name] = value; }
-              }
-            }
-          }
-        }
         const fileUploads = {};
         for (const field of fileFields) {
           const files = requestFiles[operationKey]?.[field.name] ?? [];
@@ -539,18 +462,7 @@ function App() {
         }
         const result = await postJson(
           "/api/v1/runs/execute",
-          {
-            method: example.method,
-            path,
-            query_params: queryParams,
-            headers,
-            form_body: example.form_body,
-            form_fields: formFields,
-            file_uploads: fileUploads,
-            json_body: jsonBody,
-            expected_status_codes: example.expected_status_codes,
-            base_url: targetUrl,
-          },
+          buildCheckRequest(describedOperation, operationInputs, scenario, { targetUrl, fileUploads }),
           "The check could not be executed.",
         );
         nextResults[index] = result;
