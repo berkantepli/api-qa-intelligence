@@ -2,6 +2,16 @@
 
 The version lives in the [`VERSION`](VERSION) file and follows [Semantic Versioning](https://semver.org/). Before 1.0.0, a new feature raises the minor number (0.**x**.0) and a fix or visual change raises the patch number (0.x.**y**).
 
+## 0.6.0 — 2026-10-08
+
+### Saved data survives the browser
+- Saved APIs (with edited AI checks), Run history, and request details are now saved by the backend in a SQLite database (`data/workspace.db`, or `API_QA_DATA_DIR`) instead of only in the browser. Clearing the browser no longer loses them, and every browser that opens the same backend sees the same workspace.
+- On first start, the data already saved in this browser moves into the database automatically. If the backend cannot be reached, the app keeps working with the browser copy and says so.
+- Credential values are never stored, even if a client sends them.
+
+### Response time limits
+- An optional **Response time limit** per API fails a check whose response is slower, with the reason, for example "took 2300 ms (limit 1000 ms)". The CLI has `--max-duration-ms`.
+
 ## 0.5.0 — 2026-10-08
 
 ### Everyday flows
