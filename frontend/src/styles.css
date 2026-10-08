@@ -225,6 +225,12 @@ h1, h2, h3, p { margin-top: 0; }
 .bulk-modes label.selected { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); font-weight: 600; }
 .bulk-modes input { margin: 0; accent-color: var(--accent); }
 .bulk-group { display: grid; gap: 6px; }
+.bulk-writes-toggle { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; cursor: pointer; }
+.bulk-run .execution-confirmation { margin: 0; }
+.bulk-writes-toggle input { margin-top: 3px; accent-color: var(--red); }
+.bulk-writes-toggle span { display: grid; gap: 3px; }
+.bulk-writes-toggle strong { font-size: 12px; }
+.bulk-writes-toggle small { color: var(--muted); font-size: 12px; line-height: 1.45; }
 .bulk-group > strong { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; }
 .bulk-group-ready > strong { color: var(--green); }
 .bulk-group-input > strong { color: #b7791f; }
