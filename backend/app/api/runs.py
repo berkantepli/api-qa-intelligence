@@ -11,6 +11,7 @@ from pydantic import AnyHttpUrl, BaseModel, Field, field_validator
 
 from app.domain.evidence import redact_headers, redact_text, redact_value, sanitize_url
 from app.domain.network import parse_target_base_url
+from app.domain.schema_check import SchemaCheck, check_response
 
 router = APIRouter(prefix="/api/v1/runs", tags=["Scenario execution"])
 MAX_RESPONSE_SIZE_BYTES = 250_000
@@ -36,6 +37,8 @@ class ScenarioExecutionRequest(BaseModel):
     file_uploads: dict[str, list[ScenarioFileUpload]] = Field(default_factory=dict)
     json_body: Any = None
     expected_status_codes: list[int] = Field(default_factory=lambda: [200], min_length=1, max_length=10)
+    # The operation's documented JSON response schemas; when given, the response body is checked too.
+    response_schemas: dict[str, Any] = Field(default_factory=dict, max_length=40)
 
     @field_validator("method")
     @classmethod
@@ -87,6 +90,7 @@ class ScenarioExecutionResult(BaseModel):
     request_headers: dict[str, str] = Field(default_factory=dict)
     request_body: str = ""
     response_headers: dict[str, str] = Field(default_factory=dict)
+    schema_check: SchemaCheck | None = None
     error: str | None = None
 
 
@@ -163,9 +167,17 @@ async def _execute_scenario(payload: ScenarioExecutionRequest) -> ScenarioExecut
                         truncated = True
                         break
                 duration_ms = round((time.perf_counter() - started) * 1000)
-                body = _display_response_body(bytes(response_content), response.headers.get("content-type", ""))
+                content_type = response.headers.get("content-type", "")
+                body = _display_response_body(bytes(response_content), content_type)
+                status_matches = response.status_code in payload.expected_status_codes
+                # The body is only checked when the status is the expected one; a wrong status already fails.
+                schema_check = (
+                    check_response(payload.response_schemas, response.status_code, content_type, bytes(response_content), truncated)
+                    if status_matches and payload.response_schemas and payload.method != "HEAD"
+                    else None
+                )
                 return ScenarioExecutionResult(
-                    result="PASS" if response.status_code in payload.expected_status_codes else "FAIL",
+                    result="PASS" if status_matches and (schema_check is None or schema_check.status != "failed") else "FAIL",
                     method=payload.method,
                     path=payload.path,
                     response_status=response.status_code,
@@ -177,6 +189,7 @@ async def _execute_scenario(payload: ScenarioExecutionRequest) -> ScenarioExecut
                     request_headers=request_headers,
                     request_body=request_body_evidence,
                     response_headers=redact_headers(dict(response.headers)),
+                    schema_check=schema_check,
                 )
     except httpx.TimeoutException:
         error = "The API did not respond before the 15 second timeout."

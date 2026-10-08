@@ -72,7 +72,7 @@ uvicorn app.main:app --app-dir backend --reload --port 8001
 
 Open `http://127.0.0.1:8001` for the API QA Intelligence interface and API. The backend serves the built frontend from `frontend/dist`.
 
-To run one explicit check, use `POST /api/v1/runs/execute`. Provide a base URL (it may include the server’s base path, such as `https://petstore3.swagger.io/api/v3`; the operation path is appended to it), method, path, optional query parameters, headers or JSON body, and expected status codes. For example:
+To run one explicit check, use `POST /api/v1/runs/execute`. Provide a base URL (it may include the server’s base path, such as `https://petstore3.swagger.io/api/v3`; the operation path is appended to it), method, path, optional query parameters, headers or JSON body, expected status codes, and optionally the operation’s `response_schemas` from the API overview. For example:
 
 ```json
 {
@@ -82,6 +82,8 @@ To run one explicit check, use `POST /api/v1/runs/execute`. Provide a base URL (
   "expected_status_codes": [200]
 }
 ```
+
+A check passes when the response status is one of the expected codes. When `response_schemas` are given and the contract documents a JSON schema for the received status (an exact code, a range such as `4XX`, or `default`), the response body must also match it: types (including `nullable` and type lists), `enum`/`const`, required and documented properties, `additionalProperties: false`, array items, numeric and length bounds, and `allOf`/`anyOf`/`oneOf`. A mismatch turns the check into a FAIL with the differences listed by JSON path (for example `$[31].name: required property is missing`); `format` and `pattern` are not enforced. The body is not checked when the status already fails, the response is truncated, or no schema is documented. The UI sends these schemas automatically; APIs imported before 0.3.0 need to be imported again.
 
 The topbar connection indicator asks the backend to probe the target base URL (`POST /api/v1/targets/check`): a read-only `HEAD` request, retried as `GET` when the server rejects `HEAD`, with the same safety rules as check execution. It shows *API reachable* (status code, method, and response time in its tooltip), or the code itself for problems such as *API error · 503*; it also explains connection failures and reports targets the safety rules do not allow.
 

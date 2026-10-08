@@ -24,6 +24,7 @@ class FailureAnalysisRequest(BaseModel):
     response_body: str = Field(default="", max_length=10_000)
     response_truncated: bool = False
     error: str | None = Field(default=None, max_length=1_000)
+    schema_errors: list[str] = Field(default_factory=list, max_length=10)
 
 
 @router.post(
@@ -48,6 +49,7 @@ async def analyze_failed_check(payload: FailureAnalysisRequest) -> FailureAnalys
         "response_body": redact_text(payload.response_body),
         "response_truncated": payload.response_truncated,
         "error": redact_text(payload.error) if payload.error else None,
+        "response_schema_differences": [redact_text(item)[:300] for item in payload.schema_errors],
     }
     try:
         analysis = await analyze_failure(evidence)
