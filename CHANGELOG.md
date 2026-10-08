@@ -2,6 +2,15 @@
 
 The version lives in the [`VERSION`](VERSION) file and follows [Semantic Versioning](https://semver.org/). Before 1.0.0, a new feature raises the minor number (0.**x**.0) and a fix or visual change raises the patch number (0.x.**y**).
 
+## 0.5.0 — 2026-10-08
+
+### Everyday flows
+- **Select all** selects every runnable check of an endpoint in one click (and **Clear selection** undoes it).
+- Each endpoint in the overview list shows a green or red dot for its latest run.
+- The overview's Methods card is replaced by **Endpoints tested**, which shows failing endpoints and opens Coverage & Risk.
+- **Run again** in a run's details opens its endpoint with the same checks selected, so a fix can be rechecked in two clicks.
+- **Try the Swagger Petstore sample** on the import page imports a public contract when you have no spec at hand.
+
 ## 0.4.1 — 2026-10-08
 
 ### Fixes
