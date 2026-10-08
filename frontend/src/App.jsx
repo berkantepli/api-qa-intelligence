@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { categoryLabels, inputHelp, parameterLabel } from "./categories.js";
 import CoveragePage from "./CoveragePage.jsx";
 import DuplicateNotice from "./DuplicateNotice.jsx";
@@ -14,7 +14,8 @@ import ScenarioDraftEditor from "./ScenarioDraftEditor.jsx";
 import SettingsPage, { aiStatusLabel } from "./SettingsPage.jsx";
 import { version as appVersion } from "../package.json";
 import { buildWorkspaceExport, mergeWorkspace, parseWorkspaceImport, workspaceFileName } from "./workspace.js";
-import { buildCheckRequest, describeOperation, isValidJson, requestReadiness, requestValues } from "./requestBuilder.js";
+import { persistableInputs } from "./bulkRun.js";
+import { buildCheckRequest, describeOperation, isValidJson, readFileUploads, requestReadiness, requestValues } from "./requestBuilder.js";
 import { buildEditedScenario, createDraft, editedCheckSummary, isEditedScenario, statusCodeSuggestions, validateDraftFields } from "./scenarioDraft.js";
 
 const DEFAULT_TARGET_URL = "http://127.0.0.1:8000";
@@ -23,6 +24,7 @@ const STORAGE_KEYS = {
   savedApis: "api-qa-intelligence-saved-apis",
   activeApi: "api-qa-intelligence-active-api",
   runHistory: "api-qa-intelligence-run-history",
+  requestInputs: "api-qa-intelligence-request-inputs",
 };
 
 function readStoredJson(key, fallback) {
@@ -126,7 +128,9 @@ function App() {
   const [highlightedCheck, setHighlightedCheck] = useState(null);
   const [showExecutionConfirmation, setShowExecutionConfirmation] = useState(false);
   const [results, setResults] = useState({});
-  const [requestInputs, setRequestInputs] = useState({});
+  // Request details per saved API and endpoint: { [apiId]: { "METHOD /path": inputs } }.
+  // Non-credential values are kept in this browser; credentials live only in memory.
+  const [requestInputs, setRequestInputs] = useState(() => readStoredJson(STORAGE_KEYS.requestInputs, {}));
   const [requestFiles, setRequestFiles] = useState({});
   // Per endpoint: { loading, summary, error, marks: { [inputKey]: { kind, reason } } } from "Fill with AI".
   const [sampleFill, setSampleFill] = useState({});
@@ -135,6 +139,9 @@ function App() {
   const [connectionCheckId, setConnectionCheckId] = useState(0);
   const [loading, setLoading] = useState(false);
   const [running, setRunning] = useState(false);
+  // Coverage bulk run progress: { status: "running" | "done" | "stopped" | "error", total, done, current, counts, message }.
+  const [bulkRun, setBulkRun] = useState(null);
+  const bulkStopRequested = useRef(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
 
@@ -145,7 +152,8 @@ function App() {
   const aiScenarioIdeas = operationScenarios.map((scenario, scenarioIndex) => ({ scenario, scenarioIndex })).filter(({ scenario }) => scenario.source === "ai");
   const contractScenarios = operationScenarios.filter((scenario) => !isEditedScenario(scenario));
   const scenarioIdeaStatus = scenarioIdeaState[`${activeApiId}:${operationKey}`] ?? {};
-  const operationInputs = requestInputs[operationKey] ?? {};
+  const apiInputs = requestInputs[activeApiId] ?? {};
+  const operationInputs = apiInputs[operationKey] ?? {};
   const operationFill = sampleFill[operationKey] ?? {};
   const fillMarkFor = (inputKey) => fillHint(operationFill.marks?.[inputKey]);
   const describedOperation = describeOperation(operation);
@@ -187,6 +195,13 @@ function App() {
   useEffect(() => { localStorage.setItem(STORAGE_KEYS.savedApis, JSON.stringify(savedApis)); }, [savedApis]);
   useEffect(() => { localStorage.setItem(STORAGE_KEYS.activeApi, activeApiId); }, [activeApiId]);
   useEffect(() => { localStorage.setItem(STORAGE_KEYS.runHistory, JSON.stringify(runHistory)); }, [runHistory]);
+  useEffect(() => {
+    // Deleted APIs drop out here, so their request details are not kept either.
+    const stored = Object.fromEntries(savedApis
+      .map((api) => [api.id, persistableInputs(api.overview, requestInputs[api.id])])
+      .filter(([, inputs]) => Object.keys(inputs).length));
+    localStorage.setItem(STORAGE_KEYS.requestInputs, JSON.stringify(stored));
+  }, [requestInputs, savedApis]);
   useEffect(() => { refreshAiStatus(); }, []);
 
   // Bring a just-saved check into view and highlight it briefly.
@@ -392,11 +407,15 @@ function App() {
     });
   }
 
-  function updateRequestInput(name, value) {
+  function mergeOperationInputs(apiId, key, inputs) {
     setRequestInputs((current) => ({
       ...current,
-      [operationKey]: { ...(current[operationKey] ?? {}), [name]: value },
+      [apiId]: { ...(current[apiId] ?? {}), [key]: { ...(current[apiId]?.[key] ?? {}), ...inputs } },
     }));
+  }
+
+  function updateRequestInput(name, value) {
+    mergeOperationInputs(activeApiId, operationKey, { [name]: value });
     clearFillMark(name);
   }
 
@@ -411,6 +430,7 @@ function App() {
   async function fillWithAi() {
     if (!operation || operationFill.loading) return;
     const key = operationKey;
+    const apiId = activeApiId;
     const fields = collectEmptyFields({
       parameters: operationParameters,
       bodyFields,
@@ -430,7 +450,7 @@ function App() {
         "Sample values could not be generated.",
       );
       const { inputs, marks, summary } = applySampleValues(answer, fields);
-      setRequestInputs((current) => ({ ...current, [key]: { ...(current[key] ?? {}), ...inputs } }));
+      mergeOperationInputs(apiId, key, inputs);
       setSampleFill((current) => ({ ...current, [key]: { loading: false, error: "", summary, marks: { ...current[key]?.marks, ...marks } } }));
     } catch (caught) {
       setSampleFill((current) => ({ ...current, [key]: { ...current[key], loading: false, error: caught.message || "Sample values could not be generated." } }));
@@ -448,18 +468,7 @@ function App() {
         const scenario = availableScenarios[index];
         const example = scenario.request_example;
         if (!example) continue;
-        const fileUploads = {};
-        for (const field of fileFields) {
-          const files = requestFiles[operationKey]?.[field.name] ?? [];
-          if (files.length) fileUploads[field.name] = await Promise.all(files.map(async (fileItem) => {
-            const bytes = new Uint8Array(await fileItem.arrayBuffer());
-            let binary = "";
-            for (let offset = 0; offset < bytes.length; offset += 0x8000) {
-              binary += String.fromCharCode(...bytes.subarray(offset, Math.min(offset + 0x8000, bytes.length)));
-            }
-            return { filename: fileItem.name, content_type: fileItem.type || "application/octet-stream", content_base64: btoa(binary) };
-          }));
-        }
+        const fileUploads = await readFileUploads(fileFields, requestFiles[operationKey]);
         const result = await postJson(
           "/api/v1/runs/execute",
           buildCheckRequest(describedOperation, operationInputs, scenario, { targetUrl, fileUploads }),
@@ -498,6 +507,50 @@ function App() {
       return;
     }
     setAnalysisState((current) => ({ ...current, [key]: { loading: false, error: "" } }));
+  }
+
+  // Runs a planned set of endpoints one check at a time; each endpoint gets its own Run history entry.
+  async function runBulk(plan) {
+    if (!overview || bulkRun?.status === "running" || !plan.checkCount) return;
+    bulkStopRequested.current = false;
+    const apiId = activeApiId;
+    const counts = { PASS: 0, FAIL: 0, ERROR: 0 };
+    let done = 0;
+    let status = "done";
+    let message = "";
+    setBulkRun({ status: "running", total: plan.checkCount, done, counts: { ...counts }, current: "" });
+    for (const item of plan.ready) {
+      const itemOperation = overview.operations[item.operationIndex];
+      const described = describeOperation(itemOperation);
+      const inputs = requestInputs[apiId]?.[item.key] ?? {};
+      const completed = [];
+      try {
+        const fileUploads = await readFileUploads(described.fileFields, requestFiles[item.key]);
+        for (const scenario of item.checks) {
+          if (bulkStopRequested.current) break;
+          setBulkRun((current) => ({ ...current, current: `${item.key} · ${scenario.title}` }));
+          const result = await postJson(
+            "/api/v1/runs/execute",
+            buildCheckRequest(described, inputs, scenario, { targetUrl, fileUploads }),
+            "The check could not be executed.",
+          );
+          completed.push({ title: scenario.title, category: scenario.category, source: scenario.source, ...result });
+          counts[result.result in counts ? result.result : "ERROR"] += 1;
+          done += 1;
+          setBulkRun((current) => ({ ...current, done, counts: { ...counts } }));
+        }
+      } catch (caught) {
+        status = "error";
+        message = `${item.key}: ${caught.message || "The check could not be executed."}`;
+      }
+      if (completed.length) {
+        const entry = { id: Date.now() + done, apiId, api: overview.title, endpoint: item.key, target: targetUrl, createdAt: new Date().toISOString(), results: completed };
+        setRunHistory((current) => [entry, ...current]);
+      }
+      if (status === "error") break;
+      if (bulkStopRequested.current) { status = "stopped"; break; }
+    }
+    setBulkRun((current) => ({ ...current, status, message, current: "" }));
   }
 
   function requestRun() {
@@ -573,6 +626,7 @@ function App() {
   function deleteAllData() {
     setSavedApis([]);
     setRunHistory([]);
+    setRequestInputs({});
     setActiveApiId("");
     setTargetUrl(DEFAULT_TARGET_URL);
     setSelectedRunId(null);
@@ -729,6 +783,13 @@ function App() {
             apiRuns={runsForApi(runHistory, activeApiId, savedApis)}
             onOpenEndpoint={openEndpointFromCoverage}
             onGoToSpecs={openSpecsPage}
+            inputsByOperation={apiInputs}
+            filesByOperation={requestFiles}
+            targetUrl={targetUrl}
+            bulkRun={bulkRun}
+            onBulkRun={runBulk}
+            onStopBulkRun={() => { bulkStopRequested.current = true; }}
+            onDismissBulkRun={() => setBulkRun(null)}
           />
         ) : page === "history" && selectedRun ? (
           <RunDetail run={selectedRun} analysisState={analysisState} onAnalyze={analyzeFailure} onBack={() => openRunHistory()} />
