@@ -24,6 +24,20 @@ def test_redact_headers_masks_credentials():
     }
 
 
+def test_key_named_credentials_are_masked_but_similar_words_are_kept():
+    headers = {"X-Key": "k", "Subscription-Key": "k", "key": "k", "Monkey": "m", "Keyword": "w", "primaryKey": "id"}
+
+    assert redact_headers(headers) == {
+        "X-Key": "[REDACTED]",
+        "Subscription-Key": "[REDACTED]",
+        "key": "[REDACTED]",
+        "Monkey": "m",
+        "Keyword": "w",
+        "primaryKey": "id",
+    }
+    assert redact_text("key=abc keyboard=qwerty") == 'key="[REDACTED]" keyboard=qwerty'
+
+
 def test_sanitize_url_removes_userinfo_and_masks_query_secrets():
     url = sanitize_url("https://user:pw@example.com:8443/items?token=abc&page=2#frag")
 

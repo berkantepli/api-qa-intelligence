@@ -5,7 +5,7 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 SENSITIVE_KEY = re.compile(
     r"authorization|authentication|(?:^|[^a-z])auth(?:$|[^a-z])|cookie|token|secret|"
-    r"password|credential|api[-_]?key",
+    r"password|credential|api[-_]?key|(?:^|[^a-z])key(?:$|[^a-z])",
     re.IGNORECASE,
 )
 
@@ -51,7 +51,7 @@ def redact_text(value: str) -> str:
         return json.dumps(redact_value(parsed), ensure_ascii=False, indent=2)
     except json.JSONDecodeError:
         pattern = re.compile(
-            r"((?:authorization|authentication|auth|cookie|token|secret|password|credential|api[-_]?key)"
+            r"((?:authorization|authentication|auth|cookie|token|secret|password|credential|api[-_]?key|\bkey)"
             r"[\"']?\s*[:=]\s*)(?:\"[^\"]*\"|'[^']*'|[^\s,;}]+)",
             re.IGNORECASE,
         )
