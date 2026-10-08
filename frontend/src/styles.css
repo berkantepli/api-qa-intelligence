@@ -106,12 +106,17 @@ h1, h2, h3, p { margin-top: 0; }
 .input-with-icon input { width: 100%; border: 0; outline: 0; color: #393b47; font-size: 12px; }
 .input-with-icon input:focus-visible { outline: 0; }
 .input-with-icon input::placeholder { color: #a5a7b1; }
-.upload-box { display: flex; min-height: 164px; flex-direction: column; align-items: center; justify-content: center; margin-top: 19px; border: 1px dashed #cdd0dc; border-radius: 9px; background: #fdfdff; color: #4b4e5b; cursor: pointer; }
+.upload-box { position: relative; display: flex; min-height: 164px; flex-direction: column; align-items: center; justify-content: center; margin-top: 19px; border: 1px dashed #cdd0dc; border-radius: 9px; background: #fdfdff; color: #4b4e5b; cursor: pointer; }
 .upload-box:hover { border-color: #9991e7; background: #fbfaff; }
 .upload-icon { display: grid; width: 36px; height: 36px; place-items: center; margin-bottom: 9px; border-radius: 10px; background: var(--accent-soft); color: var(--accent); }
 .upload-box strong { font-size: 12px; font-weight: 600; }
 .upload-box small { margin-top: 4px; color: #9a9caa; font-size: 10px; }
-.upload-box input { width: min(280px, 90%); margin-top: 13px; color: #7e8190; font-size: 11px; }
+.upload-box strong { max-width: 90%; overflow: hidden; text-align: center; text-overflow: ellipsis; white-space: nowrap; }
+.upload-button { margin-top: 13px; padding: 6px 12px; border: 1px solid var(--line); border-radius: 7px; background: var(--surface); color: var(--text); font-size: 11px; font-weight: 600; }
+.upload-box:hover .upload-button, .upload-box:focus-within .upload-button { border-color: var(--accent); color: var(--accent); }
+.upload-box:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+.upload-box.has-file .upload-icon { background: var(--green-soft); color: var(--green); }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .card-footer { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-top: 21px; padding-top: 17px; border-top: 1px solid #eff0f4; }
 .privacy-note { display: flex; align-items: center; gap: 7px; color: #828593; font-size: 11px; }
 .privacy-note svg { color: #49a77a; }
