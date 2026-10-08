@@ -333,6 +333,12 @@ function App() {
     updateSavedApi(activeApiId, { targetUrl: value });
   }
 
+  function changeSourceMode(mode) {
+    setSourceMode(mode);
+    // A message about the other source (for example "choose a file") no longer applies.
+    setError("");
+  }
+
   async function importSpec(event) {
     event?.preventDefault();
     setLoading(true);
@@ -828,8 +834,8 @@ function App() {
                 <div><h2>Import OpenAPI specification</h2><p>Use a spec URL or choose a local JSON/YAML file.</p></div>
               </div>
               <div className="mode-switch" role="tablist" aria-label="Specification source">
-                <button type="button" role="tab" aria-selected={sourceMode === "url"} className={sourceMode === "url" ? "selected" : ""} onClick={() => setSourceMode("url")}><Icon name="link" size={16} /> Spec URL</button>
-                <button type="button" role="tab" aria-selected={sourceMode === "file"} className={sourceMode === "file" ? "selected" : ""} onClick={() => setSourceMode("file")}><Icon name="upload" size={16} /> Upload file</button>
+                <button type="button" role="tab" aria-selected={sourceMode === "url"} className={sourceMode === "url" ? "selected" : ""} onClick={() => changeSourceMode("url")}><Icon name="link" size={16} /> Spec URL</button>
+                <button type="button" role="tab" aria-selected={sourceMode === "file"} className={sourceMode === "file" ? "selected" : ""} onClick={() => changeSourceMode("file")}><Icon name="upload" size={16} /> Upload file</button>
               </div>
               {sourceMode === "url" ? (
                 <label className="field-wrap"><span className="field-label">OpenAPI URL</span><span className="input-with-icon"><Icon name="link" size={17} /><input autoComplete="url" type="url" value={specUrl} onChange={(event) => setSpecUrl(event.target.value)} placeholder="https://api.example.com/openapi.json" required /></span></label>

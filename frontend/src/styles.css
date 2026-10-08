@@ -136,7 +136,8 @@ h1, h2, h3, p { margin-top: 0; }
 .alert { display: flex; align-items: flex-start; gap: 8px; margin-top: 14px; padding: 10px 12px; border-radius: 7px; font-size: 11px; line-height: 1.5; }
 .error-alert { border: 1px solid #f1d3d6; background: #fff8f8; color: #a9434d; }
 .success-alert { border: 1px solid #d4ecdf; background: #f6fcf8; color: #267b56; }
-.alert svg { flex: 0 0 auto; margin-top: 1px; }
+/* One line tall, so the icon lines up with the first line of text. */
+.alert svg { flex: 0 0 auto; width: 1.5em; height: 1.5em; }
 .spinner { width: 13px; height: 13px; border: 2px solid rgb(255 255 255 / 42%); border-top-color: white; border-radius: 50%; animation: spin .7s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
