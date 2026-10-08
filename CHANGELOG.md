@@ -2,6 +2,11 @@
 
 The version lives in the [`VERSION`](VERSION) file and follows [Semantic Versioning](https://semver.org/). Before 1.0.0, a new feature raises the minor number (0.**x**.0) and a fix or visual change raises the patch number (0.x.**y**).
 
+## 0.2.1 — 2026-10-08
+
+### Fixes
+- Endpoints with no parameters or request body no longer show AI suggestions: every check for them would send the same request as *Valid request*, so the ideas could never become checks. A short note explains this instead.
+
 ## 0.2.0 — 2026-10-08
 
 ### Coverage & Risk
