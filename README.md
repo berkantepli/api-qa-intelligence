@@ -28,7 +28,7 @@ OpenAPI / Swagger → API understanding → QA scenarios → selected test execu
 - **AI:** local Ollama adapter with a configurable model; additional providers can be added later
 - **Frontend:** React with Vite, served by the backend from `frontend/dist`
 
-The backend imports an OpenAPI 3.x JSON/YAML file or URL and returns a readable operation overview with deterministic baseline QA scenario suggestions and JSON request examples when it can safely derive them. It can execute one check or a selected batch, compare response statuses with expected codes, and record redacted request/response evidence in Run history. On request, Ollama can suggest extra review-only ideas for a selected endpoint or provide advisory analysis of a failed check; deterministic results remain authoritative.
+The backend imports an OpenAPI 3.x or Swagger 2.0 JSON/YAML file or URL (Swagger 2.0 is converted to OpenAPI 3 on import: servers from host/basePath/schemes, body and formData parameters as request bodies, definitions and security definitions as components; the overview shows the original version) and returns a readable operation overview with deterministic baseline QA scenario suggestions and JSON request examples when it can safely derive them. It can execute one check or a selected batch, compare response statuses with expected codes, and record redacted request/response evidence in Run history. On request, Ollama can suggest extra review-only ideas for a selected endpoint or provide advisory analysis of a failed check; deterministic results remain authoritative.
 
 ## Repository layout
 
@@ -175,7 +175,7 @@ See [docs/MVP_ROADMAP.md](docs/MVP_ROADMAP.md) for the staged plan and product b
 
 ## Project status
 
-Early MVP. The app can import and summarize an OpenAPI 3.x file or URL, suggest contract-based scenarios, request additional review-only AI scenario ideas, execute selected checks, retain redacted run evidence, and optionally analyze failed checks, and summarize coverage and risk per endpoint with an exportable report. Broader provider support remains future work.
+Early MVP. The app can import and summarize an OpenAPI 3.x or Swagger 2.0 file or URL, suggest contract-based scenarios, request additional review-only AI scenario ideas, execute selected checks, retain redacted run evidence, and optionally analyze failed checks, and summarize coverage and risk per endpoint with an exportable report. Broader provider support remains future work.
 
 The current version is in [`VERSION`](VERSION) (shown in the sidebar and returned by `GET /health`); see [CHANGELOG.md](CHANGELOG.md) for what changed in each release.
 
