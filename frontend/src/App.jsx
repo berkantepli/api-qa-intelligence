@@ -958,7 +958,7 @@ function App() {
                 <label className={`upload-box ${file ? "has-file" : ""}`}>
                   <span className="upload-icon"><Icon name={file ? "check" : "upload"} size={21} /></span>
                   <strong>{file ? file.name : "Choose an OpenAPI file"}</strong>
-                  <small>{file ? `${Math.max(1, Math.round(file.size / 1024))} KB · ready to import` : "JSON or YAML · OpenAPI 3.x"}</small>
+                  <small>{file ? `${Math.max(1, Math.round(file.size / 1024))} KB · ready to import` : "JSON or YAML · OpenAPI 3.x or Swagger 2.0"}</small>
                   <span className="upload-button">{file ? "Choose another file" : "Choose file"}</span>
                   {/* The native control is visually hidden: its browser-language "No file chosen" text repeated the title. */}
                   <input className="visually-hidden" type="file" accept=".json,.yaml,.yml,application/json,text/yaml" onChange={(event) => setFile(event.target.files?.[0] || null)} />

@@ -15,7 +15,8 @@ def scenario(op, title):
     ("document", "message"),
     [
         ([], "root must be"),
-        ({"swagger": "2.0"}, "OpenAPI 3.x"),
+        ({"swagger": "1.2"}, "OpenAPI 3.x or Swagger 2.0"),
+        ({"swagger": "2.0", "paths": {}}, "'info' object"),
         ({"openapi": "3.0.0"}, "'info' object"),
         ({"openapi": "3.0.0", "info": {"version": "1"}}, "title"),
         ({"openapi": "3.0.0", "info": {"title": "A", "version": "1"}}, "'paths' object"),

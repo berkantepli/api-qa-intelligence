@@ -4,6 +4,7 @@ from typing import Any
 from pydantic import AnyHttpUrl, BaseModel, Field
 
 from app.domain.schema_check import response_schemas
+from app.domain.swagger2 import convert_swagger2, is_swagger2
 
 STRING_FORMAT_SAMPLES = {
     "email": "qa@example.com",
@@ -101,9 +102,15 @@ def summarize_openapi(document: Any) -> ApiOverview:
     if not isinstance(document, Mapping):
         raise OpenApiDocumentError("The document root must be a JSON or YAML object.")
 
+    # Swagger 2.0 documents are converted to OpenAPI 3 first; the overview names the original version.
+    source_version = None
+    if is_swagger2(document):
+        source_version = f"{document.get('swagger')} (Swagger, converted)"
+        document = convert_swagger2(document)
+
     openapi_version = document.get("openapi")
     if not isinstance(openapi_version, str) or not openapi_version.startswith("3."):
-        raise OpenApiDocumentError("An OpenAPI 3.x document is required.")
+        raise OpenApiDocumentError("An OpenAPI 3.x or Swagger 2.0 document is required.")
 
     info = document.get("info")
     if not isinstance(info, Mapping):
@@ -165,7 +172,7 @@ def summarize_openapi(document: Any) -> ApiOverview:
     return ApiOverview(
         title=title.strip(),
         version=version.strip(),
-        openapi_version=openapi_version,
+        openapi_version=source_version or openapi_version,
         servers=server_urls,
         operation_count=len(operations),
         operations=operations,
@@ -436,6 +443,10 @@ def _operation_parameters(path_item: Mapping[str, Any], operation: Mapping[str, 
             example = parameter.get("example")
             if example is None and isinstance(schema, Mapping):
                 example = _documented_example(schema)
+                items = schema.get("items")
+                # An array parameter (for example ?status=available) can be sent with one documented item value.
+                if example is None and schema.get("type") == "array" and isinstance(items, Mapping):
+                    example = _documented_example(_resolve_schema(items, document) or items)
             key = (name, str(location))
             combined[key] = ApiParameter(
                 name=name,
