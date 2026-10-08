@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { duplicatePairKey, findDuplicateScenarios, findSameRequest, scenarioConcept } from "./duplicates.js";
+import { duplicatePairKey, filterNewIdeas, findDuplicateScenarios, findSameRequest, scenarioConcept } from "./duplicates.js";
 
 const contract = (title, rationale, extra = {}) => ({ source: "contract", category: "negative", title, rationale, ...extra });
 const idea = (title, rationale, category = "negative") => ({ source: "ai", category, title, rationale, request_example: null });
@@ -115,5 +115,25 @@ describe("findSameRequest", () => {
 
   it("skips the scenario being edited", () => {
     expect(findSameRequest(valid.request_example, [valid], 0)).toBeNull();
+  });
+});
+
+describe("filterNewIdeas", () => {
+  it("drops ideas that repeat existing checks or each other", () => {
+    const existing = [
+      omitParameter,
+      { ...idea("Test with rate limiting applied", "Validate that the endpoint enforces rate limits.", "boundary"), source: "ai_edited" },
+    ];
+    const ideas = [
+      idea("Call the endpoint without batch_id", "Leave out the required batch_id path parameter."),
+      idea("Confirm rate limiting under load", "Many requests in a short window should be throttled.", "boundary"),
+      idea("Send a very long batch_id", "Use a 10,000 character batch_id value.", "boundary"),
+      idea("Send an extremely long batch_id", "Use a 10,000 character batch_id value.", "boundary"),
+    ];
+
+    const { kept, skipped } = filterNewIdeas(existing, ideas, { targetNames: ["batch_id"] });
+
+    expect(kept.map((item) => item.title)).toEqual(["Send a very long batch_id"]);
+    expect(skipped).toBe(3);
   });
 });
