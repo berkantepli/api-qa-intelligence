@@ -51,6 +51,11 @@ describe("outcomeSummary", () => {
     expect(outcomeSummary({ result: "ERROR", expected_status_codes: [200] }))
       .toBe("Expected HTTP 200, but no response was received.");
   });
+  it("explains a response slower than the time limit", () => {
+    expect(outcomeSummary({ result: "FAIL", response_status: 200, expected_status_codes: [200], duration_ms: 2300, max_duration_ms: 1000, too_slow: true }))
+      .toBe("Received HTTP 200, as expected, but it took 2300 ms (limit 1000 ms).");
+  });
+
   it("explains the response schema result when the status matched", () => {
     expect(outcomeSummary({ result: "PASS", response_status: 200, expected_status_codes: [200], schema_check: { status: "passed" } }))
       .toBe("Received HTTP 200, as expected, and the body matches the documented schema.");

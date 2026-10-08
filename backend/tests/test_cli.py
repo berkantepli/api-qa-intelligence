@@ -117,3 +117,19 @@ def test_private_targets_need_an_explicit_flag(spec, mock_http):
 
     assert main(["run", "--spec", spec, "--target", "http://10.0.0.5/v1", "--allow-private-network", "--smoke", "--endpoint", "GET /pets"]) == 1
     assert str(mock_http.requests[0].url) == "http://10.0.0.5/v1/pets"
+
+
+def test_slow_responses_fail_with_a_time_limit(spec, mock_http, tmp_path):
+    import time
+
+    def slow(request):
+        time.sleep(0.02)
+        return pets_api(request)
+
+    mock_http.respond_with(slow)
+    args = ["run", "--spec", spec, "--header", "X-Key: secret", "--smoke", "--endpoint", "GET /pets", "--junit", str(tmp_path / "r.xml")]
+
+    assert main(args) == 0
+    assert main([*args, "--max-duration-ms", "1"]) == 1
+    failure = ElementTree.parse(tmp_path / "r.xml").getroot().find(".//failure")
+    assert failure.get("message").startswith("HTTP 200 as expected, but it took")

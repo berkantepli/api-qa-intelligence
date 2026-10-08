@@ -53,6 +53,8 @@ def failure_message(result: ScenarioExecutionResult) -> str:
     expected = " or ".join(str(code) for code in result.expected_status_codes)
     if result.response_status is None:
         return result.error or f"Expected HTTP {expected}, but no response was received."
+    if result.too_slow and result.response_status in result.expected_status_codes:
+        return f"HTTP {result.response_status} as expected, but it took {result.duration_ms} ms (limit {result.max_duration_ms} ms)."
     if result.schema_check and result.schema_check.status == "failed":
         return f"HTTP {result.response_status} as expected, but the body does not match the documented schema: {result.schema_check.detail}"
     return f"Expected HTTP {expected}, received HTTP {result.response_status}."

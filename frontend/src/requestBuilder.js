@@ -89,7 +89,7 @@ export function requestReadiness(described, inputs = {}, files = {}) {
 }
 
 // The execute payload for one runnable scenario. File uploads are read by the caller.
-export function buildCheckRequest(described, inputs, scenario, { targetUrl, fileUploads = {} }) {
+export function buildCheckRequest(described, inputs, scenario, { targetUrl, fileUploads = {}, maxDurationMs = null }) {
   const { operation, operationParameters, bodyFields, isFormBody, needsRawJsonBody, validBodyTemplate } = described;
   const { getParameterValue, getBodyFieldValue, rawJsonBodyValue } = requestValues(described, inputs);
   const example = scenario.request_example;
@@ -149,6 +149,7 @@ export function buildCheckRequest(described, inputs, scenario, { targetUrl, file
     expected_status_codes: example.expected_status_codes,
     // When the contract documents JSON response schemas, the backend also checks the response body.
     response_schemas: operation.response_schemas ?? {},
+    max_duration_ms: maxDurationMs,
     base_url: targetUrl,
   };
 }

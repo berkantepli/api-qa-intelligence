@@ -57,6 +57,8 @@ def build_parser() -> argparse.ArgumentParser:
                      help="Also run POST, PUT, PATCH, and DELETE checks. They may create or delete real data.")
     run.add_argument("--allow-private-network", action="store_true",
                      help="Allow private-network targets such as Docker service names or 10.x addresses.")
+    run.add_argument("--max-duration-ms", type=int, metavar="MS",
+                     help="Fail a check whose response takes longer than this many milliseconds.")
     run.add_argument("--fail-on-skipped", action="store_true", help="Exit 1 when an endpoint is skipped for missing inputs.")
     run.add_argument("--junit", type=Path, metavar="FILE", help="Write a JUnit XML report.")
     run.add_argument("--json", type=Path, metavar="FILE", help="Write a JSON report.")
@@ -162,6 +164,7 @@ async def run_checks(args: argparse.Namespace) -> RunReport:
             continue
         for scenario in checks:
             payload = build_check_request(described, inputs, scenario, target, headers)
+            payload["max_duration_ms"] = args.max_duration_ms
             try:
                 result = await execute_scenario(
                     ScenarioExecutionRequest.model_validate(payload), allow_private_network=args.allow_private_network

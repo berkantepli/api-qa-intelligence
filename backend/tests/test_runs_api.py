@@ -1,5 +1,6 @@
 import base64
 import json
+import time
 
 import httpx
 import pytest
@@ -169,3 +170,22 @@ def test_batch_summarizes_results(client, mock_http):
 
     assert (response["total"], response["passed"], response["failed"], response["errors"]) == (3, 2, 1, 0)
     assert [item["result"] for item in response["results"]] == ["PASS", "FAIL", "PASS"]
+
+
+def test_a_response_slower_than_the_limit_fails(client, mock_http):
+    def slow(request):
+        time.sleep(0.05)
+        return httpx.Response(200, json={})
+
+    mock_http.respond_with(slow)
+    result = execute(client, max_duration_ms=1).json()
+
+    assert (result["result"], result["response_status"]) == ("FAIL", 200)
+    assert result["too_slow"] is True
+    assert result["duration_ms"] >= 50 and result["max_duration_ms"] == 1
+
+
+def test_a_response_within_the_limit_passes(client, mock_http):
+    result = execute(client, max_duration_ms=60_000).json()
+
+    assert (result["result"], result["too_slow"]) == ("PASS", False)

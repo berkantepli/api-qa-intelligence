@@ -40,6 +40,8 @@ class ScenarioExecutionRequest(BaseModel):
     expected_status_codes: list[int] = Field(default_factory=lambda: [200], min_length=1, max_length=10)
     # The operation's documented JSON response schemas; when given, the response body is checked too.
     response_schemas: dict[str, Any] = Field(default_factory=dict, max_length=40)
+    # A response slower than this fails the check; None means no limit.
+    max_duration_ms: int | None = Field(default=None, ge=1, le=120_000)
 
     @field_validator("method")
     @classmethod
@@ -92,6 +94,8 @@ class ScenarioExecutionResult(BaseModel):
     request_body: str = ""
     response_headers: dict[str, str] = Field(default_factory=dict)
     schema_check: SchemaCheck | None = None
+    max_duration_ms: int | None = None
+    too_slow: bool = False
     error: str | None = None
 
 
@@ -151,8 +155,9 @@ async def execute_scenario(
                     if status_matches and payload.response_schemas and payload.method != "HEAD"
                     else None
                 )
+                too_slow = payload.max_duration_ms is not None and duration_ms > payload.max_duration_ms
                 return ScenarioExecutionResult(
-                    result="PASS" if status_matches and (schema_check is None or schema_check.status != "failed") else "FAIL",
+                    result="PASS" if status_matches and not too_slow and (schema_check is None or schema_check.status != "failed") else "FAIL",
                     method=payload.method,
                     path=payload.path,
                     response_status=response.status_code,
@@ -165,6 +170,8 @@ async def execute_scenario(
                     request_body=request_body_evidence,
                     response_headers=redact_headers(dict(response.headers)),
                     schema_check=schema_check,
+                    max_duration_ms=payload.max_duration_ms,
+                    too_slow=too_slow,
                 )
     except httpx.TimeoutException:
         error = "The API did not respond before the 15 second timeout."

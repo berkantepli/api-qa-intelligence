@@ -425,6 +425,8 @@ h1, h2, h3, p { margin-top: 0; }
 .target-field span { flex: 0 0 auto; color: #777a88; font-size: 12px; font-weight: 600; }
 .target-field input { width: 100%; min-width: 0; border: 0; outline: 0; background: transparent; color: #535665; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
 .target-field input:focus-visible { outline: 0; }
+.time-limit-field input { max-width: 120px; }
+.time-limit-field small { flex: 1; color: var(--muted); font-size: 12px; }
 .request-inputs { display: grid; gap: 10px; margin: 0 12px 13px; padding: 13px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-soft); }
 .request-inputs-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding-bottom: 2px; }
 .request-inputs-heading > div { display: grid; gap: 4px; }
