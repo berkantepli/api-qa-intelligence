@@ -137,7 +137,7 @@ h1, h2, h3, p { margin-top: 0; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* API overview, API specs, and Run history share one content width. */
-.overview-page, .specs-page, .history-page { width: min(1440px, calc(100% - 60px)); margin: 0 auto; padding: 34px 0 52px; }
+.overview-page, .specs-page, .history-page { width: calc(100% - 64px); margin: 0 auto; padding: 34px 0 52px; }
 .history-page h1 { margin: 9px 0 5px; color: #20222b; font-family: Manrope, sans-serif; font-size: 26px; font-weight: 600; letter-spacing: -1.1px; line-height: 1.2; }
 .history-chevron { flex: 0 0 auto; color: var(--muted); transition: transform .15s; }
 .history-groups { display: grid; gap: 14px; margin-top: 30px; }
