@@ -35,6 +35,34 @@ describe("planBulkRun", () => {
   });
 });
 
+describe("data-changing endpoints", () => {
+  const writes = {
+    operations: [
+      { method: "DELETE", path: "/pets/{id}", parameters: [], scenarios: [valid] },
+      { method: "GET", path: "/pets", parameters: [], scenarios: [valid] },
+      { method: "POST", path: "/pets", parameters: [], scenarios: [valid, negative] },
+      { method: "PUT", path: "/pets", parameters: [], scenarios: [valid] },
+    ],
+  };
+  const rows = writes.operations.map((operation, operationIndex) => ({ key: `${operation.method} ${operation.path}`, operationIndex }));
+
+  it("are left out unless included", () => {
+    const plan = planBulkRun(writes, rows);
+
+    expect(plan.ready.map((item) => item.key)).toEqual(["GET /pets"]);
+    expect(plan.dataChanging).toHaveLength(3);
+    expect(plan.writeCount).toBe(0);
+  });
+
+  it("run after reads, with deletes last, when included", () => {
+    const plan = planBulkRun(writes, rows, { includeWrites: true, inputsByOperation: { "DELETE /pets/{id}": { "parameter:path:id": "7" } } });
+
+    expect(plan.ready.map((item) => item.key)).toEqual(["GET /pets", "POST /pets", "PUT /pets", "DELETE /pets/{id}"]);
+    expect(plan.dataChanging).toEqual([]);
+    expect([plan.checkCount, plan.writeCount]).toEqual([5, 4]);
+  });
+});
+
 describe("persistableInputs", () => {
   it("keeps request details but never credentials", () => {
     const inputs = {
