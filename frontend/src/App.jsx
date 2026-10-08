@@ -3,7 +3,8 @@ import { categoryLabels, inputHelp, parameterLabel } from "./categories.js";
 import CoveragePage from "./CoveragePage.jsx";
 import DuplicateNotice from "./DuplicateNotice.jsx";
 import { duplicatePairKey, filterNewIdeas, findDuplicateScenarios, findSameRequest } from "./duplicates.js";
-import { runsForApi } from "./coverage.js";
+import { computeCoverage, runsForApi } from "./coverage.js";
+import CoverageRing from "./CoverageRing.jsx";
 import { connectionLabel } from "./targetConnection.js";
 import Icon from "./Icon.jsx";
 import RunDetail from "./RunDetail.jsx";
@@ -815,8 +816,8 @@ function App() {
         ) : page === "specs" ? (
           <section className="specs-page">
             <div className="specs-heading"><div><div className="page-eyebrow">YOUR API QA WORKSPACE</div><h1>API specs</h1><p className="page-lede">Your imported APIs stay here so you can return to them anytime.</p></div><button className="primary-button" onClick={openImportPage}><Icon name="upload" size={15} /> Import API</button></div>
-            {savedApis.length ? <div className="specs-list">{savedApis.map((api) => <article className="spec-card" key={api.id}>
-              <button className="spec-card-open" type="button" onClick={() => openSavedApi(api)}><span className="spec-card-icon"><Icon name="file" size={20} /></span><span className="spec-card-copy"><strong>{api.title}</strong><small>Version {api.overview.version} · OpenAPI {api.overview.openapi_version}</small><small>{api.overview.operation_count} endpoints · Imported {new Date(api.importedAt).toLocaleDateString()}</small></span><Icon name="chevron" size={18} /></button>
+            {savedApis.length ? <div className="specs-list">{savedApis.map((api) => ({ api, coverage: computeCoverage(api.overview, runsForApi(runHistory, api.id, savedApis)).totals })).map(({ api, coverage }) => <article className="spec-card" key={api.id}>
+              <button className="spec-card-open" type="button" onClick={() => openSavedApi(api)}><CoverageRing totals={coverage} /><span className="spec-card-copy"><strong>{api.title}</strong><small>Version {api.overview.version} · OpenAPI {api.overview.openapi_version}</small><small>{coverage.tested} of {api.overview.operation_count} endpoints tested{coverage.failing ? <> · <span className="history-fail">{coverage.failing} failing</span></> : null} · Imported {new Date(api.importedAt).toLocaleDateString()}</small></span><Icon name="chevron" size={18} /></button>
               {pendingDeleteApiId === api.id
                 ? <div className="spec-card-confirm" role="group" aria-label={`Delete ${api.title}`}>
                   <span>Delete this API? Its scenarios and AI checks are removed; Run history is kept.</span>
