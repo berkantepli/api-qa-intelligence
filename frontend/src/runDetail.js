@@ -28,6 +28,9 @@ export function outcomeSummary(result) {
       ? `Received HTTP ${result.response_status}, as expected, and the body matches the documented schema.`
       : `Received HTTP ${result.response_status}, as expected.`;
   }
+  if (result.too_slow && result.expected_status_codes?.includes(result.response_status)) {
+    return `Received HTTP ${result.response_status}, as expected, but it took ${result.duration_ms} ms (limit ${result.max_duration_ms} ms).`;
+  }
   if (schema?.status === "failed") return `Received HTTP ${result.response_status}, as expected, but the body does not match the documented schema: ${schema.detail}`;
   return `Expected HTTP ${expected}, received HTTP ${result.response_status}.`;
 }

@@ -171,6 +171,8 @@ function App() {
   const contractScenarios = operationScenarios.filter((scenario) => !isEditedScenario(scenario));
   const scenarioIdeaStatus = scenarioIdeaState[`${activeApiId}:${operationKey}`] ?? {};
   const apiInputs = requestInputs[activeApiId] ?? {};
+  // Optional per-API response time limit in milliseconds; null means no limit.
+  const maxDurationMs = savedApis.find((api) => api.id === activeApiId)?.maxDurationMs ?? null;
   const operationInputs = apiInputs[operationKey] ?? {};
   const operationFill = sampleFill[operationKey] ?? {};
   const fillMarkFor = (inputKey) => fillHint(operationFill.marks?.[inputKey]);
@@ -583,7 +585,7 @@ function App() {
         const fileUploads = await readFileUploads(fileFields, requestFiles[operationKey]);
         const result = await postJson(
           "/api/v1/runs/execute",
-          buildCheckRequest(describedOperation, operationInputs, scenario, { targetUrl, fileUploads }),
+          buildCheckRequest(describedOperation, operationInputs, scenario, { targetUrl, fileUploads, maxDurationMs }),
           "The check could not be executed.",
         );
         nextResults[index] = result;
@@ -643,7 +645,7 @@ function App() {
           setBulkRun((current) => ({ ...current, current: `${item.key} · ${scenario.title}` }));
           const result = await postJson(
             "/api/v1/runs/execute",
-            buildCheckRequest(described, inputs, scenario, { targetUrl, fileUploads }),
+            buildCheckRequest(described, inputs, scenario, { targetUrl, fileUploads, maxDurationMs }),
             "The check could not be executed.",
           );
           completed.push({ title: scenario.title, category: scenario.category, source: scenario.source, ...result });
@@ -1001,6 +1003,7 @@ function App() {
               <section className="panel scenario-panel">
                 <div className="panel-header scenario-header"><div><div className="panel-kicker"><Icon name="spark" size={15} /> RUNNABLE CHECKS {isDataChangingMethod && <span className="mutation-badge">May change data</span>}</div><h2>{operation?.method} <span>{operation?.path}</span></h2><p>These checks include a complete request and can be executed now.</p>{operation && !operation.response_schemas && <p className="schema-note">Import this API again to also check response bodies against the contract.</p>}</div></div>
                 <label className="target-field"><span>Target API base URL</span><input value={targetUrl} onChange={(event) => updateTargetUrl(event.target.value)} placeholder="http://127.0.0.1:8000" /></label>
+                <label className="target-field time-limit-field"><span>Response time limit</span><input type="number" min="1" max="120000" step="100" inputMode="numeric" value={maxDurationMs ?? ""} onChange={(event) => updateSavedApi(activeApiId, { maxDurationMs: event.target.value ? Math.min(120000, Math.max(1, Number(event.target.value))) : null })} placeholder="No limit" /><small>ms · a slower response fails the check</small></label>
                 {(operationParameters.length > 0 || bodyFields.length > 0 || needsRawJsonBody) && <div className="request-inputs">
                   <div className="request-inputs-heading">
                     <div><strong>Request details</strong><span>Fill in required values from your test environment.</span></div>
@@ -1037,7 +1040,7 @@ function App() {
                         {isEditedScenario(scenario) && <p className="edited-check-summary">{editedCheckSummary(scenario.request_example)}</p>}
                         {isEditedScenario(scenario) && editingDraft?.scenarioIndex !== scenario.scenarioIndex && <div className="card-actions"><button className="text-button" type="button" disabled={running} onClick={() => openDraftEditor(scenario.scenarioIndex)}>{draftStash[draftKey(scenario)] ? "Continue editing" : "Edit"}</button><button className="text-button danger" type="button" disabled={running} onClick={() => removeEditedCheck(scenario.scenarioIndex)}>Remove</button></div>}
                         {editingDraft?.scenarioIndex === scenario.scenarioIndex && draftEditor}
-                        {result && <div className={`result-box result-${result.result.toLowerCase()}`}><div className="result-heading"><strong>{result.result}</strong>{result.response_status && <span>HTTP {result.response_status}</span>}<small>{result.duration_ms} ms</small></div>{result.result === "FAIL" && result.schema_check?.status !== "failed" && <p className="result-reason">{outcomeSummary(result)}</p>}{result.schema_check?.status === "passed" && <p className="schema-note">Body matches the documented schema.</p>}<SchemaDifferences check={result.schema_check} />{result.error && <p>{result.error}</p>}{result.response_body && <details><summary>Response details</summary><pre>{result.response_body}</pre></details>}</div>}</div>
+                        {result && <div className={`result-box result-${result.result.toLowerCase()}`}><div className="result-heading"><strong>{result.result}</strong>{result.response_status && <span>HTTP {result.response_status}</span>}<small>{result.duration_ms} ms</small></div>{result.result === "FAIL" && (result.too_slow || result.schema_check?.status !== "failed") && <p className="result-reason">{outcomeSummary(result)}</p>}{result.schema_check?.status === "passed" && <p className="schema-note">Body matches the documented schema.</p>}<SchemaDifferences check={result.schema_check} />{result.error && <p>{result.error}</p>}{result.response_body && <details><summary>Response details</summary><pre>{result.response_body}</pre></details>}</div>}</div>
                       </article>
                     );
                   })}

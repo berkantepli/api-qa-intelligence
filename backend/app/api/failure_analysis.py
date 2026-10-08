@@ -25,6 +25,7 @@ class FailureAnalysisRequest(BaseModel):
     response_truncated: bool = False
     error: str | None = Field(default=None, max_length=1_000)
     schema_errors: list[str] = Field(default_factory=list, max_length=10)
+    max_duration_ms: int | None = None
 
 
 @router.post(
@@ -42,6 +43,7 @@ async def analyze_failed_check(payload: FailureAnalysisRequest) -> FailureAnalys
         "expected_status_codes": payload.expected_status_codes,
         "actual_status_code": payload.response_status,
         "duration_ms": payload.duration_ms,
+        "response_time_limit_ms": payload.max_duration_ms,
         "request_url": sanitize_url(payload.request_url) if payload.request_url else "",
         "request_headers": redact_headers(payload.request_headers),
         "request_body": redact_text(payload.request_body),
