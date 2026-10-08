@@ -5,8 +5,12 @@ import httpx
 from fastapi import HTTPException
 
 
-def parse_target_base_url(base_url: str) -> httpx.URL:
-    """Validates a target API base URL the same way for checks and connection probes."""
+def parse_target_base_url(base_url: str, *, allow_private_network: bool = False) -> httpx.URL:
+    """Validates a target API base URL the same way for checks and connection probes.
+
+    The web app always blocks private-network hosts; the CLI may allow them, because a CI job
+    usually tests a service on its own network.
+    """
     base = httpx.URL(base_url)
     if base.username or base.password:
         raise HTTPException(
@@ -18,7 +22,8 @@ def parse_target_base_url(base_url: str) -> httpx.URL:
             status_code=422,
             detail="Base URL cannot contain a query or fragment, for example https://api.example.com/v1.",
         )
-    ensure_safe_target_host(base)
+    if not allow_private_network:
+        ensure_safe_target_host(base)
     return base
 
 
