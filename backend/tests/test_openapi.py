@@ -139,7 +139,21 @@ def test_security_scenario_follows_operation_security(sample_spec):
     public = operation(overview, "DELETE", "/pets/{id}")
     assert any(item.category == "security_minded" for item in protected.scenarios)
     assert not any(item.category == "security_minded" for item in public.scenarios)
-    assert scenario(protected, "Call without authentication").request_example is None
+    unauthenticated = scenario(protected, "Call without authentication").request_example
+    assert unauthenticated.omitted_parameters == [{"name": "X-Key", "location": "header"}]
+    assert unauthenticated.expected_status_codes == [401, 403]
+
+
+def test_optional_authentication_is_not_checked_as_required():
+    document = {
+        "openapi": "3.0.0",
+        "info": {"title": "Optional", "version": "1"},
+        "components": {"securitySchemes": {"bearer": {"type": "http", "scheme": "bearer"}}},
+        "paths": {"/items": {"get": {"security": [{"bearer": []}, {}], "responses": {"200": {}, "401": {}}}}},
+    }
+
+    (item,) = summarize_openapi(document).operations
+    assert scenario(item, "Call without authentication").request_example is None
 
 
 def test_circular_references_do_not_recurse_forever():
