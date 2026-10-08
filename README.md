@@ -99,7 +99,9 @@ The API overview flags scenarios on the same endpoint that seem to test the same
 
 ### Run history
 
-Every executed batch is saved in this browser’s Run history, grouped by API with pass/fail/error totals and the most recently used API first. Groups start collapsed; open one to see its runs. Open a run to see its target, PASS/FAIL/ERROR counts, and, for each check, the expected and received status, duration, the request line with headers and body, and the response status, headers, and body. Failed and errored checks open expanded. Delete a single run with the trash icon on its row, or every run for an API with the trash icon on the group header; both ask for confirmation and cannot be undone. Evidence is stored already redacted; uploaded file contents are never stored.
+In the overview, **Select all** selects every runnable check of the endpoint, each endpoint in the list shows a green or red dot for its latest run, and the summary cards show how many endpoints are tested and how many checks can run with the request details entered so far. On the import page, **Try the Swagger Petstore sample** imports the public Petstore contract when you have no spec at hand.
+
+Every executed batch is saved in this browser’s Run history, grouped by API with pass/fail/error totals and the most recently used API first. Groups start collapsed; open one to see its runs. Open a run to see its target, PASS/FAIL/ERROR counts, and, for each check, the expected and received status, duration, the request line with headers and body, and the response status, headers, and body. Failed and errored checks open expanded. **Run again** opens the run's endpoint in the overview with the same checks selected, so you can enter any credentials again and rerun them. Delete a single run with the trash icon on its row, or every run for an API with the trash icon on the group header; both ask for confirmation and cannot be undone. Evidence is stored already redacted; uploaded file contents are never stored.
 
 ### Coverage & Risk
 

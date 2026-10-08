@@ -103,13 +103,18 @@ function CheckDetail({ result, index, analysisStatus, onAnalyze }) {
   </details>;
 }
 
-export default function RunDetail({ run, analysisState, onAnalyze, onBack }) {
+export default function RunDetail({ run, analysisState, onAnalyze, onBack, onRerun, canRerun }) {
   const summary = summarizeResults(run.results);
   return <section className="history-page run-detail">
     <button className="back-link" type="button" onClick={onBack}><Icon name="back" size={15} /> Run history</button>
     <div className="page-eyebrow">RUN DETAILS</div>
-    <h1 className="run-detail-endpoint">{run.endpoint}</h1>
-    <p className="page-lede">{run.api} · {new Date(run.createdAt).toLocaleString()}</p>
+    <div className="run-detail-heading">
+      <div>
+        <h1 className="run-detail-endpoint">{run.endpoint}</h1>
+        <p className="page-lede">{run.api} · {new Date(run.createdAt).toLocaleString()}</p>
+      </div>
+      {canRerun && <button className="secondary-button" type="button" onClick={onRerun} title="Open this endpoint with the same checks selected"><Icon name="run" size={14} /> Run again</button>}
+    </div>
 
     <div className="run-summary">
       <div><span>Target</span><strong title={run.target}>{run.target}</strong></div>
