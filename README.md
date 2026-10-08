@@ -1,5 +1,7 @@
 # API QA Intelligence
 
+[![CI](https://github.com/berkantepli/api-qa-intelligence/actions/workflows/ci.yml/badge.svg)](https://github.com/berkantepli/api-qa-intelligence/actions/workflows/ci.yml)
+
 An AI-powered API quality intelligence platform that turns an OpenAPI description into thoughtful, risk-aware tests, runs selected checks, and explains failures in a QA context.
 
 This project is **not a Postman replacement**. Its focus is helping teams decide what to test, see meaningful coverage gaps, and understand what a failure may mean.
@@ -126,6 +128,8 @@ npm test
 ```
 
 The backend tests replace outbound HTTP calls with an in-memory transport, so they never contact a target API or Ollama.
+
+The same checks run on GitHub Actions for every pull request and push to `main` ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)): backend lint and tests, and frontend tests and build.
 
 ## Roadmap
 
