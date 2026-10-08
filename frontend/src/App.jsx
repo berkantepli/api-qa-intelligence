@@ -934,21 +934,23 @@ function App() {
                   })}
                   {!inputsReady ? <div className="empty-state">Complete the required request details above to prepare these checks.</div> : availableScenarios.length === 0 && <div className="empty-state">No executable checks are available for this endpoint yet. Choose another endpoint with a complete request example.</div>}
                 </div>
-                <section className="ai-suggestions">
+                {hasInputsToVary ? <section className="ai-suggestions">
                   <div className="ai-suggestions-heading"><div><div className="panel-kicker"><Icon name="spark" size={14} /> AI SUGGESTIONS</div><p>Ideas based on this endpoint’s contract. Review them before turning them into checks.</p></div><button className="secondary-button" type="button" disabled={scenarioIdeaStatus.loading} onClick={generateScenarioIdeas}>{scenarioIdeaStatus.loading ? <><span className="spinner" /> Thinking…</> : <><Icon name="spark" size={14} /> {aiScenarioIdeas.length ? "Refresh suggestions" : "Suggest scenarios"}</>}</button></div>
                   <small className="ai-suggestions-note">Sends endpoint details to your configured AI model. No credentials or API requests are sent.</small>
                   {savedCheck?.operationKey === operationKey && <div className="alert success-alert saved-check-notice" role="status"><Icon name="check" size={16} /><span>“{savedCheck.title}” was saved as a check under Runnable checks{inputsReady ? "." : "; complete the request details above to run it."}</span>{inputsReady && <button className="text-button" type="button" onClick={() => setHighlightedCheck(savedCheck.scenarioIndex)}>Show it</button>}</div>}
                   {scenarioIdeaStatus.error && <div className="alert error-alert" role="alert">{scenarioIdeaStatus.error}</div>}
                   {scenarioIdeaStatus.skipped > 0 && <small className="ai-suggestions-note">Skipped {scenarioIdeaStatus.skipped} {scenarioIdeaStatus.skipped === 1 ? "idea that repeats" : "ideas that repeat"} an existing check.</small>}
-                  {!hasInputsToVary && aiScenarioIdeas.length > 0 && <small className="ai-suggestions-note">This endpoint has no parameters or request body, so these ideas stay as review notes: a check made from them would repeat “Valid request”.</small>}
                   {aiScenarioIdeas.length ? <div className="ai-suggestions-list">{aiScenarioIdeas.map(({ scenario, scenarioIndex }) => <article className="ai-suggestion-card" key={`${scenario.title}-${scenarioIndex}`}>
                     <div className="scenario-title-row"><span className={`category-pill category-${scenario.category}`}>{categoryLabels[scenario.category] || scenario.category}</span><span className="review-pill">Review · not runnable</span>{duplicateIndexes.has(scenarioIndex) && <span className="duplicate-pill">Possible duplicate</span>}{draftStash[draftKey(scenario)] && editingDraft?.scenarioIndex !== scenarioIndex && <span className="edited-pill">Draft in progress</span>}</div>
                     <h3>{scenario.title}</h3><p>{scenario.rationale}</p>
                     {editingDraft?.scenarioIndex === scenarioIndex
                       ? draftEditor
-                      : hasInputsToVary && <div className="card-actions"><button className="text-button" type="button" disabled={running} onClick={() => openDraftEditor(scenarioIndex)}>{draftStash[draftKey(scenario)] ? "Continue draft" : "Convert to check"}</button></div>}
+                      : <div className="card-actions"><button className="text-button" type="button" disabled={running} onClick={() => openDraftEditor(scenarioIndex)}>{draftStash[draftKey(scenario)] ? "Continue draft" : "Convert to check"}</button></div>}
                   </article>)}</div> : <div className="ai-suggestions-empty">No AI ideas yet. Generate suggestions when you want a second QA perspective.</div>}
-                </section>
+                </section> : <section className="ai-suggestions">
+                  <div className="panel-kicker"><Icon name="spark" size={14} /> AI SUGGESTIONS</div>
+                  <small className="ai-suggestions-note">This endpoint has no parameters or request body to vary, so every check would send the same request as “Valid request”. AI suggestions are only offered for endpoints with inputs.</small>
+                </section>}
                 {showExecutionConfirmation && <div className="execution-confirmation" role="alert">
                   <div><strong>This request may change data.</strong><p>You are about to run {selectedCount} {operation.method} {operation.path} check{selectedCount === 1 ? "" : "s"} against {targetUrl}. This can create, update, or delete data in the target API.</p></div>
                   <div className="execution-confirmation-actions"><button className="secondary-button" type="button" onClick={() => setShowExecutionConfirmation(false)}>Cancel</button><button className="primary-button" type="button" onClick={confirmRun}>Confirm and run</button></div>
