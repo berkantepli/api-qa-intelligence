@@ -188,3 +188,27 @@ def test_diagnosis_reports_failed_inference(client, mock_http, monkeypatch, chat
 
     assert steps(diagnosis) == ["available", "available", "available", "unavailable"]
     assert diagnosis["available"] is False
+
+
+def test_scenario_ideas_list_existing_checks_so_they_are_not_repeated(client, mock_http):
+    mock_http.respond_with(ollama_reply({"scenarios": []}))
+    operation = {
+        "method": "GET",
+        "path": "/bugs/activity",
+        "scenarios": [
+            {"category": "happy_path", "title": "Valid request", "rationale": "r", "source": "contract"},
+            {"category": "boundary", "title": "Test with rate limiting applied", "rationale": "r", "source": "ai_edited"},
+            {"category": "negative", "title": "Old review idea", "rationale": "r", "source": "ai"},
+        ],
+    }
+
+    client.post("/api/v1/specs/scenario-ideas", json={"operation": operation})
+
+    sent = json.loads(mock_http.requests[0].content)
+    context = json.loads(sent["messages"][1]["content"].split("\n", 1)[1])
+    assert context["existing_checks"] == [
+        {"title": "Valid request", "category": "happy_path"},
+        {"title": "Test with rate limiting applied", "category": "boundary"},
+    ]
+    assert context["has_inputs_to_vary"] is False
+    assert "Never repeat" in sent["messages"][0]["content"]
