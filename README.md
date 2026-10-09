@@ -160,7 +160,17 @@ npm test
 
 The backend tests replace outbound HTTP calls with an in-memory transport, so they never contact a target API or Ollama.
 
-The same checks run on GitHub Actions for every pull request and push to `main` ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)): backend lint and tests, and frontend tests and build.
+Browser tests (Playwright) walk the main flows — import, passing and failing checks, schema differences, a missing-key finding, data surviving a cleared browser, Run again, a bulk run with data-changing endpoints, and Delete all — against a small target API with deliberate problems ([`frontend/e2e/target_api.py`](frontend/e2e/target_api.py)). They start the app on a throwaway database:
+
+```bash
+cd frontend
+npm run build
+npm run test:e2e
+```
+
+Locally they use the installed Google Chrome; set `E2E_PYTHON` if the backend's Python is not `../.venv/bin/python`.
+
+The same checks run on GitHub Actions for every pull request and push to `main` ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)): backend lint and tests, frontend tests and build, and the browser tests.
 
 ## Roadmap
 
