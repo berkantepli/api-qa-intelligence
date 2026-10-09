@@ -2,6 +2,19 @@
 
 The version lives in the [`VERSION`](VERSION) file and follows [Semantic Versioning](https://semver.org/). Before 1.0.0, a new feature raises the minor number (0.**x**.0) and a fix or visual change raises the patch number (0.x.**y**).
 
+## 1.0.0 — 2026-10-09
+
+The first stable release. API QA Intelligence turns an OpenAPI 3.x or Swagger 2.0 contract into risk-aware QA checks, runs them from the browser, in bulk, or from CI, judges each response by its status, documented schema, and time limit, keeps redacted evidence, and shows coverage and risk per endpoint. A local Ollama model can add scenario ideas, sample values, and failure explanations.
+
+### What 1.0 promises
+- The `/api/v1` HTTP API is stable for all 1.x releases: routes and fields may be added, never removed or renamed ([docs/API.md](docs/API.md)). A test guards this.
+- The `api-qa` command line keeps its options, exit codes, and report formats.
+- Workspace databases and workspace export files from 1.x keep working; older databases are upgraded when the app starts.
+
+### New in 1.0
+- The Docker image is published to GitHub Container Registry with each release: `docker run -p 8001:8001 -v api-qa-data:/data ghcr.io/berkantepli/api-qa-intelligence`.
+- The project is licensed under MIT.
+
 ## 0.8.0 — 2026-10-09
 
 ### Docker
