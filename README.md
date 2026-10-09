@@ -182,6 +182,10 @@ See [docs/MVP_ROADMAP.md](docs/MVP_ROADMAP.md) for the staged plan and product b
 - Never commit credentials, API tokens, or private OpenAPI specifications.
 - Configure the target host explicitly; generated scenarios should not silently send requests.
 - Treat AI-generated scenarios and failure explanations as suggestions that need review.
+- The backend has no login and is meant to run on your own machine. It answers only to `localhost` and `127.0.0.1`, which stops DNS rebinding (a web page re-pointed to 127.0.0.1 cannot read or delete the workspace or send checks through it). To reach it under another name, for example in a container, list the names in `API_QA_ALLOWED_HOSTS` (comma-separated, or `*`); do not expose it to a network you do not trust.
+- Checks only reach public hosts or this machine (private-network hosts are refused unless the CLI is given `--allow-private-network`), never follow redirects, and send nothing unless you start a run.
+- Credentials are kept only in the open tab: run evidence, exports, the workspace database, and CLI reports redact them.
+- Importing a contract cannot hang the app: `$ref` chains are expanded only up to a fixed size, beyond which schemas accept any value.
 
 ## Project status
 

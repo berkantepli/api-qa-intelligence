@@ -1,12 +1,16 @@
+import os
 from collections.abc import Callable
 
-import httpx
-import pytest
-from fastapi.testclient import TestClient
+# The test client calls the app as "testserver"; allow it before the app is imported.
+os.environ.setdefault("API_QA_ALLOWED_HOSTS", "testserver")
 
-from app.api.workspace import get_store
-from app.domain.store import WorkspaceStore
-from app.main import app
+import httpx  # noqa: E402
+import pytest  # noqa: E402
+from fastapi.testclient import TestClient  # noqa: E402
+
+from app.api.workspace import get_store  # noqa: E402
+from app.domain.store import WorkspaceStore  # noqa: E402
+from app.main import app  # noqa: E402
 
 Handler = Callable[[httpx.Request], httpx.Response]
 
