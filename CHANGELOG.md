@@ -2,6 +2,21 @@
 
 The version lives in the [`VERSION`](VERSION) file and follows [Semantic Versioning](https://semver.org/). Before 1.0.0, a new feature raises the minor number (0.**x**.0) and a fix or visual change raises the patch number (0.x.**y**).
 
+## 0.8.0 — 2026-10-09
+
+### Docker
+- The app runs with `docker run -p 8001:8001 -v api-qa-data:/data api-qa-intelligence`: web app, backend, and the `api-qa` CLI in one image, with the workspace database in a volume.
+- `API_QA_ALLOW_PRIVATE_NETWORK=1` lets a server reach private-network targets (off by default), for example an API on the host machine through `host.docker.internal`.
+
+### Security
+- The backend answers only to `localhost` and `127.0.0.1` (plus names in `API_QA_ALLOWED_HOSTS`), so a web page using DNS rebinding cannot read or delete the workspace or send checks through it.
+- A contract whose schemas `$ref` each other many levels deep can no longer hang an import: schema expansion stops at a fixed size.
+- Development dependencies updated (Vitest 5) to clear audit advisories.
+
+### Quality
+- Playwright browser tests cover the main flows against a target API with deliberate problems, and run on every pull request together with a Docker image build.
+- **Select all** also shows for endpoints with a single check.
+
 ## 0.7.0 — 2026-10-08
 
 ### Swagger 2.0
