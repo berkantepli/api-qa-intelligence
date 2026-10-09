@@ -13,6 +13,8 @@ htmlcov/
 node_modules/
 frontend/node_modules/
 frontend/dist/
+frontend/test-results/
+frontend/playwright-report/
 
 # Local workspace database
 data/
