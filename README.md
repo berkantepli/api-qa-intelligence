@@ -213,4 +213,4 @@ The current version is in [`VERSION`](VERSION) (shown in the sidebar and returne
 
 ## License
 
-[MIT](LICENSE) © 2026 Berk Antepli
+Released under the [MIT License](LICENSE). © 2026 Berk Antepli
