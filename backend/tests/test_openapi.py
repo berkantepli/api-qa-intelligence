@@ -211,3 +211,29 @@ def test_fields_carry_their_schema_and_only_documented_examples():
     assert fields["tags"].value_schema == {"type": "array", "items": {"type": "object", "properties": {"name": {"type": "string"}}}}
     assert operation.parameters[0].example is None
     assert operation.parameters[0].value_schema == {"type": "integer", "minimum": 5}
+
+
+def test_deeply_nested_refs_cannot_hang_an_import():
+    """Ten properties referencing the next schema over six levels would inline a million nodes."""
+    import time
+
+    schemas = {"L6": {"type": "string"}}
+    for level in range(5, -1, -1):
+        schemas[f"L{level}"] = {
+            "type": "object",
+            "properties": {f"p{index}": {"$ref": f"#/components/schemas/L{level + 1}"} for index in range(10)},
+        }
+    reference = {"$ref": "#/components/schemas/L0"}
+    document = {
+        "openapi": "3.0.0",
+        "info": {"title": "Nested", "version": "1"},
+        "components": {"schemas": schemas},
+        "paths": {"/a": {"post": {
+            "requestBody": {"content": {"application/json": {"schema": reference}}},
+            "responses": {"200": {"content": {"application/json": {"schema": reference}}}},
+        }}},
+    }
+
+    started = time.perf_counter()
+    summarize_openapi(document)
+    assert time.perf_counter() - started < 2
