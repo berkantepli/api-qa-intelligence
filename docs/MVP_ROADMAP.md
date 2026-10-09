@@ -1,5 +1,7 @@
 # MVP roadmap
 
+> Historical: this is how the project was planned from the first commit to 1.0.0. What shipped in each release is in [CHANGELOG.md](../CHANGELOG.md).
+
 ## Product goal
 
 Help a QA engineer go from an API contract to reviewed, executable test scenarios and evidence-based failure explanations. The tool should answer “what should I test and what does this result tell me?” rather than focus on manually composing requests.
