@@ -125,12 +125,13 @@ Install and run Ollama with a model. The default model is `qwen3-vl:8b-instruct`
 
 ## Running with Docker
 
-The image contains the web app, the backend, and the `api-qa` CLI:
+The image contains the web app, the backend, and the `api-qa` CLI. Each release is published to GitHub Container Registry:
 
 ```bash
-docker build -t api-qa-intelligence .
-docker run -p 8001:8001 -v api-qa-data:/data api-qa-intelligence
+docker run -p 8001:8001 -v api-qa-data:/data ghcr.io/berkantepli/api-qa-intelligence
 ```
+
+To build it yourself instead: `docker build -t api-qa-intelligence .`
 
 Open http://localhost:8001. The workspace database lives in the `/data` volume, so it survives new containers. Inside the container `127.0.0.1` is the container itself: to test an API running on your machine, use `http://host.docker.internal:<port>` as the target and start the container with `-e API_QA_ALLOW_PRIVATE_NETWORK=1`, which allows private-network targets (off by default). AI features look for Ollama at `http://host.docker.internal:11434`; set `OLLAMA_BASE_URL` to change it. To open the app under another host name, add it to `API_QA_ALLOWED_HOSTS`. The CLI runs the same way: `docker run --rm api-qa-intelligence api-qa run --spec https://example.com/openapi.json`.
 
@@ -183,9 +184,13 @@ Locally they use the installed Google Chrome; set `E2E_PYTHON` if the backend's 
 
 The same checks run on GitHub Actions for every pull request and push to `main` ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)): backend lint and tests, frontend tests and build, the browser tests, and a Docker image build with a smoke test.
 
+## Backend API
+
+Every feature of the web app goes through a documented HTTP API under `/api/v1`, which is stable for all 1.x releases: see [docs/API.md](docs/API.md), and `/docs` on a running backend for the typed reference.
+
 ## Roadmap
 
-See [docs/MVP_ROADMAP.md](docs/MVP_ROADMAP.md) for the staged plan and product boundaries.
+[docs/MVP_ROADMAP.md](docs/MVP_ROADMAP.md) records how the project was planned up to 1.0. Ideas after 1.0 include a built-in demo API, a hosted demo, and more AI providers than a local Ollama.
 
 ## Security and responsible use
 
@@ -200,7 +205,9 @@ See [docs/MVP_ROADMAP.md](docs/MVP_ROADMAP.md) for the staged plan and product b
 
 ## Project status
 
-Early MVP. The app can import and summarize an OpenAPI 3.x or Swagger 2.0 file or URL, suggest contract-based scenarios, request additional review-only AI scenario ideas, execute selected checks, retain redacted run evidence, and optionally analyze failed checks, and summarize coverage and risk per endpoint with an exportable report. Broader provider support remains future work.
+Stable (1.0). The app imports OpenAPI 3.x and Swagger 2.0 contracts, generates contract-based checks, runs them from the browser, in bulk, or from CI with JUnit and JSON reports, checks responses against the documented schema and an optional time limit, keeps redacted evidence and the workspace in a local database, summarizes coverage and risk, and optionally uses a local Ollama model for scenario ideas, sample values, and failure analysis.
+
+Within 1.x, the `/api/v1` HTTP API, the `api-qa` command line, the workspace database, and workspace export files stay compatible: new features are added, existing behavior is not removed. Older databases are upgraded when the app starts.
 
 The current version is in [`VERSION`](VERSION) (shown in the sidebar and returned by `GET /health`); see [CHANGELOG.md](CHANGELOG.md) for what changed in each release.
 
