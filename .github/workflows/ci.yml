@@ -81,3 +81,23 @@ jobs:
         with:
           name: playwright-traces
           path: frontend/test-results
+
+  docker:
+    name: Docker image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        run: docker build -t api-qa-intelligence .
+      - name: Start
+        run: docker run -d --name api-qa -p 8001:8001 api-qa-intelligence
+      - name: Smoke test
+        run: |
+          for i in $(seq 1 30); do curl -fsS http://localhost:8001/health && break; sleep 1; done
+          curl -fsS http://localhost:8001/health | grep -q "\"version\":\"$(cat VERSION)\""
+          curl -fsS http://localhost:8001/ | grep -q '<div id="root">'
+          curl -fsS http://localhost:8001/api/v1/workspace | grep -q '"savedApis":\[\]'
+          docker run --rm api-qa-intelligence api-qa --version | grep -q "$(cat VERSION)"
+      - name: Show the logs
+        if: failure()
+        run: docker logs api-qa
