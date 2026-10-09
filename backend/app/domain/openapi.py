@@ -523,9 +523,23 @@ def _documented_example(schema: Mapping[str, Any]) -> Any:
     return enum[0] if isinstance(enum, list) and enum else None
 
 
+# Schemas that $ref each other several levels deep multiply when inlined (10 properties over 6
+# levels is a million nodes from a 3 KB file). Each resolution stops expanding after this many
+# schema nodes; anything beyond resolves to {} (any value), so a crafted contract cannot hang import.
+MAX_RESOLVED_NODES = 2_000
+
+
 def _resolve_schema(
-    schema: Mapping[str, Any], document: Mapping[str, Any], seen: frozenset[str] = frozenset()
+    schema: Mapping[str, Any],
+    document: Mapping[str, Any],
+    seen: frozenset[str] = frozenset(),
+    budget: list[int] | None = None,
 ) -> Mapping[str, Any] | None:
+    if budget is None:
+        budget = [MAX_RESOLVED_NODES]
+    budget[0] -= 1
+    if budget[0] < 0:
+        return {}
     reference = schema.get("$ref")
     if isinstance(reference, str) and reference.startswith("#/"):
         if reference in seen:
@@ -539,7 +553,7 @@ def _resolve_schema(
         if not isinstance(target, Mapping):
             return None
         resolved = dict(
-            _resolve_schema(target, document, seen | {reference}) or {}
+            _resolve_schema(target, document, seen | {reference}, budget) or {}
         )
         resolved.update({key: value for key, value in schema.items() if key != "$ref"})
         schema = resolved
@@ -547,7 +561,7 @@ def _resolve_schema(
 
     def resolve_nested(value: Mapping[str, Any]) -> Mapping[str, Any]:
         # A circular reference resolves to {}; keep it instead of falling back to the raw $ref.
-        nested = _resolve_schema(value, document, seen)
+        nested = _resolve_schema(value, document, seen, budget)
         return value if nested is None else nested
 
     result = dict(schema)

@@ -13,6 +13,8 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 MAX_DEPTH = 8
+# The most schema nodes one response schema expands to; see openapi.MAX_RESOLVED_NODES.
+MAX_RESOLVED_NODES = 2_000
 MAX_PROPERTIES = 60
 MAX_ERRORS = 10
 JSON_TYPES = {"object", "array", "string", "number", "integer", "boolean", "null"}
@@ -36,7 +38,7 @@ def response_schemas(responses: Any, document: Mapping[str, Any]) -> dict[str, d
             continue
         for media_type, media in content.items():
             if "json" in str(media_type).lower() and isinstance(media, Mapping) and isinstance(media.get("schema"), Mapping):
-                schemas[str(code).upper()] = _resolve(media["schema"], document, frozenset(), 0)
+                schemas[str(code).upper()] = _resolve(media["schema"], document, frozenset(), 0, [MAX_RESOLVED_NODES])
                 break
     return schemas
 
@@ -188,9 +190,12 @@ def _follow_ref(node: Mapping[str, Any], document: Mapping[str, Any], seen: froz
     return _follow_ref(target, document, seen | {reference}) if isinstance(target, Mapping) else None
 
 
-def _resolve(schema: Mapping[str, Any], document: Mapping[str, Any], seen: frozenset[str], depth: int) -> dict[str, Any]:
-    """Inlines $refs a few levels deep; cycles and deeper levels accept any value."""
-    if depth > MAX_DEPTH:
+def _resolve(
+    schema: Mapping[str, Any], document: Mapping[str, Any], seen: frozenset[str], depth: int, budget: list[int]
+) -> dict[str, Any]:
+    """Inlines $refs a few levels deep; cycles, deeper levels, and nodes past the budget accept any value."""
+    budget[0] -= 1
+    if depth > MAX_DEPTH or budget[0] < 0:
         return {}
     reference = schema.get("$ref")
     if isinstance(reference, str):
@@ -200,10 +205,10 @@ def _resolve(schema: Mapping[str, Any], document: Mapping[str, Any], seen: froze
         if target is None:
             return {}
         merged = {**target, **{key: value for key, value in schema.items() if key != "$ref"}}
-        return _resolve(merged, document, seen | {reference}, depth)
+        return _resolve(merged, document, seen | {reference}, depth, budget)
 
     def nested(value: Any) -> Any:
-        return _resolve(value, document, seen, depth + 1) if isinstance(value, Mapping) else {}
+        return _resolve(value, document, seen, depth + 1, budget) if isinstance(value, Mapping) else {}
 
     resolved: dict[str, Any] = {
         key: schema[key]
