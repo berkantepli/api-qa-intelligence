@@ -189,3 +189,12 @@ def test_a_response_within_the_limit_passes(client, mock_http):
     result = execute(client, max_duration_ms=60_000).json()
 
     assert (result["result"], result["too_slow"]) == ("PASS", False)
+
+
+def test_private_targets_need_the_server_opt_in(client, mock_http, monkeypatch):
+    private = {"base_url": "http://10.0.0.5:8080"}
+
+    assert execute(client, **private).status_code == 422
+    monkeypatch.setenv("API_QA_ALLOW_PRIVATE_NETWORK", "1")
+    assert execute(client, **private).json()["result"] == "PASS"
+    assert str(mock_http.requests[-1].url) == "http://10.0.0.5:8080/health"
