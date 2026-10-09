@@ -1,7 +1,9 @@
+import os
 from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app.api.ai_scenarios import router as ai_scenarios_router
 from app.api.ai_status import router as ai_status_router
@@ -18,6 +20,14 @@ app = FastAPI(
     description="Import an OpenAPI contract and inspect its operations for QA planning.",
     version=APP_VERSION,
 )
+
+# The app runs on the user's machine without a login. Answering only to its own host names stops
+# DNS rebinding: a web page whose domain is re-pointed to 127.0.0.1 cannot read or delete the
+# workspace or send checks through this backend. Add names (or "*") with API_QA_ALLOWED_HOSTS.
+ALLOWED_HOSTS = ["localhost", "127.0.0.1", *(
+    host.strip() for host in os.getenv("API_QA_ALLOWED_HOSTS", "").split(",") if host.strip()
+)]
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=ALLOWED_HOSTS)
 
 
 @app.get("/health", tags=["Health"])
