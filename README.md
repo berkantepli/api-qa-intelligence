@@ -206,4 +206,4 @@ The current version is in [`VERSION`](VERSION) (shown in the sidebar and returne
 
 ## License
 
-Personal learning and portfolio project.
+[MIT](LICENSE) © 2026 Berk Antepli
