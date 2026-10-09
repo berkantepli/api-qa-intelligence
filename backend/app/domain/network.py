@@ -1,4 +1,5 @@
 import ipaddress
+import os
 import socket
 
 import httpx
@@ -8,8 +9,10 @@ from fastapi import HTTPException
 def parse_target_base_url(base_url: str, *, allow_private_network: bool = False) -> httpx.URL:
     """Validates a target API base URL the same way for checks and connection probes.
 
-    The web app always blocks private-network hosts; the CLI may allow them, because a CI job
-    usually tests a service on its own network.
+    Private-network hosts are blocked unless the caller allows them (the CLI's
+    --allow-private-network, because a CI job usually tests a service on its own network) or the
+    server is started with API_QA_ALLOW_PRIVATE_NETWORK=1 (for example in Docker, where an API on
+    the host machine is reached through a private address such as host.docker.internal).
     """
     base = httpx.URL(base_url)
     if base.username or base.password:
@@ -27,7 +30,13 @@ def parse_target_base_url(base_url: str, *, allow_private_network: bool = False)
     return base
 
 
+def private_network_allowed() -> bool:
+    return os.getenv("API_QA_ALLOW_PRIVATE_NETWORK", "").lower() in {"1", "true", "yes"}
+
+
 def ensure_safe_target_host(url: httpx.URL) -> None:
+    if private_network_allowed():
+        return
     host = url.host
     port = url.port or (443 if url.scheme == "https" else 80)
     if host.lower() == "localhost":

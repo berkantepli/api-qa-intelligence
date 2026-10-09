@@ -123,6 +123,17 @@ The **Settings** page shows whether the configured Ollama model is reachable and
 
 Install and run Ollama with a model. The default model is `qwen3-vl:8b-instruct`, and the default Ollama URL is `http://127.0.0.1:11434`. Override them with `OLLAMA_MODEL` and `OLLAMA_BASE_URL` before starting the backend. In an API overview, choose **Suggest scenarios** to send the selected endpoint’s contract details (operation, parameters, and body field names/types) to the configured model. The model receives no example values, credentials, target URL, or API traffic. It also receives the titles of the endpoint’s existing checks and is asked not to repeat them; ideas that still repeat an existing check are skipped. On endpoints without parameters or a request body, ideas stay review notes because a check made from them would repeat the contract check. Suggestions are review-only and are not runnable until you choose **Convert to check**, state the expected status codes, and decide for each parameter whether to use the request details, omit it, send it with an empty value (not available for path parameters), or send a custom value; the editor warns when a draft would send exactly the same request as another check; JSON bodies are sent exactly as written in the editor. Saved checks are labeled **AI idea · edited**, stay in this browser with the saved API, and run only when you select them, with the usual confirmation for data-changing methods. In a run’s details, choose **Analyze with AI** on a failed check to send that check’s redacted evidence for optional, advisory analysis. Read the on-screen disclosure before requesting either AI feature.
 
+## Running with Docker
+
+The image contains the web app, the backend, and the `api-qa` CLI:
+
+```bash
+docker build -t api-qa-intelligence .
+docker run -p 8001:8001 -v api-qa-data:/data api-qa-intelligence
+```
+
+Open http://localhost:8001. The workspace database lives in the `/data` volume, so it survives new containers. Inside the container `127.0.0.1` is the container itself: to test an API running on your machine, use `http://host.docker.internal:<port>` as the target and start the container with `-e API_QA_ALLOW_PRIVATE_NETWORK=1`, which allows private-network targets (off by default). AI features look for Ollama at `http://host.docker.internal:11434`; set `OLLAMA_BASE_URL` to change it. To open the app under another host name, add it to `API_QA_ALLOWED_HOSTS`. The CLI runs the same way: `docker run --rm api-qa-intelligence api-qa run --spec https://example.com/openapi.json`.
+
 ## Running checks in CI
 
 The `api-qa` command runs a contract's runnable checks without the web app, so a CI pipeline can test an API on every change. It is installed with the backend (`pip install -e .`, or `pip install "git+https://github.com/berkantepli/api-qa-intelligence"`).
@@ -170,7 +181,7 @@ npm run test:e2e
 
 Locally they use the installed Google Chrome; set `E2E_PYTHON` if the backend's Python is not `../.venv/bin/python`.
 
-The same checks run on GitHub Actions for every pull request and push to `main` ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)): backend lint and tests, frontend tests and build, and the browser tests.
+The same checks run on GitHub Actions for every pull request and push to `main` ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)): backend lint and tests, frontend tests and build, the browser tests, and a Docker image build with a smoke test.
 
 ## Roadmap
 
