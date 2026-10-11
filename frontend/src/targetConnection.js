@@ -24,8 +24,14 @@ export function connectionLabel(state) {
   if (status === "error") return { tone: "unavailable", text: "Check failed", title: message };
   if (status !== "done" || !result) return { tone: "unknown", text: "No API selected", title: "Select an API with a target base URL." };
 
+  if (!result.reachable && result.timed_out) {
+    return { tone: "warning", text: "Slow to respond", title: `${result.error} The API may be down, or just slow: checks wait up to 15 seconds. (${result.url})` };
+  }
   if (!result.reachable) {
     return { tone: "unavailable", text: "API unavailable", title: `${result.error} (${result.url})` };
+  }
+  if (result.fromCheck) {
+    return { tone: "connected", text: "API reachable", title: `A check just got HTTP ${result.status_code} from ${result.method} ${result.url} in ${result.duration_ms} ms.` };
   }
   const summary = `${result.method} ${result.url} returned ${result.status_code} in ${result.duration_ms} ms.`;
   // A healthy answer keeps its status code in the tooltip; a problem shows it in the label.

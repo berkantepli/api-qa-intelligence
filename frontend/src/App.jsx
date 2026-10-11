@@ -377,6 +377,18 @@ function App() {
     else if (isValidTimeLimit(text)) updateSavedApi(activeApiId, { maxDurationMs: Number(text) });
   }
 
+  // A check or flow step that got an answer proves the target is up, even if the topbar probe
+  // (which waits less than a check) timed out earlier.
+  function noteTargetAnswer(check) {
+    if (check?.response_status == null) return;
+    const url = targetUrl.trim();
+    setConnection((current) => current.status === "done" && current.url === url && current.result?.reachable ? current : {
+      status: "done",
+      url,
+      result: { url: check.request_url, reachable: true, method: check.method, status_code: check.response_status, duration_ms: check.duration_ms, fromCheck: true },
+    });
+  }
+
   function updateSavedApi(id, changes) {
     setSavedApis((current) => current.map((api) => api.id === id ? { ...api, ...changes } : api));
   }
@@ -669,6 +681,7 @@ function App() {
           "The check could not be executed.",
         );
         nextResults[index] = result;
+        noteTargetAnswer(result);
         completed.push({ title: scenario.title, category: scenario.category, source: scenario.source, ...result });
         setResults({ ...nextResults });
       }
@@ -728,6 +741,7 @@ function App() {
             buildCheckRequest(described, inputs, scenario, { targetUrl, fileUploads, maxDurationMs }),
             "The check could not be executed.",
           );
+          noteTargetAnswer(result);
           completed.push({ title: scenario.title, category: scenario.category, source: scenario.source, ...result });
           counts[result.result in counts ? result.result : "ERROR"] += 1;
           done += 1;
@@ -792,6 +806,7 @@ function App() {
       const outcome = await postJson("/api/v1/flows/execute", buildFlowRequest(overview, flow, {
         targetUrl, maxDurationMs, pathValues: flowPathValues[apiId]?.[flow.id], inputsByOperation: requestInputs[apiId],
       }), "The flow could not be run.");
+      noteTargetAnswer(outcome.steps?.find((step) => step.check?.response_status != null)?.check);
       const entry = flowRunEntry(flow, outcome, { apiId, api: overview.title, target: targetUrl });
       setRunHistory((current) => [entry, ...current]);
       updateFlowState(apiId, flow.id, { running: false, outcome, runId: entry.id });

@@ -15,7 +15,7 @@ from app.domain.network import (
 )
 
 router = APIRouter(prefix="/api/v1/targets", tags=["Scenario execution"])
-CHECK_TIMEOUT_SECONDS = 5
+CHECK_TIMEOUT_SECONDS = 8
 # Servers that reject HEAD are asked again with GET, which is also read-only.
 HEAD_NOT_SUPPORTED = {405, 501}
 
@@ -31,6 +31,8 @@ class TargetCheckResult(BaseModel):
     status_code: int | None = None
     duration_ms: int
     error: str | None = None
+    # No answer within the probe's time limit: the API may be down, or just slower than the probe waits.
+    timed_out: bool = False
 
 
 @router.post(
@@ -54,16 +56,18 @@ async def check_target(payload: TargetCheckRequest) -> TargetCheckResult:
         )
     url = sanitize_url(str(base))
     method: Literal["HEAD", "GET"] = "HEAD"
+    timed_out = False
     try:
         async with asyncio.timeout(CHECK_TIMEOUT_SECONDS), target_client(
-            timeout=httpx.Timeout(CHECK_TIMEOUT_SECONDS, connect=3), follow_redirects=False
+            timeout=httpx.Timeout(CHECK_TIMEOUT_SECONDS, connect=5), follow_redirects=False
         ) as client:
             response = await client.head(base)
             if response.status_code in HEAD_NOT_SUPPORTED:
                 method = "GET"
                 async with client.stream("GET", base) as streamed:
                     response = streamed
-    except TimeoutError:
+    except (TimeoutError, httpx.TimeoutException):
+        timed_out = True
         error = f"The target API did not respond within {CHECK_TIMEOUT_SECONDS} seconds."
     except httpx.RequestError as request_error:
         error = request_error_reason(request_error, "the target API", CHECK_TIMEOUT_SECONDS)
@@ -81,4 +85,5 @@ async def check_target(payload: TargetCheckRequest) -> TargetCheckResult:
         method=method,
         duration_ms=round((time.perf_counter() - started) * 1000),
         error=error,
+        timed_out=timed_out,
     )

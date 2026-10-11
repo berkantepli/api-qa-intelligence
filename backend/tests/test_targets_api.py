@@ -38,7 +38,8 @@ def test_server_errors_are_reachable_with_their_code(client, mock_http):
     ("error", "message"),
     [
         (httpx.ConnectError("refused"), "refused"),
-        (httpx.ReadTimeout("slow"), "did not respond within 5 seconds"),
+        (httpx.ReadTimeout("slow"), "did not respond within 8 seconds"),
+        (httpx.ConnectTimeout("slow"), "did not respond within 8 seconds"),
         (httpx.RemoteProtocolError("broken"), "closed the connection"),
     ],
 )
@@ -54,6 +55,8 @@ def test_unreachable_targets_explain_why(client, mock_http, error, message):
     assert result["reachable"] is False
     assert result["status_code"] is None
     assert message in result["error"]
+    # Only a timeout leaves open that the API is up but slow.
+    assert result["timed_out"] is isinstance(error, httpx.TimeoutException)
 
 
 @pytest.mark.parametrize(
