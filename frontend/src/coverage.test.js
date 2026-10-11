@@ -34,12 +34,24 @@ describe("computeCoverage", () => {
     expect(byKey["DELETE /pets/{id}"].risks.map((risk) => risk.id)).toEqual(["untested-write"]);
   });
 
-  it("orders failing first, then untested by risk, then passing", () => {
-    expect(coverage.endpoints.map((endpoint) => endpoint.key)).toEqual(["GET /pets/{id}", "POST /pets", "DELETE /pets/{id}", "GET /pets"]);
+  it("orders endpoints by risk score, highest first", () => {
+    expect(coverage.endpoints.map((endpoint) => [endpoint.key, endpoint.risk.score, endpoint.risk.level])).toEqual([
+      ["POST /pets", 50, "high"],
+      ["GET /pets/{id}", 45, "medium"],
+      ["DELETE /pets/{id}", 35, "medium"],
+      ["GET /pets", 0, "low"],
+    ]);
+  });
+
+  it("explains each score with the rules that added points", () => {
+    expect(byKey["POST /pets"].risk.factors.map((factor) => [factor.label, factor.points])).toEqual([
+      ["Changes data", 15], ["Requires authentication", 10], ["Never tested", 15], ["Auth not checked", 10],
+    ]);
+    expect(byKey["GET /pets/{id}"].risk.factors.map((factor) => factor.id)).toEqual(["failing", "happy-only"]);
   });
 
   it("summarizes totals", () => {
-    expect(coverage.totals).toEqual({ endpoints: 4, tested: 2, coveragePercent: 50, failing: 1, untestedWrites: 2, flaky: 0, stale: 0, checksExecuted: 4 });
+    expect(coverage.totals).toEqual({ endpoints: 4, tested: 2, coveragePercent: 50, failing: 1, untestedWrites: 2, flaky: 0, stale: 0, highRisk: 1, checksExecuted: 4 });
   });
 
   it("shows each category by its checks' latest outcome", () => {
@@ -97,6 +109,15 @@ describe("coverage report", () => {
     expect(report.endpoints[0]).toMatchObject({ method: "GET", path: "/pets", status: "failing", checks: { covered: 1, runnable: 2 } });
     expect(report.endpoints[0].categories.happy_path).toBe("failing");
     expect(report.endpoints[0].risks).toContain("Failing in latest run");
+    expect(report.endpoints[0].risk_score).toEqual({
+      score: 50,
+      level: "high",
+      factors: [
+        { id: "failing", label: "Failing in latest run", points: 35 },
+        { id: "happy-only", label: "Only happy path tested", points: 10 },
+        { id: "partial", label: "1 of 2 checks not run yet", points: 5 },
+      ],
+    });
   });
 
   it("renders a Markdown table with escaped cells", () => {
@@ -104,7 +125,8 @@ describe("coverage report", () => {
 
     expect(markdown).toContain("# Coverage & Risk: Pets | Store 1.0");
     expect(markdown).toContain("- Endpoints tested: 1 / 4 (25%)");
-    expect(markdown).toContain("| `GET /pets` | failing | 1/2 | FAIL | not run | – | – | – | Failing in latest run, Only happy path tested |");
+    expect(markdown).toContain("- High-risk endpoints (score 50+): 2");
+    expect(markdown).toContain("| `GET /pets` | 50 high | failing | 1/2 | FAIL | not run | – | – | – | +35 Failing in latest run, +10 Only happy path tested, +5 1 of 2 checks not run yet |");
   });
 
   it("names files after the API and date", () => {

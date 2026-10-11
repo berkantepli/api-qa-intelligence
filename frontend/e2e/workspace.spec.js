@@ -136,6 +136,20 @@ test("runs data-changing checks in bulk only after confirmation", async ({ page 
   await expect(page.locator(".coverage-row").filter({ hasText: "/pets" }).filter({ has: page.locator(".method-post") })).not.toContainText("Not tested");
 });
 
+test("scores each endpoint's risk and explains the score", async ({ page }) => {
+  await page.goto("/");
+  await nav(page, "Coverage");
+
+  const rows = page.locator(".coverage-row");
+  await expect(rows.first().locator(".risk-score")).toBeVisible();
+  const scores = await rows.locator(".risk-score").evaluateAll((items) => items.map((item) => Number.parseInt(item.textContent, 10)));
+  expect(scores).toEqual([...scores].sort((a, b) => b - a));
+  await expect(rows.filter({ has: page.locator(".method-post") }).first()).toContainText("+15 Changes data");
+
+  await page.getByText("How the risk score works").click();
+  await expect(page.locator(".risk-rules table")).toContainText("Failing in latest run");
+});
+
 test("deletes all saved data", async ({ page }) => {
   await page.goto("/");
   await nav(page, "Settings");
