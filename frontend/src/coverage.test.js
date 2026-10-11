@@ -66,7 +66,10 @@ describe("computeCoverage", () => {
     const changed = computeCoverage(overview, runs, Date.parse("2026-10-04T10:00:00Z"), changes);
     const keyed = Object.fromEntries(changed.endpoints.map((endpoint) => [endpoint.key, endpoint]));
 
-    expect(keyed["DELETE /pets/{id}"].risk.factors.map((factor) => factor.label)).toContain("New in the contract");
+    // A new endpoint is listed as a change but scored once, as never tested.
+    expect(keyed["DELETE /pets/{id}"].contractChange.type).toBe("added");
+    expect(keyed["DELETE /pets/{id}"].risk.factors.map((factor) => factor.id)).toEqual(["deletes", "untested"]);
+    expect(keyed["GET /pets"].risk.factors.map((factor) => factor.label)).toContain("Changed in the contract");
     // GET /pets last ran on 2026-10-02 10:00, before the change.
     expect(keyed["GET /pets"].contractChange).toEqual({ type: "changed", changes: ["New response 404"] });
     expect(changed.totals.changedNotRun).toBe(2);

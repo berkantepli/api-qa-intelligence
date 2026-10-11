@@ -235,7 +235,38 @@ test("shows what changed when a contract is imported again", async ({ page }) =>
   await expect(panel).toContainText("DELETE /pets/{id}");
   await expect(panel).toContainText("New response 410");
   await expect(panel).toContainText("GET /orders");
-  await expect(page.locator(".coverage-row").filter({ hasText: "/pets/{id}" }).filter({ has: page.locator(".method-delete") })).toContainText("+15 New in the contract");
+  // A new endpoint is scored once, as never tested; a changed one adds Changed in the contract.
+  await expect(page.locator(".coverage-row").filter({ hasText: "/pets/{id}" }).filter({ has: page.locator(".method-delete") })).not.toContainText("in the contract");
+  await expect(page.locator(".coverage-row").filter({ hasText: "/pets/{id}" }).filter({ has: page.locator(".method-get") })).toContainText("+15 Changed in the contract");
+});
+
+test("matches a renamed contract by its source and offers to merge one with the same title", async ({ page }) => {
+  const contract = await (await fetch(`${TARGET_URL}/openapi.json`)).json();
+  const importFile = async (name, document) => {
+    await page.goto("/");
+    await nav(page, "API specs");
+    await page.getByRole("button", { name: "Import API" }).first().click();
+    await page.getByRole("tab", { name: "Upload file" }).click();
+    await page.locator(".import-card input[type=file]").setInputFiles({ name, mimeType: "application/json", buffer: Buffer.from(JSON.stringify(document)) });
+    await page.locator(".import-card").getByRole("button", { name: /Import API/ }).click();
+    await expect(page.locator(".overview-heading")).toBeVisible();
+  };
+
+  const renamed = structuredClone(contract);
+  renamed.info.title = "E2E Pets Renamed";
+  await importFile("pets-contract.json", renamed);
+  await expect(page.locator(".import-notice")).toContainText("Imported E2E Pets again, now titled E2E Pets Renamed");
+
+  const copy = structuredClone(renamed);
+  copy.paths["/pets"].get.responses["500"] = { description: "error" };
+  await importFile("pets-copy.json", copy);
+  await expect(page.locator(".merge-offer")).toContainText("imported from pets-contract.json");
+  await page.getByRole("button", { name: "Merge into it" }).click();
+  await expect(page.locator(".import-notice")).toContainText("1 changed endpoint");
+  await expect(page.locator(".merge-offer")).toHaveCount(0);
+
+  await nav(page, "API specs");
+  await expect(page.locator(".spec-card").filter({ hasText: "E2E Pets Renamed" })).toHaveCount(1);
 });
 
 test("deletes all saved data", async ({ page }) => {

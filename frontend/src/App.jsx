@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { categoryLabels, inputHelp, parameterLabel } from "./categories.js";
 import { cliImportMessage, cliReportRuns, matchReportApi, parseCliReport } from "./cliReport.js";
-import { reimportedApi } from "./contractDiff.js";
+import { reimportedApi, staleCheckReasons } from "./contractDiff.js";
 import CoveragePage from "./CoveragePage.jsx";
 import DuplicateNotice from "./DuplicateNotice.jsx";
 import { duplicatePairKey, filterNewIdeas, findDuplicateScenarios, findSameRequest } from "./duplicates.js";
@@ -51,13 +51,14 @@ function writeStored(key, value) {
 
 const isValidTimeLimit = (text) => /^\d+$/.test(text) && Number(text) >= 1 && Number(text) <= 120000;
 
-function reimportNotice(api) {
+function reimportNotice(api, previousTitle = api.title) {
+  const name = previousTitle === api.title ? api.title : `${previousTitle} again, now titled ${api.title}`;
   const changes = api.contractChanges;
-  if (!changes || changes.comparedAt !== api.importedAt) return `Imported ${api.title} again: the contract has not changed.`;
+  if (!changes || changes.comparedAt !== api.importedAt) return `Imported ${name}${previousTitle === api.title ? " again" : ""}: the contract has not changed.`;
   const count = (items, word) => items.length && `${items.length} ${word} ${items.length === 1 ? "endpoint" : "endpoints"}`;
   const parts = [count(changes.added, "new"), count(changes.changed, "changed"), count(changes.removed, "removed")].filter(Boolean);
   const dropped = changes.droppedChecks ? ` ${changes.droppedChecks} saved AI ${changes.droppedChecks === 1 ? "check was" : "checks were"} dropped with removed endpoints.` : "";
-  return `Imported ${api.title} again: ${parts.join(", ")}. See Contract changes on the Coverage page.${dropped}`;
+  return `Imported ${name}${previousTitle === api.title ? " again" : ""}: ${parts.join(", ")}. See Contract changes on the Coverage page.${dropped}`;
 }
 
 function runnableCheckCount(operation) {
@@ -164,6 +165,8 @@ function App() {
   const [flowSuggestions, setFlowSuggestions] = useState({});
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  // After importing an API whose title matches another saved API: { newId, oldId, oldSource }.
+  const [mergeOffer, setMergeOffer] = useState(null);
 
   const operation = overview?.operations?.[selectedOperation];
   const isDataChangingMethod = ["POST", "PUT", "PATCH", "DELETE"].includes(operation?.method);
@@ -482,15 +485,19 @@ function App() {
       const id = `${payload.title || "API"}::${source}`;
       const imported = { id, title: payload.title || "Imported API", source, importedAt: new Date().toISOString(), overview: payload, targetUrl: resolveApiTarget({ source, overview: payload }) };
       // Importing a saved API again compares the two contracts and keeps the user's checks and settings.
-      const existing = savedApis.find((api) => api.id === id);
-      const savedApi = existing ? reimportedApi(existing, imported) : imported;
-      setSavedApis((current) => [savedApi, ...current.filter((api) => api.id !== id)]);
-      setActiveApiId(id);
+      // The same URL or file name is the same API even when its title changed; the id stays, so runs stay linked.
+      const existing = savedApis.find((api) => api.id === id) ?? savedApis.find((api) => api.source === source);
+      const savedApi = existing ? { ...reimportedApi(existing, imported), id: existing.id } : imported;
+      setSavedApis((current) => [savedApi, ...current.filter((api) => api.id !== savedApi.id)]);
+      setActiveApiId(savedApi.id);
+      // The same title from another source may be a new version, or a separate copy (staging and production), so ask.
+      const sameTitle = existing ? null : savedApis.find((api) => api.title === imported.title && api.id !== id);
+      setMergeOffer(sameTitle ? { newId: id, oldId: sameTitle.id, oldSource: sameTitle.source } : null);
       setTargetUrl(savedApi.targetUrl);
       setPage("overview");
       setSelectedOperation(firstRunnableOperationIndex(savedApi.overview));
       resetRunState();
-      setNotice(existing ? reimportNotice(savedApi) : `Imported ${payload.operation_count} operations. Review the suggested scenarios below.`);
+      setNotice(existing ? reimportNotice(savedApi, existing.title) : `Imported ${payload.operation_count} operations. Review the suggested scenarios below.`);
     } catch (caught) {
       setError(caught.message || "Something went wrong while importing the specification.");
     } finally {
@@ -818,6 +825,23 @@ function App() {
     URL.revokeObjectURL(url);
   }
 
+  // Treats the API just imported as a new version of the saved API with the same title: the saved API
+  // keeps its id, runs, checks, and settings, takes the new contract and source, and shows what changed.
+  function mergeImportedApi() {
+    const newer = savedApis.find((api) => api.id === mergeOffer?.newId);
+    const older = savedApis.find((api) => api.id === mergeOffer?.oldId);
+    setMergeOffer(null);
+    if (!newer || !older) return;
+    const merged = { ...reimportedApi(older, newer), id: older.id, source: newer.source };
+    setSavedApis((current) => [merged, ...current.filter((api) => api.id !== newer.id && api.id !== older.id)]);
+    setRunHistory((current) => current.map((run) => run.apiId === newer.id ? { ...run, apiId: older.id } : run));
+    setActiveApiId(older.id);
+    setTargetUrl(merged.targetUrl);
+    setSelectedOperation(firstRunnableOperationIndex(merged.overview));
+    resetRunState();
+    setNotice(reimportNotice(merged, older.title));
+  }
+
   // Adds the checks from an `api-qa run --json` report to Run history, so CI runs count on Coverage.
   function importCliReport(text) {
     const report = parseCliReport(text);
@@ -1115,6 +1139,12 @@ function App() {
               <div><div className="page-eyebrow">API OVERVIEW</div><h1>{overview.title}</h1><p className="page-lede">Version {overview.version} <span className="dot-sep">·</span> OpenAPI {overview.openapi_version}</p></div>
             </div>
             {notice && <div className="alert success-alert import-notice" role="status"><Icon name="check" size={17} /><span>{notice}</span><button className="text-button" type="button" onClick={() => setNotice("")}>Dismiss</button></div>}
+            {mergeOffer?.newId === activeApiId && <div className="alert merge-offer" role="status">
+              <Icon name="link" size={17} />
+              <span>Another saved API is also called “{overview.title}”, imported from <code>{mergeOffer.oldSource}</code>. If this is a new version of it, merge them: the contracts are compared, and its runs, saved checks, target URL, and time limit are kept.</span>
+              <button className="secondary-button" type="button" onClick={mergeImportedApi}>Merge into it</button>
+              <button className="text-button" type="button" onClick={() => setMergeOffer(null)}>Keep separate</button>
+            </div>}
             <div className="stats-row">
               <div className="stat-card"><span className="stat-label">Endpoints</span><strong>{overview.operation_count}</strong><span className="stat-note">available to review</span></div>
               <button className="stat-card stat-card-link" type="button" onClick={openCoveragePage} title="Open Coverage & Risk"><span className="stat-label">Endpoints tested</span><strong>{apiCoverage.totals.tested} / {apiCoverage.totals.endpoints}</strong><span className="stat-note">{apiCoverage.totals.tested ? (apiCoverage.totals.failing ? <span className="history-fail">{apiCoverage.totals.failing} failing in latest run</span> : "all passing in latest run") : "run checks to start"}</span></button>
@@ -1174,6 +1204,7 @@ function App() {
                         </label>
                         <div className="scenario-content"><div className="scenario-title-row"><span className={`category-pill category-${scenario.category}`}>{categoryLabels[scenario.category] || scenario.category}</span>{isEditedScenario(scenario) && <span className="edited-pill">AI idea · edited</span>}{duplicateIndexes.has(scenario.scenarioIndex) && <span className="duplicate-pill">Possible duplicate</span>}</div><h3>{scenario.title}</h3><p>{scenario.rationale}</p>
                         {isEditedScenario(scenario) && <p className="edited-check-summary">{editedCheckSummary(scenario.request_example)}</p>}
+                        {isEditedScenario(scenario) && staleCheckReasons(scenario, operation).length > 0 && <div className="stale-check" role="note"><strong>Review against the current contract</strong><ul>{staleCheckReasons(scenario, operation).map((reason) => <li key={reason}>{reason}</li>)}</ul></div>}
                         {isEditedScenario(scenario) && editingDraft?.scenarioIndex !== scenario.scenarioIndex && <div className="card-actions"><button className="text-button" type="button" disabled={running} onClick={() => openDraftEditor(scenario.scenarioIndex)}>{draftStash[draftKey(scenario)] ? "Continue editing" : "Edit"}</button><button className="text-button danger" type="button" disabled={running} onClick={() => removeEditedCheck(scenario.scenarioIndex)}>Remove</button></div>}
                         {editingDraft?.scenarioIndex === scenario.scenarioIndex && draftEditor}
                         {result && <div className={`result-box result-${result.result.toLowerCase()}`}><div className="result-heading"><strong>{result.result}</strong>{result.response_status && <span>HTTP {result.response_status}</span>}<small>{result.duration_ms} ms</small></div>{result.result === "FAIL" && (result.too_slow || result.schema_check?.status !== "failed") && <p className="result-reason">{outcomeSummary(result)}</p>}{result.schema_check?.status === "passed" && <p className="schema-note">Body matches the documented schema.</p>}<SchemaDifferences check={result.schema_check} />{result.error && <p>{result.error}</p>}{result.response_body && <details><summary>Response details</summary><pre>{result.response_body}</pre></details>}</div>}</div>

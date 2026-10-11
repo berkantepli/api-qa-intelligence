@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { diffOverviews, operationChanges, pendingChange, reimportedApi } from "./contractDiff.js";
+import { diffOverviews, operationChanges, pendingChange, reimportedApi, staleCheckReasons, staleChecks } from "./contractDiff.js";
 
 const getPet = {
   method: "GET", path: "/pets/{id}",
@@ -97,5 +97,42 @@ describe("reimportedApi", () => {
   it("keeps the previous comparison when the contract did not change", () => {
     const api = reimportedApi({ ...existing, contractChanges: { comparedAt: "earlier" } }, { ...imported, overview: existing.overview });
     expect(api.contractChanges).toEqual({ comparedAt: "earlier" });
+  });
+});
+
+describe("staleCheckReasons", () => {
+  const edited = (example) => ({ title: "Edited", category: "negative", source: "ai_edited", request_example: { expected_status_codes: [404], ...example } });
+
+  it("names inputs, bodies, and status codes the contract no longer has", () => {
+    const check = edited({
+      omitted_parameters: [{ name: "fields", location: "query" }],
+      parameter_values: { "path:id": "x", "header:X-Old": "1" },
+      expected_status_codes: [404, 410],
+    });
+    expect(staleCheckReasons(check, v2.operations[0])).toEqual([
+      "Sends header parameter X-Old, which the contract no longer has",
+      // v2 removed the 404 response.
+      "Expects HTTP 404, which the contract does not document",
+      "Expects HTTP 410, which the contract does not document",
+    ]);
+    expect(staleCheckReasons(edited({ json_body: { name: "Rex", color: "red" }, expected_status_codes: [201] }), createPet)).toEqual([
+      "Sends body field color, which the contract no longer has",
+    ]);
+    expect(staleCheckReasons(edited({ json_body: { name: "Rex" } }), getPet)).toEqual(["Sends a request body, but the endpoint no longer takes one"]);
+  });
+
+  it("accepts ranges and default responses, and checks that still fit", () => {
+    expect(staleCheckReasons(edited({ expected_status_codes: [418] }), { ...getPet, response_codes: ["4XX"] })).toEqual([]);
+    expect(staleCheckReasons(edited({ expected_status_codes: [418] }), { ...getPet, response_codes: ["200", "DEFAULT"] })).toEqual([]);
+    expect(staleCheckReasons(edited({ expected_status_codes: [404] }), getPet)).toEqual([]);
+  });
+
+  it("lists only saved AI checks that need a review", () => {
+    const overview = { operations: [{ ...getPet, scenarios: [
+      { title: "Contract", source: "contract", request_example: { expected_status_codes: [500] } },
+      edited({ expected_status_codes: [500] }),
+      edited({ expected_status_codes: [404] }),
+    ] }] };
+    expect(staleChecks(overview)).toEqual([{ key: "GET /pets/{id}", title: "Edited", reasons: ["Expects HTTP 500, which the contract does not document"] }]);
   });
 });
