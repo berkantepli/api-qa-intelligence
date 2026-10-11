@@ -33,6 +33,13 @@ describe("scoreEndpoint", () => {
   });
 });
 
+describe("contract changes", () => {
+  it("adds points for a new or changed endpoint that has not run since", () => {
+    expect(scoreEndpoint(endpoint({ contractChange: { type: "added" } })).factors).toEqual([{ id: "contract-changed", kind: "evidence", points: 15, label: "New in the contract" }]);
+    expect(scoreEndpoint(endpoint({ contractChange: { type: "changed" } })).factors[0].label).toBe("Changed in the contract");
+  });
+});
+
 describe("riskLevel", () => {
   it("is high from 50 and medium from 25", () => {
     expect([49, 50, 24, 25].map((score) => riskLevel(score).id)).toEqual(["medium", "high", "low", "medium"]);

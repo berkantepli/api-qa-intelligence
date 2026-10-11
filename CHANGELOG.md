@@ -2,6 +2,17 @@
 
 The version lives in the [`VERSION`](VERSION) file and follows [Semantic Versioning](https://semver.org/). Before 1.0.0, a new feature raises the minor number (0.**x**.0) and a fix or visual change raises the patch number (0.x.**y**).
 
+## 1.5.0 — 2026-10-11
+
+### Contract changes
+- Importing a saved API again (same title and the same URL or file name) compares the two contracts. The overview says how many endpoints are new, changed, or removed.
+- **Contract changes** on **Coverage & Risk** lists them with each change as a sentence: new or removed parameters and body fields, required and credential changes, schema rules such as `maxLength` or `enum`, request body changes, new or removed response codes, and changed response schemas.
+- A new or changed endpoint adds +15 to its risk score (*New in the contract* or *Changed in the contract*) until it runs again; the **Changed** filter lists those endpoints. Both reports include the comparison.
+
+### Fixes
+- Importing a saved API again no longer loses your edited AI checks, AI ideas, target URL, and response time limit. Checks on endpoints the new contract removed are dropped and counted.
+- The import message is shown on the overview, where the app opens after an import.
+
 ## 1.4.0 — 2026-10-11
 
 ### CI runs on Coverage
