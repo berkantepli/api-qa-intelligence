@@ -2,7 +2,7 @@
 
 The version lives in the [`VERSION`](VERSION) file and follows [Semantic Versioning](https://semver.org/). Before 1.0.0, a new feature raises the minor number (0.**x**.0) and a fix or visual change raises the patch number (0.x.**y**).
 
-## Unreleased
+## 1.3.0 — 2026-10-11
 
 ### Flows
 - A new **Flows** page, next to Coverage in the sidebar, suggests multi-step checks that follow one record through its lifecycle: create it, read it back, update it, delete it, and confirm it is gone. A created record's id is passed to the following requests.
