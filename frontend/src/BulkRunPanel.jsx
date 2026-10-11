@@ -13,7 +13,7 @@ function EndpointList({ items, renderNote }) {
 }
 
 // Plan and progress for running the checks of every endpoint in the current Coverage filter.
-export default function BulkRunPanel({ overview, endpoints, filterLabel, inputsByOperation, filesByOperation, targetUrl, bulkRun, onRun, onStop, onClose, onOpenEndpoint }) {
+export default function BulkRunPanel({ overview, endpoints, filterLabel, inputsByOperation, filesByOperation, targetUrl, targetProblem, bulkRun, onRun, onStop, onClose, onOpenEndpoint }) {
   const [mode, setMode] = useState("all");
   const [includeWrites, setIncludeWrites] = useState(false);
   // Running data-changing checks needs a second, explicit confirmation.
@@ -78,12 +78,13 @@ export default function BulkRunPanel({ overview, endpoints, filterLabel, inputsB
     </details>}
     {plan.noChecks.length > 0 && <small className="bulk-group-note">{plural(plan.noChecks.length, "endpoint")} without a runnable check {plan.noChecks.length === 1 ? "is" : "are"} left out.</small>}
 
+    {targetProblem && <div className="alert error-alert" role="alert"><Icon name="close" size={16} /><span>{targetProblem} Fix the Target API base URL on the API overview page before running checks.</span></div>}
     {confirmingWrites && <div className="execution-confirmation" role="alert">
       <div><strong>This run will change data.</strong><p>{plural(plan.writeCount, "check")} on {plural(writeEndpoints.length, "data-changing endpoint")} ({[...new Set(writeEndpoints.map((item) => item.method))].join(", ")}) will be sent to <code>{targetUrl}</code>. They can create, update, or delete data there. Use a test environment, not production.</p></div>
       <div className="execution-confirmation-actions"><button className="secondary-button" type="button" onClick={() => setConfirmingWrites(false)}>Cancel</button><button className="primary-button" type="button" onClick={() => onRun(plan)}>Confirm and run</button></div>
     </div>}
     <div className="bulk-run-actions">
-      <button className="primary-button" type="button" disabled={!plan.checkCount || !targetUrl || confirmingWrites} onClick={start}>
+      <button className="primary-button" type="button" disabled={!plan.checkCount || Boolean(targetProblem) || confirmingWrites} onClick={start}>
         <Icon name="run" size={14} />{plan.checkCount ? `Run ${plural(plan.checkCount, "check")} on ${plural(plan.ready.length, "endpoint")}` : "Nothing ready to run"}
       </button>
       <button className="secondary-button" type="button" onClick={onClose}>Cancel</button>
