@@ -9,7 +9,8 @@ The version lives in the [`VERSION`](VERSION) file and follows [Semantic Version
 - Requests and responses are judged in opposite directions, and a renamed path parameter counts as the same endpoint.
 - Each endpoint with breaking changes or warnings lists the checks worth running again.
 - `--markdown` writes a report for a pull request comment (`-` for standard output) and `--json` the full result; the command exits 1 on breaking changes (`--fail-on warning|never` changes that). A GitHub Actions example comments the report on pull requests.
-- `POST /api/v1/specs/diff` runs the same comparison on two API overviews.
+- `POST /api/v1/specs/diff` runs the same comparison on two API overviews and also returns the report as Markdown.
+- **Contract changes** on Coverage & Risk classifies each change of a new import as Breaking, Warning, or Safe, shows the totals and the checks to run again per endpoint, and **Copy as Markdown** copies the report. Changes saved by earlier versions keep their plain list.
 
 ## 1.7.0 — 2026-10-12
 
