@@ -9,7 +9,7 @@ from pydantic import BaseModel
 
 from app.domain.contract_diff import ContractDiff, diff_contracts
 from app.domain.documents import UNEXPECTED_SHAPE, DocumentTooComplexError, parse_document
-from app.domain.network import ensure_safe_target_host, request_error_reason
+from app.domain.network import ensure_safe_target_host, request_error_reason, target_client
 from app.domain.openapi import ApiOverview, OpenApiDocumentError, SpecUrlRequest, summarize_openapi
 
 router = APIRouter(prefix="/api/v1/specs", tags=["API specifications"])
@@ -42,7 +42,7 @@ async def import_specification_from_url(payload: SpecUrlRequest) -> ApiOverview:
 
     try:
         # The read timeout applies per chunk; the overall deadline also stops a server that trickles bytes.
-        async with asyncio.timeout(SPEC_FETCH_TIMEOUT_SECONDS), httpx.AsyncClient(
+        async with asyncio.timeout(SPEC_FETCH_TIMEOUT_SECONDS), target_client(
             timeout=httpx.Timeout(SPEC_FETCH_TIMEOUT_SECONDS, connect=4), follow_redirects=False
         ) as client:
             async with client.stream("GET", url) as response:

@@ -13,7 +13,7 @@ from fastapi import HTTPException
 from pydantic import AnyHttpUrl, BaseModel, Field, field_validator
 
 from app.domain.evidence import redact_headers, redact_text, redact_value, sanitize_url
-from app.domain.network import parse_target_base_url, request_error_reason
+from app.domain.network import parse_target_base_url, request_error_reason, target_client
 from app.domain.schema_check import SchemaCheck, check_response
 
 REQUEST_TIMEOUT_SECONDS = 15
@@ -77,6 +77,9 @@ class ScenarioExecutionRequest(BaseModel):
         blocked = [name for name in values if name.lower() in BLOCKED_HEADERS]
         if blocked:
             raise ValueError(f"These headers cannot be overridden: {', '.join(blocked)}.")
+        broken = [name for name, value in values.items() if any(char in f"{name}{value}" for char in "\r\n\0")]
+        if broken:
+            raise ValueError(f"Header names and values cannot contain line breaks: {', '.join(repr(name) for name in broken)}.")
         return values
 
     @property

@@ -7,7 +7,12 @@ from fastapi import APIRouter
 from pydantic import AnyHttpUrl, BaseModel
 
 from app.domain.evidence import sanitize_url
-from app.domain.network import HostResolutionError, parse_target_base_url, request_error_reason
+from app.domain.network import (
+    HostResolutionError,
+    parse_target_base_url,
+    request_error_reason,
+    target_client,
+)
 
 router = APIRouter(prefix="/api/v1/targets", tags=["Scenario execution"])
 CHECK_TIMEOUT_SECONDS = 5
@@ -50,7 +55,7 @@ async def check_target(payload: TargetCheckRequest) -> TargetCheckResult:
     url = sanitize_url(str(base))
     method: Literal["HEAD", "GET"] = "HEAD"
     try:
-        async with asyncio.timeout(CHECK_TIMEOUT_SECONDS), httpx.AsyncClient(
+        async with asyncio.timeout(CHECK_TIMEOUT_SECONDS), target_client(
             timeout=httpx.Timeout(CHECK_TIMEOUT_SECONDS, connect=3), follow_redirects=False
         ) as client:
             response = await client.head(base)
