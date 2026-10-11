@@ -51,7 +51,7 @@ describe("computeCoverage", () => {
   });
 
   it("summarizes totals", () => {
-    expect(coverage.totals).toEqual({ endpoints: 4, tested: 2, coveragePercent: 50, failing: 1, untestedWrites: 2, flaky: 0, stale: 0, highRisk: 1, withGaps: 0, gaps: 0, checksExecuted: 4 });
+    expect(coverage.totals).toEqual({ endpoints: 4, tested: 2, coveragePercent: 50, failing: 1, untestedWrites: 2, flaky: 0, stale: 0, highRisk: 1, changedNotRun: 0, withGaps: 0, gaps: 0, checksExecuted: 4 });
   });
 
   it("shows each category by its checks' latest outcome", () => {
@@ -59,6 +59,18 @@ describe("computeCoverage", () => {
     expect(states).toEqual({ happy_path: "passing", negative: "passing", boundary: "none", invalid_value: "none", security_minded: "none" });
     expect(byKey["GET /pets/{id}"].categories[0].state).toBe("failing");
     expect(byKey["DELETE /pets/{id}"].categories[0].state).toBe("not_run");
+  });
+
+  it("raises the score of endpoints changed in the contract until they run again", () => {
+    const changes = { comparedAt: "2026-10-02T12:00:00Z", fromVersion: "1", toVersion: "2", added: ["DELETE /pets/{id}"], removed: [], changed: [{ key: "GET /pets", changes: ["New response 404"] }] };
+    const changed = computeCoverage(overview, runs, Date.parse("2026-10-04T10:00:00Z"), changes);
+    const keyed = Object.fromEntries(changed.endpoints.map((endpoint) => [endpoint.key, endpoint]));
+
+    expect(keyed["DELETE /pets/{id}"].risk.factors.map((factor) => factor.label)).toContain("New in the contract");
+    // GET /pets last ran on 2026-10-02 10:00, before the change.
+    expect(keyed["GET /pets"].contractChange).toEqual({ type: "changed", changes: ["New response 404"] });
+    expect(changed.totals.changedNotRun).toBe(2);
+    expect(coverageReportMarkdown({ title: "Pets" }, changed)).toContain("## Contract changes since the previous import (1 → 2)");
   });
 
   it("handles a missing overview", () => {

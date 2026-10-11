@@ -211,6 +211,20 @@ h1, h2, h3, p { margin-top: 0; }
 .risk-score-high { background: var(--red-soft); color: var(--red); }
 .risk-score-medium { background: #fff3db; color: #9a6b19; }
 .risk-score-low { background: var(--surface-soft); color: var(--muted); }
+.coverage-risk-contract-changed { background: #fff3db; color: #9a6b19; }
+.import-notice span { flex: 1; }
+.contract-changes { margin-top: 14px; padding: 13px 16px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--muted); font-size: 12px; }
+.contract-changes summary { color: var(--text); cursor: pointer; font-size: 14px; font-weight: 700; }
+.contract-changes summary small { margin-left: 6px; color: var(--muted); font-size: 12px; font-weight: 400; }
+.contract-changes > ul { display: grid; gap: 7px; margin: 12px 0 0; padding: 0; list-style: none; }
+.contract-changes > ul > li { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.contract-changes > ul > li > ul { flex-basis: 100%; margin: 0 0 2px 70px; padding-left: 16px; color: var(--text); }
+.contract-changes code { color: var(--text); font-weight: 600; }
+.contract-changes p { margin: 10px 0 0; }
+.contract-changes b { min-width: 62px; padding: 2px 7px; border-radius: 4px; font-size: 11px; text-align: center; }
+.contract-change-new { background: var(--accent-soft); color: var(--accent); }
+.contract-change-changed { background: #fff3db; color: #9a6b19; }
+.contract-change-removed { background: var(--red-soft); color: var(--red); }
 .run-source-badge { display: inline-block; margin-left: 8px; padding: 1px 6px; border-radius: 4px; background: var(--accent-soft); color: var(--accent); font-family: inherit; font-size: 10px; font-style: normal; font-weight: 700; letter-spacing: .04em; vertical-align: middle; }
 .coverage-gaps { margin: -6px 18px 12px 94px; color: var(--muted); font-size: 12px; }
 .coverage-gaps summary { width: fit-content; color: var(--accent); cursor: pointer; font-weight: 600; }
@@ -674,7 +688,7 @@ h1, h2, h3, p { margin-top: 0; }
 :root[data-theme="dark"] .duplicate-notice-heading span, :root[data-theme="dark"] .duplicate-reason { color: #c9b28a; }
 :root[data-theme="dark"] .duplicate-notice li { border-color: #4a3a22; }
 :root[data-theme="dark"] .coverage-warning, :root[data-theme="dark"] .run-footer > span.run-footer-warning, :root[data-theme="dark"] .request-input-help.request-input-required, :root[data-theme="dark"] .connection-warning:not(.sidebar-status) { color: #eac578; }
-:root[data-theme="dark"] .coverage-risk-untested-write, :root[data-theme="dark"] .coverage-risk-untested, :root[data-theme="dark"] .risk-score-medium { background: #3a301c; color: #eac578; }
+:root[data-theme="dark"] .coverage-risk-untested-write, :root[data-theme="dark"] .coverage-risk-untested, :root[data-theme="dark"] .risk-score-medium, :root[data-theme="dark"] .coverage-risk-contract-changed, :root[data-theme="dark"] .contract-change-changed { background: #3a301c; color: #eac578; }
 :root[data-theme="dark"] .bulk-group-input > strong { color: #eac578; }
 :root[data-theme="dark"] .scenario-card.checked { border-color: #48588b; background: #1a2030; }
 :root[data-theme="dark"] .custom-check { border-color: #59616e; background: #171a21; }
@@ -756,6 +770,7 @@ h1, h2, h3, p { margin-top: 0; }
   .coverage-row .history-chevron { grid-column: 3; grid-row: 1; }
   .coverage-categories { margin-top: 0; }
   .coverage-gaps { margin: 0 12px 12px; overflow-x: auto; }
+  .contract-changes > ul > li > ul { margin-left: 0; }
   .ai-suggestions-heading { flex-direction: column; align-items: stretch; }
   .ai-suggestions-heading .secondary-button { width: 100%; }
   .history-group-toggle { flex-wrap: wrap; }

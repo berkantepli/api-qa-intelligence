@@ -1,5 +1,6 @@
 // Derives per-endpoint test coverage and risk signals from a saved API and its Run history.
 import { categoryLabels } from "./categories.js";
+import { pendingChange } from "./contractDiff.js";
 import { computeGaps } from "./coverageGaps.js";
 import { RISK_LEVELS, scoreEndpoint } from "./riskScore.js";
 import { apiIdsByTitle, runApiKey, summarizeResults } from "./runDetail.js";
@@ -60,7 +61,8 @@ function categoryCoverage(runnable, outcomes) {
   });
 }
 
-export function computeCoverage(overview, apiRuns = [], now = Date.now()) {
+// `contractChanges` is the saved API's comparison with its previous import, if any.
+export function computeCoverage(overview, apiRuns = [], now = Date.now(), contractChanges = null) {
   const endpoints = (overview?.operations ?? []).map((operation, operationIndex) => {
     const key = endpointKey(operation);
     const runs = apiRuns.filter((run) => run.endpoint === key).sort(byNewest);
@@ -88,9 +90,10 @@ export function computeCoverage(overview, apiRuns = [], now = Date.now()) {
     if (stale) risks.push({ id: "stale", label: `Not run in ${STALE_AFTER_DAYS}+ days` });
 
     const coveredChecks = runnable.filter((scenario) => executedTitles.has(scenario.title)).length;
+    const contractChange = pendingChange(contractChanges, key, latest?.createdAt);
     const risk = scoreEndpoint({
       method: operation.method, path: operation.path, status, needsAuth,
-      riskIds: risks.map((item) => item.id), coveredChecks, runnableChecks: runnable.length,
+      riskIds: risks.map((item) => item.id), coveredChecks, runnableChecks: runnable.length, contractChange,
     });
 
     return {
@@ -110,6 +113,7 @@ export function computeCoverage(overview, apiRuns = [], now = Date.now()) {
       stale,
       risks,
       risk,
+      contractChange,
       gaps: computeGaps(operation, runs),
     };
   });
@@ -123,6 +127,7 @@ export function computeCoverage(overview, apiRuns = [], now = Date.now()) {
   const tested = endpoints.filter((endpoint) => endpoint.status !== "untested").length;
   return {
     endpoints,
+    contractChanges,
     totals: {
       endpoints: endpoints.length,
       tested,
@@ -132,6 +137,7 @@ export function computeCoverage(overview, apiRuns = [], now = Date.now()) {
       flaky: endpoints.filter((endpoint) => endpoint.flakyChecks.length).length,
       stale: endpoints.filter((endpoint) => endpoint.stale).length,
       highRisk: endpoints.filter((endpoint) => endpoint.risk.level === "high").length,
+      changedNotRun: endpoints.filter((endpoint) => endpoint.contractChange).length,
       withGaps: endpoints.filter((endpoint) => endpoint.gaps.gaps.length).length,
       gaps: endpoints.reduce((sum, endpoint) => sum + endpoint.gaps.gaps.length, 0),
       checksExecuted: apiRuns.reduce((sum, run) => sum + (run.results?.length ?? 0), 0),
@@ -155,6 +161,14 @@ export function coverageReportJson(overview, coverage, generatedAt = new Date())
     api: { title: overview.title, version: overview.version },
     generated_at: generatedAt.toISOString(),
     totals: coverage.totals,
+    contract_changes: coverage.contractChanges ? {
+      compared_at: coverage.contractChanges.comparedAt,
+      from_version: coverage.contractChanges.fromVersion,
+      to_version: coverage.contractChanges.toVersion,
+      added: coverage.contractChanges.added,
+      removed: coverage.contractChanges.removed,
+      changed: coverage.contractChanges.changed,
+    } : null,
     endpoints: coverage.endpoints.map((endpoint) => ({
       method: endpoint.method,
       path: endpoint.path,
@@ -210,6 +224,7 @@ export function coverageReportMarkdown(overview, coverage, generatedAt = new Dat
       cell(endpoint.risk.factors.map((factor) => `+${factor.points} ${factor.label}`).join(", ") || "–"),
     ].join(" | ")).map((row) => `| ${row} |`),
     "",
+    ...contractChangeLines(coverage.contractChanges),
     "## Coverage gaps",
     "",
     ...(totals.gaps ? coverage.endpoints.filter((endpoint) => endpoint.gaps.gaps.length).flatMap((endpoint) => [
@@ -220,4 +235,19 @@ export function coverageReportMarkdown(overview, coverage, generatedAt = new Dat
     ]) : ["No gaps: every input and documented response code is covered by a check that has run.", ""]),
   ];
   return lines.join("\n");
+}
+
+function contractChangeLines(changes) {
+  if (!changes) return [];
+  const version = changes.fromVersion !== changes.toVersion ? ` (${changes.fromVersion} → ${changes.toVersion})` : "";
+  return [
+    `## Contract changes since the previous import${version}`,
+    "",
+    `Compared ${changes.comparedAt}.`,
+    "",
+    ...changes.added.map((key) => `- New: \`${key}\``),
+    ...changes.removed.map((key) => `- Removed: \`${key}\``),
+    ...changes.changed.flatMap((item) => [`- Changed: \`${item.key}\``, ...item.changes.map((change) => `  - ${change}`)]),
+    "",
+  ];
 }

@@ -207,6 +207,37 @@ test("imports a CLI report so CI runs count on Coverage", async ({ page }) => {
   await expect(page.locator(".history-run").filter({ hasText: "GET /pets" }).locator(".run-source-badge")).toHaveText("CI");
 });
 
+test("shows what changed when a contract is imported again", async ({ page }) => {
+  const contract = await (await fetch(`${TARGET_URL}/openapi.json`)).json();
+  const upload = (document) => ({ name: "pets-contract.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(document)) });
+  const importFile = async (document) => {
+    await page.goto("/");
+    await nav(page, "API specs");
+    await page.getByRole("button", { name: "Import API" }).first().click();
+    await page.getByRole("tab", { name: "Upload file" }).click();
+    await page.locator(".import-card input[type=file]").setInputFiles(upload(document));
+    await page.locator(".import-card").getByRole("button", { name: /Import API/ }).click();
+    await expect(page.locator(".overview-heading")).toBeVisible();
+  };
+
+  await importFile(contract);
+  const changed = structuredClone(contract);
+  changed.info.version = "1.1.0";
+  changed.paths["/pets/{id}"].get.responses["410"] = { description: "gone" };
+  delete changed.paths["/orders"];
+  changed.paths["/pets/{id}"].delete = { summary: "Delete a pet", parameters: changed.paths["/pets/{id}"].get.parameters, responses: { 204: { description: "deleted" } } };
+  await importFile(changed);
+
+  await expect(page.locator(".import-notice")).toContainText("1 new endpoint, 1 changed endpoint, 1 removed endpoint");
+  await nav(page, "Coverage");
+  const panel = page.locator(".contract-changes");
+  await expect(panel).toContainText("1.0.0 → 1.1.0");
+  await expect(panel).toContainText("DELETE /pets/{id}");
+  await expect(panel).toContainText("New response 410");
+  await expect(panel).toContainText("GET /orders");
+  await expect(page.locator(".coverage-row").filter({ hasText: "/pets/{id}" }).filter({ has: page.locator(".method-delete") })).toContainText("+15 New in the contract");
+});
+
 test("deletes all saved data", async ({ page }) => {
   await page.goto("/");
   await nav(page, "Settings");

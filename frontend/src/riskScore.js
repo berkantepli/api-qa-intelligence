@@ -13,6 +13,7 @@ export const RISK_RULES = [
   { id: "writes", kind: "impact", points: 15, label: "Changes data", description: "POST, PUT, or PATCH endpoint." },
   { id: "auth-required", kind: "impact", points: 10, label: "Requires authentication", description: "The contract documents a credential for it." },
   { id: "sensitive", kind: "impact", points: 10, label: "Sensitive area", description: "Its path names accounts, users, orders, payments, or access control." },
+  { id: "contract-changed", kind: "evidence", points: 15, label: "Changed in the contract", description: "New or changed since the previous import, and not run since." },
   { id: "failing", kind: "evidence", points: 35, label: "Failing in latest run", description: "A check failed or errored in its latest run." },
   { id: "flaky", kind: "evidence", points: 15, label: "Flaky results", description: "A check's outcome flipped at least twice in its last five results." },
   { id: "untested", kind: "evidence", points: 15, label: "Never tested", description: "No check has run against it." },
@@ -39,7 +40,7 @@ export function riskLevel(score) {
 }
 
 // `endpoint` carries what computeCoverage knows: method, path, status, needsAuth, risk flag ids,
-// and covered/runnable check counts.
+// covered/runnable check counts, and a contract change that has not run since (contractChange).
 export function scoreEndpoint(endpoint) {
   const factors = [];
   const add = (id, label) => factors.push({ id, kind: RULES[id].kind, points: RULES[id].points, label: label ?? RULES[id].label });
@@ -51,6 +52,7 @@ export function scoreEndpoint(endpoint) {
   const word = sensitivePathWord(endpoint.path);
   if (word) add("sensitive", `Sensitive area: ${word}`);
 
+  if (endpoint.contractChange) add("contract-changed", endpoint.contractChange.type === "added" ? "New in the contract" : "Changed in the contract");
   if (endpoint.status === "failing") add("failing");
   if (flags.has("flaky")) add("flaky");
   if (endpoint.status === "untested") add("untested");

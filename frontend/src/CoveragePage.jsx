@@ -11,6 +11,7 @@ const filters = [
   { id: "all", label: "All", matches: () => true },
   { id: "attention", label: "Needs attention", matches: (endpoint) => endpoint.risks.length > 0 },
   { id: "high", label: "High risk", matches: (endpoint) => endpoint.risk.level === "high", optional: true },
+  { id: "changed", label: "Changed", matches: (endpoint) => Boolean(endpoint.contractChange), optional: true },
   { id: "gaps", label: "Has gaps", matches: (endpoint) => endpoint.gaps.gaps.length > 0, optional: true },
   { id: "failing", label: "Failing", matches: (endpoint) => endpoint.status === "failing" },
   { id: "untested", label: "Not tested", matches: (endpoint) => endpoint.status === "untested" },
@@ -50,6 +51,25 @@ function GapDetails({ endpoint }) {
   </details>;
 }
 
+function ContractChanges({ changes, endpoints }) {
+  if (!changes) return null;
+  const pending = new Set(endpoints.filter((endpoint) => endpoint.contractChange).map((endpoint) => endpoint.key));
+  const version = changes.fromVersion !== changes.toVersion ? ` · ${changes.fromVersion} → ${changes.toVersion}` : "";
+  const status = (key) => pending.has(key) ? <i className="coverage-risk coverage-risk-contract-changed">Not run since</i> : <i className="coverage-category coverage-category-passing">Run since</i>;
+  return <details className="contract-changes" open={pending.size > 0}>
+    <summary>Contract changes since the previous import<small>{version} · imported {new Date(changes.comparedAt).toLocaleString()}</small></summary>
+    <ul>
+      {changes.added.map((key) => <li key={`added-${key}`}><b className="contract-change-new">New</b><code>{key}</code>{status(key)}</li>)}
+      {changes.changed.map((item) => <li key={`changed-${item.key}`}><b className="contract-change-changed">Changed</b><code>{item.key}</code>{status(item.key)}
+        <ul>{item.changes.map((change) => <li key={change}>{change}</li>)}</ul>
+      </li>)}
+      {changes.removed.map((key) => <li key={`removed-${key}`}><b className="contract-change-removed">Removed</b><code>{key}</code></li>)}
+    </ul>
+    {changes.droppedChecks > 0 && <p>{changes.droppedChecks} saved AI {changes.droppedChecks === 1 ? "check was" : "checks were"} dropped with the removed endpoints.</p>}
+    <p>New and changed endpoints add +15 to their risk score until they run again. Edited AI checks are kept on changed endpoints; review them against the new contract.</p>
+  </details>;
+}
+
 const categoryShort = { happy_path: "Happy", negative: "Negative", boundary: "Boundary", invalid_value: "Invalid", security_minded: "Auth" };
 
 function download(content, fileName, type) {
@@ -63,7 +83,7 @@ function download(content, fileName, type) {
 
 export default function CoveragePage({
   overview, apiRuns, onOpenEndpoint, onGoToSpecs,
-  inputsByOperation, filesByOperation, targetUrl, targetProblem, bulkRun, onBulkRun, onStopBulkRun, onDismissBulkRun, onImportCliReport,
+  inputsByOperation, filesByOperation, targetUrl, targetProblem, bulkRun, onBulkRun, onStopBulkRun, onDismissBulkRun, onImportCliReport, contractChanges,
 }) {
   const [filterId, setFilterId] = useState("all");
   const [importMessage, setImportMessage] = useState(null);
@@ -89,11 +109,11 @@ export default function CoveragePage({
     </section>;
   }
 
-  const { endpoints, totals } = computeCoverage(overview, apiRuns);
+  const { endpoints, totals } = computeCoverage(overview, apiRuns, Date.now(), contractChanges);
   const filter = filters.find((item) => item.id === filterId) ?? filters[0];
   const visible = endpoints.filter(filter.matches);
   const exportReport = (format) => {
-    const coverage = { endpoints, totals };
+    const coverage = { endpoints, totals, contractChanges };
     if (format === "md") download(coverageReportMarkdown(overview, coverage), coverageReportFileName(overview.title, "md"), "text/markdown");
     else download(JSON.stringify(coverageReportJson(overview, coverage), null, 2), coverageReportFileName(overview.title, "json"), "application/json");
   };
@@ -120,6 +140,8 @@ export default function CoveragePage({
       <div className="stat-card"><span className="stat-label">Untested write endpoints</span><strong className={totals.untestedWrites ? "coverage-warning" : undefined}>{totals.untestedWrites}</strong><span className="stat-note">POST, PUT, PATCH, DELETE</span></div>
       <button className="stat-card stat-card-link" type="button" onClick={() => setFilterId("high")} title="Show high-risk endpoints"><span className="stat-label">High-risk endpoints</span><strong className={totals.highRisk ? "history-fail" : undefined}>{totals.highRisk}</strong><span className="stat-note">risk score {RISK_LEVELS[0].min} or more</span></button>
     </div>
+
+    <ContractChanges changes={contractChanges} endpoints={endpoints} />
 
     {(planning || bulkRun) && <BulkRunPanel
       overview={overview}

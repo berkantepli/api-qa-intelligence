@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { categoryLabels, inputHelp, parameterLabel } from "./categories.js";
 import { cliImportMessage, cliReportRuns, matchReportApi, parseCliReport } from "./cliReport.js";
+import { reimportedApi } from "./contractDiff.js";
 import CoveragePage from "./CoveragePage.jsx";
 import DuplicateNotice from "./DuplicateNotice.jsx";
 import { duplicatePairKey, filterNewIdeas, findDuplicateScenarios, findSameRequest } from "./duplicates.js";
@@ -49,6 +50,15 @@ function writeStored(key, value) {
 }
 
 const isValidTimeLimit = (text) => /^\d+$/.test(text) && Number(text) >= 1 && Number(text) <= 120000;
+
+function reimportNotice(api) {
+  const changes = api.contractChanges;
+  if (!changes || changes.comparedAt !== api.importedAt) return `Imported ${api.title} again: the contract has not changed.`;
+  const count = (items, word) => items.length && `${items.length} ${word} ${items.length === 1 ? "endpoint" : "endpoints"}`;
+  const parts = [count(changes.added, "new"), count(changes.changed, "changed"), count(changes.removed, "removed")].filter(Boolean);
+  const dropped = changes.droppedChecks ? ` ${changes.droppedChecks} saved AI ${changes.droppedChecks === 1 ? "check was" : "checks were"} dropped with removed endpoints.` : "";
+  return `Imported ${api.title} again: ${parts.join(", ")}. See Contract changes on the Coverage page.${dropped}`;
+}
 
 function runnableCheckCount(operation) {
   return operation.scenarios?.filter((scenario) => scenario.request_example).length ?? 0;
@@ -100,7 +110,8 @@ function App() {
   const [theme, setTheme] = useState(() => localStorage.getItem(STORAGE_KEYS.theme) || "dark");
   const [savedApis, setSavedApis] = useState(() => readStoredJson(STORAGE_KEYS.savedApis, []));
   const [activeApiId, setActiveApiId] = useState(() => localStorage.getItem(STORAGE_KEYS.activeApi) || "");
-  const overview = savedApis.find((api) => api.id === activeApiId)?.overview ?? null;
+  const activeApi = savedApis.find((api) => api.id === activeApiId);
+  const overview = activeApi?.overview ?? null;
   const [page, setPage] = useState(() => savedApis.length ? "specs" : "import");
   const [runHistory, setRunHistory] = useState(() => readStoredJson(STORAGE_KEYS.runHistory, []));
   const [selectedRunId, setSelectedRunId] = useState(null);
@@ -205,7 +216,7 @@ function App() {
   // Checks need a usable target; a blocked one (for example a private address) would only fail on the server.
   const targetProblem = targetUrlProblem(targetUrl)
     || (connection.status === "blocked" && connection.url === targetUrl.trim() ? connection.message : "");
-  const apiCoverage = useMemo(() => computeCoverage(overview, runsForApi(runHistory, activeApiId, savedApis)), [overview, runHistory, activeApiId, savedApis]);
+  const apiCoverage = useMemo(() => computeCoverage(overview, runsForApi(runHistory, activeApiId, savedApis), Date.now(), activeApi?.contractChanges), [overview, runHistory, activeApiId, savedApis, activeApi]);
   const endpointStatus = useMemo(() => new Map(apiCoverage.endpoints.map((endpoint) => [endpoint.key, endpoint.status])), [apiCoverage]);
   const allSelected = availableScenarios.length > 0 && selectedScenarios.length === availableScenarios.length;
   // How many runnable checks can run with the request details entered so far.
@@ -469,15 +480,17 @@ function App() {
       }
       const source = fromUrl ? urlToImport.trim() : file.name;
       const id = `${payload.title || "API"}::${source}`;
-      const importedTargetUrl = resolveApiTarget({ source, overview: payload });
-      const savedApi = { id, title: payload.title || "Imported API", source, importedAt: new Date().toISOString(), overview: payload, targetUrl: importedTargetUrl };
+      const imported = { id, title: payload.title || "Imported API", source, importedAt: new Date().toISOString(), overview: payload, targetUrl: resolveApiTarget({ source, overview: payload }) };
+      // Importing a saved API again compares the two contracts and keeps the user's checks and settings.
+      const existing = savedApis.find((api) => api.id === id);
+      const savedApi = existing ? reimportedApi(existing, imported) : imported;
       setSavedApis((current) => [savedApi, ...current.filter((api) => api.id !== id)]);
       setActiveApiId(id);
-      setTargetUrl(importedTargetUrl);
+      setTargetUrl(savedApi.targetUrl);
       setPage("overview");
-      setSelectedOperation(firstRunnableOperationIndex(payload));
+      setSelectedOperation(firstRunnableOperationIndex(savedApi.overview));
       resetRunState();
-      setNotice(`Imported ${payload.operation_count} operations. Review the suggested scenarios below.`);
+      setNotice(existing ? reimportNotice(savedApi) : `Imported ${payload.operation_count} operations. Review the suggested scenarios below.`);
     } catch (caught) {
       setError(caught.message || "Something went wrong while importing the specification.");
     } finally {
@@ -1013,6 +1026,7 @@ function App() {
             onStopBulkRun={() => { bulkStopRequested.current = true; }}
             onDismissBulkRun={() => setBulkRun(null)}
             onImportCliReport={importCliReport}
+            contractChanges={activeApi?.contractChanges}
           />
         ) : page === "flows" ? (
           <FlowsPage
@@ -1045,7 +1059,7 @@ function App() {
         ) : page === "specs" ? (
           <section className="specs-page">
             <div className="specs-heading"><div><div className="page-eyebrow">YOUR API QA WORKSPACE</div><h1>API specs</h1><p className="page-lede">Your imported APIs stay here so you can return to them anytime.</p></div><button className="primary-button" onClick={openImportPage}><Icon name="upload" size={15} /> Import API</button></div>
-            {savedApis.length ? <div className="specs-list">{savedApis.map((api) => ({ api, coverage: computeCoverage(api.overview, runsForApi(runHistory, api.id, savedApis)).totals })).map(({ api, coverage }) => <article className="spec-card" key={api.id}>
+            {savedApis.length ? <div className="specs-list">{savedApis.map((api) => ({ api, coverage: computeCoverage(api.overview, runsForApi(runHistory, api.id, savedApis), Date.now(), api.contractChanges).totals })).map(({ api, coverage }) => <article className="spec-card" key={api.id}>
               <button className="spec-card-open" type="button" onClick={() => openSavedApi(api)}><CoverageRing totals={coverage} /><span className="spec-card-copy"><strong>{api.title}</strong><small>Version {api.overview.version} · OpenAPI {api.overview.openapi_version}</small><small>{coverage.tested} of {api.overview.operation_count} endpoints tested{coverage.failing ? <> · <span className="history-fail">{coverage.failing} failing</span></> : null} · Imported {new Date(api.importedAt).toLocaleDateString()}</small></span><Icon name="chevron" size={18} /></button>
               {pendingDeleteApiId === api.id
                 ? <div className="spec-card-confirm" role="group" aria-label={`Delete ${api.title}`}>
@@ -1100,6 +1114,7 @@ function App() {
             <div className="overview-heading">
               <div><div className="page-eyebrow">API OVERVIEW</div><h1>{overview.title}</h1><p className="page-lede">Version {overview.version} <span className="dot-sep">·</span> OpenAPI {overview.openapi_version}</p></div>
             </div>
+            {notice && <div className="alert success-alert import-notice" role="status"><Icon name="check" size={17} /><span>{notice}</span><button className="text-button" type="button" onClick={() => setNotice("")}>Dismiss</button></div>}
             <div className="stats-row">
               <div className="stat-card"><span className="stat-label">Endpoints</span><strong>{overview.operation_count}</strong><span className="stat-note">available to review</span></div>
               <button className="stat-card stat-card-link" type="button" onClick={openCoveragePage} title="Open Coverage & Risk"><span className="stat-label">Endpoints tested</span><strong>{apiCoverage.totals.tested} / {apiCoverage.totals.endpoints}</strong><span className="stat-note">{apiCoverage.totals.tested ? (apiCoverage.totals.failing ? <span className="history-fail">{apiCoverage.totals.failing} failing in latest run</span> : "all passing in latest run") : "run checks to start"}</span></button>
