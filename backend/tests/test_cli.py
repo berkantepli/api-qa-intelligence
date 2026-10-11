@@ -104,6 +104,7 @@ def test_include_writes_and_smoke(spec, mock_http):
         (["--spec", "missing.json"], "could not be read"),
         (["--spec", "{spec}", "--header", "bad"], "must look like 'Name: value'"),
         (["--spec", "{spec}", "--target", "http://10.0.0.5"], "public host or localhost"),
+        (["--spec", "{spec}", "--endpoint", "GET /nope"], "No endpoint matches 'GET /nope'"),
     ],
 )
 def test_usage_problems_exit_2(spec, mock_http, capsys, args, message):

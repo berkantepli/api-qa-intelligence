@@ -139,6 +139,13 @@ async def run_checks(args: argparse.Namespace) -> RunReport:
         raise UsageError(f"--inputs could not be read as JSON: {error}") from error
 
     report = RunReport(api=overview.title, api_version=overview.version, target=target, tool_version=APP_VERSION)
+    keys = [f"{operation.method} {operation.path}" for operation in overview.operations]
+    unmatched = [pattern for pattern in args.endpoint if not any(fnmatch.fnmatchcase(key, pattern) for key in keys)]
+    if unmatched:
+        raise UsageError(
+            f"No endpoint matches {', '.join(repr(pattern) for pattern in unmatched)}. "
+            "Patterns look like 'GET /pets' or 'GET /pets/*' and are case-sensitive."
+        )
     for operation in overview.operations:
         key = f"{operation.method} {operation.path}"
         if args.endpoint and not any(fnmatch.fnmatchcase(key, pattern) for pattern in args.endpoint):
