@@ -14,7 +14,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install API QA Intelligence
-        run: pip install "git+https://github.com/berkantepli/api-qa-intelligence@v0.4.0"
+        run: pip install "git+https://github.com/berkantepli/api-qa-intelligence@v1.3.0"
       - name: Run checks
         run: >
           api-qa run
@@ -24,6 +24,8 @@ jobs:
           --inputs api-qa-inputs.json
           --junit api-qa-report.xml
           --json api-qa-report.json
+      # Download api-qa-report.json from the run's artifacts and choose Import CI report on the
+      # Coverage page to count these checks there.
       - name: Keep the reports
         if: always()
         uses: actions/upload-artifact@v4

@@ -112,7 +112,7 @@ export default function RunDetail({ run, analysisState, onAnalyze, onBack, onRer
     <div className="run-detail-heading">
       <div>
         <h1 className="run-detail-endpoint">{run.endpoint}</h1>
-        <p className="page-lede">{run.api} · {new Date(run.createdAt).toLocaleString()}</p>
+        <p className="page-lede">{run.api} · {new Date(run.createdAt).toLocaleString()}{run.source === "cli" && <> · <i className="run-source-badge">CI</i> from an api-qa run report{run.toolVersion ? ` (api-qa ${run.toolVersion})` : ""}</>}</p>
       </div>
       {canRerun && <button className="secondary-button" type="button" onClick={onRerun} title="Open this endpoint with the same checks selected"><Icon name="run" size={14} /> Run again</button>}
     </div>

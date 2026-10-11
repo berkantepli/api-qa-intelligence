@@ -1,6 +1,10 @@
 // The main flows of the app against e2e/target_api.py, in order: they share one workspace database.
+import { spawnSync } from "node:child_process";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 import { expect, test } from "@playwright/test";
-import { TARGET_URL } from "../playwright.config.js";
+import { python, TARGET_URL } from "../playwright.config.js";
 
 test.describe.configure({ mode: "serial" });
 
@@ -159,6 +163,27 @@ test("lists the coverage gaps of an endpoint", async ({ page }) => {
   await expect(item.locator(".coverage-gap-list")).toContainText("No invalid-value check for path parameter id");
   await expect(item.locator(".coverage-gap-list")).toContainText("HTTP 404 is documented, but no check expects it");
   await expect(item.locator(".coverage-gap-codes")).toContainText("200Received");
+});
+
+test("imports a CLI report so CI runs count on Coverage", async ({ page }) => {
+  const reportPath = join(mkdtempSync(join(tmpdir(), "api-qa-cli-")), "report.json");
+  // The CLI runs from the backend folder, so a relative interpreter path is resolved first.
+  const cli = spawnSync(python.includes("/") ? resolve(python) : python, ["-m", "app.cli", "run", "--spec", `${TARGET_URL}/openapi.json`, "--target", TARGET_URL, "--allow-private-network", "--endpoint", "GET /pets", "--json", reportPath], {
+    cwd: "../backend", encoding: "utf-8",
+  });
+  expect(cli.status, cli.stderr).toBe(0);
+
+  await page.goto("/");
+  await nav(page, "Coverage");
+  await page.locator(".coverage-export input[type=file]").setInputFiles(reportPath);
+  await expect(page.locator(".success-alert")).toContainText("Imported 1 check on 1 endpoint from the CLI report");
+
+  await page.locator(".coverage-export input[type=file]").setInputFiles(reportPath);
+  await expect(page.locator(".success-alert")).toContainText("1 run was already imported.");
+
+  await nav(page, "Run history");
+  await page.locator(".history-group-toggle").first().click();
+  await expect(page.locator(".history-run").filter({ hasText: "GET /pets" }).locator(".run-source-badge")).toHaveText("CI");
 });
 
 test("deletes all saved data", async ({ page }) => {

@@ -211,6 +211,7 @@ h1, h2, h3, p { margin-top: 0; }
 .risk-score-high { background: var(--red-soft); color: var(--red); }
 .risk-score-medium { background: #fff3db; color: #9a6b19; }
 .risk-score-low { background: var(--surface-soft); color: var(--muted); }
+.run-source-badge { display: inline-block; margin-left: 8px; padding: 1px 6px; border-radius: 4px; background: var(--accent-soft); color: var(--accent); font-family: inherit; font-size: 10px; font-style: normal; font-weight: 700; letter-spacing: .04em; vertical-align: middle; }
 .coverage-gaps { margin: -6px 18px 12px 94px; color: var(--muted); font-size: 12px; }
 .coverage-gaps summary { width: fit-content; color: var(--accent); cursor: pointer; font-weight: 600; }
 .coverage-gaps summary small { margin-left: 6px; color: var(--muted); font-weight: 400; }
