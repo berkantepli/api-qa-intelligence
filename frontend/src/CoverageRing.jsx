@@ -1,4 +1,4 @@
-// Small ring showing the share of an API's endpoints tested in this browser, with a red dot
+// Small ring showing the share of an API's endpoints tested in Run history, with a red dot
 // when an endpoint failed in its latest run. Used as the API's tile on the API specs page.
 const RADIUS = 27;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;

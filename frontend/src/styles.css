@@ -450,6 +450,8 @@ h1, h2, h3, p { margin-top: 0; }
 .request-input > input, .request-input > textarea { width: 100%; min-width: 0; min-height: 34px; padding: 7px 9px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--text); font-size: 12px; }
 .request-input-missing > input:not([type="file"]), .request-input-missing > textarea { border-color: #e0b25c; }
 .request-input-help.request-input-required { color: #b7791f; }
+.request-input-help.request-input-error, .fill-summary.request-input-error, .time-limit-field small.request-input-error { color: var(--red); }
+.time-limit-field input[aria-invalid="true"] { border-color: var(--red); }
 .request-input > textarea { resize: vertical; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .request-input-help { grid-column: 2; margin-top: -4px; }
 .scenario-list { display: grid; gap: 8px; padding: 0 12px 13px; }

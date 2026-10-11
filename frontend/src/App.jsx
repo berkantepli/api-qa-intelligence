@@ -45,6 +45,8 @@ function writeStored(key, value) {
   catch { /* the backend database still has the data */ }
 }
 
+const isValidTimeLimit = (text) => /^\d+$/.test(text) && Number(text) >= 1 && Number(text) <= 120000;
+
 function runnableCheckCount(operation) {
   return operation.scenarios?.filter((scenario) => scenario.request_example).length ?? 0;
 }
@@ -154,6 +156,9 @@ function App() {
   const apiInputs = requestInputs[activeApiId] ?? {};
   // Optional per-API response time limit in milliseconds; null means no limit.
   const maxDurationMs = savedApis.find((api) => api.id === activeApiId)?.maxDurationMs ?? null;
+  // What is typed in the time limit field; only a whole number from 1 to 120000 is saved.
+  const [limitDraft, setLimitDraft] = useState(null);
+  const limitInvalid = limitDraft !== null && limitDraft.trim() !== "" && !isValidTimeLimit(limitDraft.trim());
   const operationInputs = apiInputs[operationKey] ?? {};
   const operationFill = sampleFill[operationKey] ?? {};
   const fillMarkFor = (inputKey) => fillHint(operationFill.marks?.[inputKey]);
@@ -320,6 +325,13 @@ function App() {
     }, 400);
     return () => { window.clearTimeout(delay); controller.abort(); };
   }, [activeApiId, targetUrl, connectionCheckId]);
+
+  function updateTimeLimit(value) {
+    setLimitDraft(value);
+    const text = value.trim();
+    if (!text) updateSavedApi(activeApiId, { maxDurationMs: null });
+    else if (isValidTimeLimit(text)) updateSavedApi(activeApiId, { maxDurationMs: Number(text) });
+  }
 
   function updateSavedApi(id, changes) {
     setSavedApis((current) => current.map((api) => api.id === id ? { ...api, ...changes } : api));
@@ -1011,7 +1023,7 @@ function App() {
               <section className="panel scenario-panel">
                 <div className="panel-header scenario-header"><div><div className="panel-kicker"><Icon name="spark" size={15} /> RUNNABLE CHECKS {isDataChangingMethod && <span className="mutation-badge">May change data</span>}</div><h2>{operation?.method} <span>{operation?.path}</span></h2><p>These checks include a complete request and can be executed now.</p>{operation && !operation.response_schemas && <p className="schema-note">Import this API again to also check response bodies against the contract.</p>}</div></div>
                 <label className="target-field"><span>Target API base URL</span><input value={targetUrl} onChange={(event) => updateTargetUrl(event.target.value)} placeholder="http://127.0.0.1:8000" /></label>
-                <label className="target-field time-limit-field"><span>Response time limit</span><input type="number" min="1" max="120000" step="100" inputMode="numeric" value={maxDurationMs ?? ""} onChange={(event) => updateSavedApi(activeApiId, { maxDurationMs: event.target.value ? Math.min(120000, Math.max(1, Number(event.target.value))) : null })} placeholder="No limit" /><small>ms · a slower response fails the check</small></label>
+                <label className="target-field time-limit-field"><span>Response time limit</span><input type="number" min="1" max="120000" step="100" inputMode="numeric" value={limitDraft ?? maxDurationMs ?? ""} onChange={(event) => updateTimeLimit(event.target.value)} onBlur={() => setLimitDraft(null)} aria-invalid={limitInvalid} placeholder="No limit" />{limitInvalid ? <small className="request-input-error" role="alert">Enter a whole number from 1 to 120000 ms. The saved limit{maxDurationMs ? ` (${maxDurationMs} ms)` : ""} is kept.</small> : <small>ms · a slower response fails the check</small>}</label>
                 {(operationParameters.length > 0 || bodyFields.length > 0 || needsRawJsonBody) && <div className="request-inputs">
                   <div className="request-inputs-heading">
                     <div><strong>Request details</strong><span>Fill in required values from your test environment.</span></div>

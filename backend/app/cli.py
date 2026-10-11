@@ -102,11 +102,16 @@ def load_contract(spec: str) -> ApiOverview:
         raise UsageError(message) from error
 
 
+def validate_target(target: str | None) -> None:
+    if target is None:
+        return
+    parsed = httpx.URL(target) if "://" in target else None
+    if parsed is None or parsed.scheme not in {"http", "https"} or not parsed.host:
+        raise UsageError(f"--target {target!r} must be an http:// or https:// URL, for example https://api.example.com/v1.")
+
+
 def resolve_target(target: str | None, overview: ApiOverview, spec: str) -> str:
     if target:
-        parsed = httpx.URL(target) if "://" in target else None
-        if parsed is None or parsed.scheme not in {"http", "https"} or not parsed.host:
-            raise UsageError(f"--target {target!r} must be an http:// or https:// URL, for example https://api.example.com/v1.")
         return target.rstrip("/")
     if not overview.servers:
         raise UsageError("The contract declares no server; pass --target.")
@@ -148,9 +153,11 @@ def inputs_for(operation_key: str, operation, params: list[str], inputs_file: di
 
 
 async def run_checks(args: argparse.Namespace) -> RunReport:
+    # Arguments are checked before the contract is downloaded.
+    validate_target(args.target)
+    headers = parse_headers(args.header)
     overview = load_contract(args.spec)
     target = resolve_target(args.target, overview, args.spec)
-    headers = parse_headers(args.header)
     try:
         inputs_file = json.loads(args.inputs.read_text(encoding="utf-8")) if args.inputs else {}
     except (OSError, ValueError) as error:
@@ -202,12 +209,16 @@ async def run_checks(args: argparse.Namespace) -> RunReport:
     return report
 
 
+def plural(count: int, noun: str) -> str:
+    return f"{count} {noun}" if count == 1 else f"{count} {noun}s"
+
+
 def print_summary(report: RunReport) -> None:
     totals = report.totals
     print(
         f"\n{report.api} {report.api_version} → {report.target}\n"
-        f"{totals['checks']} checks: {totals['passed']} passed, {totals['failed']} failed, {totals['errors']} errors; "
-        f"{totals['skipped_endpoints']} endpoints skipped",
+        f"{plural(totals['checks'], 'check')}: {totals['passed']} passed, {totals['failed']} failed, "
+        f"{plural(totals['errors'], 'error')}; {plural(totals['skipped_endpoints'], 'endpoint')} skipped",
         file=sys.stderr,
     )
     for endpoint in report.endpoints:
