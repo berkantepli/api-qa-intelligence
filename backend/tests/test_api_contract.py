@@ -31,7 +31,7 @@ STABLE_FIELDS = {
     "AIDiagnosis": {"application", "available", "base_url", "inference", "model", "model_check", "ollama", "provider"},
     "AIStatus": {"available_models", "base_url", "model", "model_available", "provider", "reachable"},
     "ApiBodyField": {"description", "example", "field_type", "is_file", "multiple", "name", "required", "value_schema"},
-    "ApiOperation": {"method", "operation_id", "parameters", "path", "request_body_content_type", "request_body_fields", "request_body_required", "response_schemas", "scenarios", "summary", "tags"},
+    "ApiOperation": {"method", "operation_id", "parameters", "path", "request_body_content_type", "request_body_fields", "request_body_required", "response_codes", "response_schemas", "scenarios", "summary", "tags"},
     "ApiOverview": {"openapi_version", "operation_count", "operations", "servers", "title", "version"},
     "ApiParameter": {"credential", "description", "example", "field_type", "location", "name", "required", "value_schema"},
     "DiagnosisStep": {"reason", "status", "suggested_action"},

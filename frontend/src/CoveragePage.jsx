@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { computeCoverage, coverageReportFileName, coverageReportJson, coverageReportMarkdown } from "./coverage.js";
 import BulkRunPanel from "./BulkRunPanel.jsx";
+import { GAP_KINDS } from "./coverageGaps.js";
 import Icon from "./Icon.jsx";
 import { RISK_LEVELS, RISK_RULES } from "./riskScore.js";
 
@@ -9,6 +10,7 @@ const filters = [
   { id: "all", label: "All", matches: () => true },
   { id: "attention", label: "Needs attention", matches: (endpoint) => endpoint.risks.length > 0 },
   { id: "high", label: "High risk", matches: (endpoint) => endpoint.risk.level === "high", optional: true },
+  { id: "gaps", label: "Has gaps", matches: (endpoint) => endpoint.gaps.gaps.length > 0, optional: true },
   { id: "failing", label: "Failing", matches: (endpoint) => endpoint.status === "failing" },
   { id: "untested", label: "Not tested", matches: (endpoint) => endpoint.status === "untested" },
   { id: "flaky", label: "Flaky", matches: (endpoint) => endpoint.flakyChecks.length > 0, optional: true },
@@ -18,6 +20,35 @@ const categoryStates = { passing: "passed", failing: "has failures", not_run: "n
 const levelLabels = Object.fromEntries(RISK_LEVELS.map((level) => [level.id, level.label]));
 // Evidence factors reuse the risk flag colors; impact factors share one neutral style.
 const factorClass = (factor) => factor.kind === "impact" ? "coverage-risk coverage-risk-impact" : `coverage-risk coverage-risk-${factor.id}`;
+// Gap states reuse the category strip's colors.
+const gapStates = {
+  passing: ["passing", "Passed"], failing: ["failing", "Failing"], not_run: ["not_run", "Not run"],
+  not_runnable: ["not_run", "Idea only"], no_check: ["none", "No check"],
+  received: ["passing", "Received"], expected_not_received: ["not_run", "Never received"],
+};
+const GapState = ({ state }) => <i className={`coverage-category coverage-category-${gapStates[state][0]}`}>{gapStates[state][1]}</i>;
+
+function GapDetails({ endpoint }) {
+  const { inputs, responses, codesKnown, gaps } = endpoint.gaps;
+  if (!inputs.length && !responses.length) return null;
+  return <details className="coverage-gaps">
+    <summary>{gaps.length ? `${gaps.length} coverage ${gaps.length === 1 ? "gap" : "gaps"}` : "No coverage gaps"}<small>inputs and response codes</small></summary>
+    {gaps.length > 0 && <ul className="coverage-gap-list">{gaps.map((gap) => <li key={gap.text}>{gap.text}</li>)}</ul>}
+    {inputs.length > 0 && <table>
+      <thead><tr><th>Input</th>{Object.values(GAP_KINDS).map((kind) => <th key={kind.label}>{kind.label}</th>)}</tr></thead>
+      <tbody>{inputs.map((input) => <tr key={input.key}>
+        <td><code>{input.name}</code><small>{input.location}</small></td>
+        {Object.keys(GAP_KINDS).map((kind) => {
+          const check = input.checks.find((item) => item.kind === kind);
+          return <td key={kind} title={check?.titles.join(", ") || undefined}>{check ? <GapState state={check.state} /> : <span className="coverage-gap-na">–</span>}</td>;
+        })}
+      </tr>)}</tbody>
+    </table>}
+    {responses.length > 0 && <div className="coverage-gap-codes"><span>Documented responses</span>{responses.map((response) => <span key={response.code} title={response.titles.join(", ") || "No check expects this code."}><b>{response.code}</b><GapState state={response.state} /></span>)}</div>}
+    {!codesKnown && <small className="coverage-gap-note">Only responses with a JSON body are listed. Import this API again to include every documented response code.</small>}
+  </details>;
+}
+
 const categoryShort = { happy_path: "Happy", negative: "Negative", boundary: "Boundary", invalid_value: "Invalid", security_minded: "Auth" };
 
 function download(content, fileName, type) {
@@ -118,6 +149,7 @@ export default function CoveragePage({
           <Icon className="history-chevron" name="chevron" size={15} />
           <span className="coverage-categories" aria-label="Checks by category">{endpoint.categories.map((category) => <i key={category.id} className={`coverage-category coverage-category-${category.state}`} title={`${category.label}: ${categoryStates[category.state]}`}>{categoryShort[category.id]}</i>)}</span>
         </button>
+        <GapDetails endpoint={endpoint} />
       </li>)}</ul> : <p className="coverage-empty">No endpoints match this filter.</p>}
     </section>
   </section>;

@@ -150,6 +150,17 @@ test("scores each endpoint's risk and explains the score", async ({ page }) => {
   await expect(page.locator(".risk-rules table")).toContainText("Failing in latest run");
 });
 
+test("lists the coverage gaps of an endpoint", async ({ page }) => {
+  await page.goto("/");
+  await nav(page, "Coverage");
+
+  const item = page.locator(".history-runs > li").filter({ has: page.locator(".coverage-row", { hasText: "/pets/{id}" }) });
+  await item.locator(".coverage-gaps summary").click();
+  await expect(item.locator(".coverage-gap-list")).toContainText("No invalid-value check for path parameter id");
+  await expect(item.locator(".coverage-gap-list")).toContainText("HTTP 404 is documented, but no check expects it");
+  await expect(item.locator(".coverage-gap-codes")).toContainText("200Received");
+});
+
 test("deletes all saved data", async ({ page }) => {
   await page.goto("/");
   await nav(page, "Settings");

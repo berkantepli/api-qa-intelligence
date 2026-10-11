@@ -51,7 +51,7 @@ describe("computeCoverage", () => {
   });
 
   it("summarizes totals", () => {
-    expect(coverage.totals).toEqual({ endpoints: 4, tested: 2, coveragePercent: 50, failing: 1, untestedWrites: 2, flaky: 0, stale: 0, highRisk: 1, checksExecuted: 4 });
+    expect(coverage.totals).toEqual({ endpoints: 4, tested: 2, coveragePercent: 50, failing: 1, untestedWrites: 2, flaky: 0, stale: 0, highRisk: 1, withGaps: 0, gaps: 0, checksExecuted: 4 });
   });
 
   it("shows each category by its checks' latest outcome", () => {
@@ -126,6 +126,8 @@ describe("coverage report", () => {
     expect(markdown).toContain("# Coverage & Risk: Pets | Store 1.0");
     expect(markdown).toContain("- Endpoints tested: 1 / 4 (25%)");
     expect(markdown).toContain("- High-risk endpoints (score 50+): 2");
+    expect(markdown).toContain("- Coverage gaps: 0 across 0 endpoints");
+    expect(markdown).toContain("## Coverage gaps\n\nNo gaps: every input and documented response code is covered by a check that has run.");
     expect(markdown).toContain("| `GET /pets` | 50 high | failing | 1/2 | FAIL | not run | – | – | – | +35 Failing in latest run, +10 Only happy path tested, +5 1 of 2 checks not run yet |");
   });
 

@@ -1,5 +1,6 @@
 // Derives per-endpoint test coverage and risk signals from a saved API and its Run history.
 import { categoryLabels } from "./categories.js";
+import { computeGaps } from "./coverageGaps.js";
 import { RISK_LEVELS, scoreEndpoint } from "./riskScore.js";
 import { apiIdsByTitle, runApiKey, summarizeResults } from "./runDetail.js";
 
@@ -108,6 +109,7 @@ export function computeCoverage(overview, apiRuns = [], now = Date.now()) {
       stale,
       risks,
       risk,
+      gaps: computeGaps(operation, runs),
     };
   });
 
@@ -129,6 +131,8 @@ export function computeCoverage(overview, apiRuns = [], now = Date.now()) {
       flaky: endpoints.filter((endpoint) => endpoint.flakyChecks.length).length,
       stale: endpoints.filter((endpoint) => endpoint.stale).length,
       highRisk: endpoints.filter((endpoint) => endpoint.risk.level === "high").length,
+      withGaps: endpoints.filter((endpoint) => endpoint.gaps.gaps.length).length,
+      gaps: endpoints.reduce((sum, endpoint) => sum + endpoint.gaps.gaps.length, 0),
       checksExecuted: apiRuns.reduce((sum, run) => sum + (run.results?.length ?? 0), 0),
     },
   };
@@ -164,6 +168,13 @@ export function coverageReportJson(overview, coverage, generatedAt = new Date())
         level: endpoint.risk.level,
         factors: endpoint.risk.factors.map(({ id, label, points }) => ({ id, label, points })),
       },
+      gaps: endpoint.gaps.gaps.map((gap) => gap.text),
+      inputs: endpoint.gaps.inputs.map((input) => ({
+        name: input.name,
+        location: input.location,
+        checks: Object.fromEntries(input.checks.map((check) => [check.kind, check.state])),
+      })),
+      responses: Object.fromEntries(endpoint.gaps.responses.map((response) => [response.code, response.state])),
     })),
   };
 }
@@ -182,6 +193,7 @@ export function coverageReportMarkdown(overview, coverage, generatedAt = new Dat
     `- Flaky endpoints: ${totals.flaky}`,
     `- Stale endpoints (not run in ${STALE_AFTER_DAYS}+ days): ${totals.stale}`,
     `- High-risk endpoints (score ${RISK_LEVELS[0].min}+): ${totals.highRisk}`,
+    `- Coverage gaps: ${totals.gaps} across ${totals.withGaps} endpoints`,
     `- Checks executed: ${totals.checksExecuted}`,
     "",
     `Risk score: the sum of fixed rule points, capped at 100; high from ${RISK_LEVELS[0].min}, medium from ${RISK_LEVELS[1].min}.`,
@@ -197,6 +209,14 @@ export function coverageReportMarkdown(overview, coverage, generatedAt = new Dat
       cell(endpoint.risk.factors.map((factor) => `+${factor.points} ${factor.label}`).join(", ") || "–"),
     ].join(" | ")).map((row) => `| ${row} |`),
     "",
+    "## Coverage gaps",
+    "",
+    ...(totals.gaps ? coverage.endpoints.filter((endpoint) => endpoint.gaps.gaps.length).flatMap((endpoint) => [
+      `### \`${endpoint.method} ${endpoint.path}\``,
+      "",
+      ...endpoint.gaps.gaps.map((gap) => `- ${gap.text}`),
+      "",
+    ]) : ["No gaps: every input and documented response code is covered by a check that has run.", ""]),
   ];
   return lines.join("\n");
 }
