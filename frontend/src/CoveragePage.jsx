@@ -26,7 +26,7 @@ function download(content, fileName, type) {
 
 export default function CoveragePage({
   overview, apiRuns, onOpenEndpoint, onGoToSpecs,
-  inputsByOperation, filesByOperation, targetUrl, bulkRun, onBulkRun, onStopBulkRun, onDismissBulkRun,
+  inputsByOperation, filesByOperation, targetUrl, targetProblem, bulkRun, onBulkRun, onStopBulkRun, onDismissBulkRun,
 }) {
   const [filterId, setFilterId] = useState("all");
   const [planning, setPlanning] = useState(false);
@@ -72,6 +72,7 @@ export default function CoveragePage({
       inputsByOperation={inputsByOperation}
       filesByOperation={filesByOperation}
       targetUrl={targetUrl}
+      targetProblem={targetProblem}
       bulkRun={bulkRun}
       onRun={onBulkRun}
       onStop={onStopBulkRun}

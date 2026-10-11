@@ -6,6 +6,10 @@ import httpx
 from fastapi import HTTPException
 
 
+class HostResolutionError(HTTPException):
+    """The target host name does not resolve; a connection probe reports it as unreachable."""
+
+
 def parse_target_base_url(base_url: str, *, allow_private_network: bool = False) -> httpx.URL:
     """Validates a target API base URL the same way for checks and connection probes.
 
@@ -61,7 +65,7 @@ def ensure_safe_target_host(url: httpx.URL) -> None:
             for result in socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
         }
     except (OSError, ValueError) as error:
-        raise HTTPException(
+        raise HostResolutionError(
             status_code=422,
             detail="The target URL host could not be resolved.",
         ) from error

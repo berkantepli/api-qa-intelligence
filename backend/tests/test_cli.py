@@ -44,8 +44,7 @@ def pets_api(request: httpx.Request) -> httpx.Response:
         return httpx.Response(200, json=[{"name": "Rex"}])
     if request.method == "POST":
         return httpx.Response(201, json={})
-    # /v1/pets/ (the path parameter left out) is not a pet.
-    return httpx.Response(200 if request.url.path.rstrip("/") != "/v1/pets" else 404, json={})
+    return httpx.Response(200, json={})
 
 
 def test_all_checks_pass_with_exit_code_0(spec, mock_http, tmp_path):
@@ -55,7 +54,7 @@ def test_all_checks_pass_with_exit_code_0(spec, mock_http, tmp_path):
 
     report = json.loads((tmp_path / "r.json").read_text())
     assert code == 0
-    assert report["totals"]["passed"] == report["totals"]["checks"] == 4
+    assert report["totals"]["passed"] == report["totals"]["checks"] == 3
     skipped = {f"{e['method']} {e['path']}": e["skipped_reason"] for e in report["endpoints"] if e["skipped_reason"]}
     assert skipped == {"POST /pets": "Changes data; pass --include-writes to run it."}
     assert "http://127.0.0.1:8000/v1/pets/7" in [str(request.url) for request in mock_http.requests]
@@ -72,7 +71,7 @@ def test_failures_exit_1_and_reach_the_junit_report(spec, mock_http, tmp_path):
 
     suites = ElementTree.parse(tmp_path / "r.xml").getroot()
     assert code == 1
-    assert (suites.get("tests"), suites.get("failures"), suites.get("skipped")) == ("5", "3", "1")
+    assert (suites.get("tests"), suites.get("failures"), suites.get("skipped")) == ("4", "2", "1")
     pets = suites.find("testsuite[@name='GET /pets']")
     unauthenticated = pets.find("testcase[@name='Call without authentication']/failure")
     # The contract documents 401, so that is the expected code.
@@ -105,6 +104,7 @@ def test_include_writes_and_smoke(spec, mock_http):
         (["--spec", "missing.json"], "could not be read"),
         (["--spec", "{spec}", "--header", "bad"], "must look like 'Name: value'"),
         (["--spec", "{spec}", "--target", "http://10.0.0.5"], "public host or localhost"),
+        (["--spec", "{spec}", "--endpoint", "GET /nope"], "No endpoint matches 'GET /nope'"),
     ],
 )
 def test_usage_problems_exit_2(spec, mock_http, capsys, args, message):

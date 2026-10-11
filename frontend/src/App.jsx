@@ -5,7 +5,7 @@ import DuplicateNotice from "./DuplicateNotice.jsx";
 import { duplicatePairKey, filterNewIdeas, findDuplicateScenarios, findSameRequest } from "./duplicates.js";
 import { computeCoverage, runsForApi } from "./coverage.js";
 import CoverageRing from "./CoverageRing.jsx";
-import { connectionLabel } from "./targetConnection.js";
+import { connectionLabel, targetUrlProblem } from "./targetConnection.js";
 import Icon from "./Icon.jsx";
 import RunDetail, { SchemaDifferences } from "./RunDetail.jsx";
 import { outcomeSummary } from "./runDetail.js";
@@ -59,6 +59,7 @@ async function readJsonResponse(response, fallbackMessage) {
     const detail = Array.isArray(payload.detail) ? payload.detail.map((item) => item.msg).join("; ") : payload.detail;
     const error = new Error(detail || fallbackMessage);
     error.status = response.status;
+    error.validation = Array.isArray(payload.detail);
     throw error;
   }
   return payload;
@@ -205,6 +206,9 @@ function App() {
   const selectedRun = runHistory.find((run) => run.id === selectedRunId);
   const serviceStatus = aiStatusLabel(aiStatus);
   const connectionView = connectionLabel(connection);
+  // Checks need a usable target; a blocked one (for example a private address) would only fail on the server.
+  const targetProblem = targetUrlProblem(targetUrl)
+    || (connection.status === "blocked" && connection.url === targetUrl.trim() ? connection.message : "");
   const apiCoverage = useMemo(() => computeCoverage(overview, runsForApi(runHistory, activeApiId, savedApis)), [overview, runHistory, activeApiId, savedApis]);
   const endpointStatus = useMemo(() => new Map(apiCoverage.endpoints.map((endpoint) => [endpoint.key, endpoint.status])), [apiCoverage]);
   const allSelected = availableScenarios.length > 0 && selectedScenarios.length === availableScenarios.length;
@@ -300,8 +304,17 @@ function App() {
   // The backend probes the target with the same safety rules as check execution.
   useEffect(() => {
     const url = targetUrl.trim();
-    if (!activeApiId || !url) {
+    if (!activeApiId) {
       setConnection({ status: "unknown" });
+      return undefined;
+    }
+    if (!url) {
+      setConnection({ status: "empty" });
+      return undefined;
+    }
+    const problem = targetUrlProblem(url);
+    if (problem) {
+      setConnection({ status: "invalid", url, message: problem });
       return undefined;
     }
     const controller = new AbortController();
@@ -319,7 +332,8 @@ function App() {
         setConnection({ status: "done", url, result });
       } catch (caught) {
         if (controller.signal.aborted) return;
-        setConnection({ status: caught.status === 422 ? "blocked" : "error", url, message: caught.message });
+        const status = caught.validation ? "invalid" : caught.status === 422 ? "blocked" : "error";
+        setConnection({ status, url, message: caught.validation ? "The target base URL is not a valid URL." : caught.message });
       }
     }, 400);
     return () => { window.clearTimeout(delay); controller.abort(); };
@@ -466,6 +480,7 @@ function App() {
   function selectOperation(index) {
     setSelectedOperation(index);
     resetRunState();
+    setError("");
     setSavedCheck(null);
   }
 
@@ -572,10 +587,13 @@ function App() {
   }
 
   async function runSelected() {
-    if (!operation || !inputsReady || selectedCount === 0) return;
+    if (!operation || !inputsReady || selectedCount === 0 || targetProblem) return;
     setRunning(true);
     setError("");
-    const nextResults = { ...results };
+    // Results always describe the latest run, so a run that is rejected leaves nothing stale behind.
+    setLastRunId(null);
+    setResults({});
+    const nextResults = {};
     const completed = [];
     try {
       for (const index of selectedScenarios) {
@@ -668,7 +686,7 @@ function App() {
   }
 
   function requestRun() {
-    if (!operation || !inputsReady || selectedCount === 0 || running) return;
+    if (!operation || !inputsReady || selectedCount === 0 || running || targetProblem) return;
     if (isDataChangingMethod) {
       setShowExecutionConfirmation(true);
       return;
@@ -906,6 +924,7 @@ function App() {
             inputsByOperation={apiInputs}
             filesByOperation={requestFiles}
             targetUrl={targetUrl}
+            targetProblem={targetProblem}
             bulkRun={bulkRun}
             onBulkRun={runBulk}
             onStopBulkRun={() => { bulkStopRequested.current = true; }}
@@ -1067,7 +1086,7 @@ function App() {
                   <div><strong>This request may change data.</strong><p>You are about to run {selectedCount} {operation.method} {operation.path} check{selectedCount === 1 ? "" : "s"} against {targetUrl}. This can create, update, or delete data in the target API.</p></div>
                   <div className="execution-confirmation-actions"><button className="secondary-button" type="button" onClick={() => setShowExecutionConfirmation(false)}>Cancel</button><button className="primary-button" type="button" onClick={confirmRun}>Confirm and run</button></div>
                 </div>}
-                <div className="run-footer">{inputsReady && availableScenarios.length > 0 && <button className="text-button" type="button" disabled={running} onClick={toggleAllScenarios}>{allSelected ? "Clear selection" : "Select all"}</button>}{lastRunId && !running && <button className="text-button" type="button" onClick={() => openRunHistory(lastRunId)}>View run details</button>}<span>{inputsReady ? `${availableScenarios.length} ${availableScenarios.length === 1 ? "check" : "checks"} ready to run` : "Complete required request details first"}</span><button className="primary-button" disabled={!inputsReady || selectedCount === 0 || running} onClick={requestRun}>{running ? <><span className="spinner" /> Running…</> : <><Icon name="run" size={15} /> Run selected{selectedCount ? ` (${selectedCount})` : ""}</>}</button></div>
+                <div className="run-footer">{inputsReady && availableScenarios.length > 0 && <button className="text-button" type="button" disabled={running} onClick={toggleAllScenarios}>{allSelected ? "Clear selection" : "Select all"}</button>}{lastRunId && !running && <button className="text-button" type="button" onClick={() => openRunHistory(lastRunId)}>View run details</button>}{inputsReady && targetProblem ? <span className="run-footer-warning" role="status">{targetProblem}</span> : <span>{inputsReady ? `${availableScenarios.length} ${availableScenarios.length === 1 ? "check" : "checks"} ready to run` : "Complete required request details first"}</span>}<button className="primary-button" disabled={!inputsReady || selectedCount === 0 || running || Boolean(targetProblem)} onClick={requestRun}>{running ? <><span className="spinner" /> Running…</> : <><Icon name="run" size={15} /> Run selected{selectedCount ? ` (${selectedCount})` : ""}</>}</button></div>
                 {error && <div className="alert error-alert run-error" role="alert"><Icon name="close" size={17} />{error}</div>}
               </section>
             </div>

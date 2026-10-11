@@ -6,7 +6,7 @@ from fastapi import APIRouter
 from pydantic import AnyHttpUrl, BaseModel
 
 from app.domain.evidence import sanitize_url
-from app.domain.network import parse_target_base_url
+from app.domain.network import HostResolutionError, parse_target_base_url
 
 router = APIRouter(prefix="/api/v1/targets", tags=["Scenario execution"])
 CHECK_TIMEOUT_SECONDS = 5
@@ -37,9 +37,16 @@ class TargetCheckResult(BaseModel):
     ),
 )
 async def check_target(payload: TargetCheckRequest) -> TargetCheckResult:
-    base = parse_target_base_url(str(payload.base_url))
-    url = sanitize_url(str(base))
     started = time.perf_counter()
+    try:
+        base = parse_target_base_url(str(payload.base_url))
+    except HostResolutionError:
+        # An unknown host is a reachability problem, not a blocked target.
+        return TargetCheckResult(
+            url=sanitize_url(str(payload.base_url)), reachable=False, duration_ms=0,
+            error="The host name could not be resolved. Check the spelling of the target URL.",
+        )
+    url = sanitize_url(str(base))
     method: Literal["HEAD", "GET"] = "HEAD"
     try:
         async with httpx.AsyncClient(

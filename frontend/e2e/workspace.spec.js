@@ -60,6 +60,28 @@ test("flags an endpoint that does not ask for its documented key", async ({ page
   await expect(endpoint(page, "GET", "/orders").locator(".endpoint-status-failing")).toBeVisible();
 });
 
+test("does not run checks without a usable target", async ({ page }) => {
+  await page.goto("/");
+  await nav(page, "Overview");
+  await endpoint(page, "GET", "/pets").click();
+  await page.getByRole("button", { name: "Select all" }).click();
+  const target = page.locator(".target-field input").first();
+  const run = page.getByRole("button", { name: /Run selected/ });
+
+  await target.fill("");
+  await expect(page.locator(".connection-status")).toContainText("No target URL");
+  await expect(page.getByText("Enter a Target API base URL to run checks.")).toBeVisible();
+  await expect(run).toBeDisabled();
+
+  await target.fill("not a url");
+  await expect(page.locator(".connection-status")).toContainText("Invalid target URL");
+  await expect(run).toBeDisabled();
+
+  await target.fill(TARGET_URL);
+  await expect(page.locator(".connection-status")).toContainText("API reachable");
+  await expect(run).toBeEnabled();
+});
+
 test("keeps the workspace after the browser is cleared", async ({ page }) => {
   await page.goto("/");
   await page.evaluate(() => localStorage.clear());

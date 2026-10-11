@@ -65,3 +65,17 @@ def test_rejects_unsafe_targets_without_sending_a_request(client, mock_http, bas
 
     assert response.status_code == 422
     assert mock_http.requests == []
+
+
+def test_unknown_host_is_unreachable_not_blocked(client, mock_http, monkeypatch):
+    def fail(*args, **kwargs):
+        raise OSError("nodename nor servname provided")
+
+    monkeypatch.setattr("app.domain.network.socket.getaddrinfo", fail)
+
+    response = check(client, "https://no-such-host.example")
+
+    assert response.status_code == 200
+    assert response.json()["reachable"] is False
+    assert "could not be resolved" in response.json()["error"]
+    assert mock_http.requests == []
