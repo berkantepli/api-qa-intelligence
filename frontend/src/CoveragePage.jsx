@@ -51,7 +51,7 @@ export default function CoveragePage({
     <div className="page-eyebrow">TEST COVERAGE</div>
     <h1>Coverage &amp; Risk</h1>
     <div className="coverage-heading">
-      <p className="page-lede">{overview.title} · based on the checks run in this browser.</p>
+      <p className="page-lede">{overview.title} · based on the checks in Run history.</p>
       <div className="coverage-export">
         <button className="secondary-button" type="button" onClick={() => exportReport("md")}><Icon name="arrow" size={14} /> Export Markdown</button>
         <button className="secondary-button" type="button" onClick={() => exportReport("json")}><Icon name="arrow" size={14} /> Export JSON</button>

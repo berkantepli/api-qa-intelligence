@@ -30,7 +30,7 @@ export default function RunHistoryList({ runs, savedApis, openGroups, onToggleGr
   return <section className="history-page">
     <div className="page-eyebrow">TEST EXECUTIONS</div>
     <h1>Run history</h1>
-    <p className="page-lede">Review the checks you have run in this browser, grouped by API.</p>
+    <p className="page-lede">Review the checks you have run, grouped by API.</p>
 
     {groups.length ? <div className="history-groups">{groups.map((group, index) => {
       const open = openGroups[group.key] ?? false;
