@@ -9,6 +9,30 @@ SENSITIVE_KEY = re.compile(
     r"session|signature|(?:^|[^a-z])(?:pwd|pin|otp)(?:$|[^a-z])",
     re.IGNORECASE,
 )
+# Secrets that give themselves away by their shape, wherever they appear in text.
+AUTH_SCHEME_VALUE = re.compile(r"\b(Bearer|Basic|Digest|Token)\s+[A-Za-z0-9\-._~+/]{8,}=*", re.IGNORECASE)
+JWT = re.compile(r"\beyJ[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]*")
+CARD_CANDIDATE = re.compile(r"(?<![\d-])[3-6]\d{3}(?:[ -]?\d){9,15}(?![\d-])")
+
+
+def _luhn_valid(digits: str) -> bool:
+    total = 0
+    for index, digit in enumerate(reversed(digits)):
+        value = int(digit) * (2 if index % 2 else 1)
+        total += value - 9 if value > 9 else value
+    return total % 10 == 0
+
+
+def _redact_card(match: re.Match[str]) -> str:
+    digits = re.sub(r"[ -]", "", match.group(0))
+    return "[REDACTED]" if 13 <= len(digits) <= 19 and _luhn_valid(digits) else match.group(0)
+
+
+def scrub_text(value: str) -> str:
+    """Masks bearer and basic credentials, JWTs, and payment card numbers inside free text."""
+    value = AUTH_SCHEME_VALUE.sub(lambda match: f"{match.group(1)} [REDACTED]", value)
+    value = JWT.sub("[REDACTED]", value)
+    return CARD_CANDIDATE.sub(_redact_card, value)
 
 
 def redact_value(value: Any) -> Any:
@@ -19,12 +43,14 @@ def redact_value(value: Any) -> Any:
         }
     if isinstance(value, list):
         return [redact_value(item) for item in value]
+    if isinstance(value, str):
+        return scrub_text(value)
     return value
 
 
 def redact_headers(headers: dict[str, Any]) -> dict[str, str]:
     return {
-        name: "[REDACTED]" if SENSITIVE_KEY.search(name) else str(value)
+        name: "[REDACTED]" if SENSITIVE_KEY.search(name) else scrub_text(str(value))
         for name, value in headers.items()
     }
 
@@ -57,7 +83,7 @@ def redact_text(value: str) -> str:
             r"[\"']?\s*[:=]\s*)(?:\"[^\"]*\"|'[^']*'|[^\s,;}]+)",
             re.IGNORECASE,
         )
-        return pattern.sub(r'\1"[REDACTED]"', value)
+        return scrub_text(pattern.sub(r'\1"[REDACTED]"', value))
 
 
 def strip_sensitive(value: Any) -> Any:

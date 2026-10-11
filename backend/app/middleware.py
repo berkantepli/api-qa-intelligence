@@ -43,3 +43,32 @@ class RequestSizeLimitMiddleware:
             return message
 
         await self.app(scope, limited_receive, send)
+
+
+# Stops other sites from framing the app (clickjacking: tricking a click on Delete everything or
+# Confirm and run) and from sniffing content types. The CSP only restricts framing, so the API docs
+# page can still load its assets.
+SECURITY_HEADERS = [
+    (b"x-frame-options", b"DENY"),
+    (b"content-security-policy", b"frame-ancestors 'none'"),
+    (b"x-content-type-options", b"nosniff"),
+    (b"referrer-policy", b"no-referrer"),
+]
+
+
+class SecurityHeadersMiddleware:
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        async def send_with_headers(message: Message) -> None:
+            if message["type"] == "http.response.start":
+                names = {name.lower() for name, _ in message.get("headers", [])}
+                message["headers"] = [*message.get("headers", []), *(item for item in SECURITY_HEADERS if item[0] not in names)]
+            await send(message)
+
+        await self.app(scope, receive, send_with_headers)
