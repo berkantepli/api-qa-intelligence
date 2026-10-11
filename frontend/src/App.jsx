@@ -1020,7 +1020,7 @@ function App() {
           <Icon name="shield" /><span>Coverage</span>
         </button>}
         {overview && <button className={`nav-link ${page === "flows" ? "active" : ""}`} onClick={openFlowsPage}>
-          <Icon name="run" /><span>Flows</span>{apiFlows.length > 0 && <span className="nav-count">{apiFlows.length}</span>}
+          <Icon name="run" /><span>Flows</span>
         </button>}
         <button className={`nav-link ${page === "history" ? "active" : ""}`} onClick={() => openRunHistory()}>
           <Icon name="clock" /><span>Run history</span>
