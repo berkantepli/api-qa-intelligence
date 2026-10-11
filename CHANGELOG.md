@@ -2,6 +2,14 @@
 
 The version lives in the [`VERSION`](VERSION) file and follows [Semantic Versioning](https://semver.org/). Before 1.0.0, a new feature raises the minor number (0.**x**.0) and a fix or visual change raises the patch number (0.x.**y**).
 
+## 1.3.0 — 2026-10-11
+
+### CI runs on Coverage
+- **Import CI report** on **Coverage & Risk** adds the checks from an `api-qa run --json` report, so checks run in CI count on coverage, risk scores, and coverage gaps like checks run in the browser.
+- The report is matched to the saved API with the same title (the active API first, then the same version). Each endpoint that ran becomes a run marked **CI** in Run history and Run details; skipped endpoints add nothing.
+- Importing the same report again adds nothing. Endpoints the saved API does not have, and a report for another API version, are named in the result message.
+- The GitHub Actions example installs a 1.x release and explains how to use the uploaded report.
+
 ## 1.2.0 — 2026-10-11
 
 ### Coverage gaps
