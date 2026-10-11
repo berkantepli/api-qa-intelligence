@@ -66,7 +66,7 @@ def test_lifecycle_flow_is_inferred_from_the_create_response():
     ]
     create, _, update, delete, gone = flow.steps
     assert [rule.model_dump() for rule in create.extract] == [
-        {"variable": "petId", "source": "response_body", "pointer": "/id"}
+        {"variable": "petId", "source": "response_body", "pointer": "/id", "fallback": None}
     ]
     # A collection-level update names the record in its body.
     assert update.json_body == {"id": "{{petId}}", "name": "Rex"}
@@ -118,7 +118,7 @@ def test_a_value_sent_in_the_create_body_is_used_when_the_response_is_not_docume
 
     flow = only_flow(document)
 
-    assert flow.steps[0].extract[0].model_dump() == {"variable": "username", "source": "request_body", "pointer": "/username"}
+    assert flow.steps[0].extract[0].model_dump() == {"variable": "username", "source": "request_body", "pointer": "/username", "fallback": None}
     assert flow.steps[2].path == "/users/{{username}}"
     assert flow.steps[2].json_body == {"username": "{{username}}"}
     assert "is not cleaned up" in flow.notes[0]
@@ -159,6 +159,36 @@ def test_a_parent_path_parameter_is_reported_as_missing():
 
     assert flow.missing_inputs == ["ownerId"]
     assert flow.steps[1].path == "/owners/{ownerId}/pets/{{petId}}"
+
+
+def test_a_nested_collection_creates_its_parent_first_and_deletes_it_last():
+    owner = {"name": "ownerId", "in": "path", "required": True, "schema": {"type": "integer"}}
+    document = contract({
+        "/owners": {"post": {"requestBody": json_body(), "responses": {"201": json_response()}}},
+        "/owners/{ownerId}": {"parameters": [owner], "delete": {"responses": {"204": {"description": "deleted"}}}},
+        "/owners/{ownerId}/pets": {"parameters": [owner], "post": {"requestBody": json_body(), "responses": {"201": json_response()}}},
+        "/owners/{ownerId}/pets/{petId}": {
+            "parameters": [owner, ITEM["parameters"][0]],
+            "get": {"responses": {"200": json_response()}},
+            "delete": {"responses": {"204": {"description": "deleted"}}},
+        },
+    })
+
+    pet = next(flow for flow in summarize_openapi(document).flows if flow.title == "Pet lifecycle")
+
+    assert pet.missing_inputs == []
+    assert [(step.role, step.method, step.path) for step in pet.steps] == [
+        ("create", "POST", "/owners"),
+        ("create", "POST", "/owners/{{ownerId}}/pets"),
+        ("read", "GET", "/owners/{{ownerId}}/pets/{{petId}}"),
+        ("delete", "DELETE", "/owners/{{ownerId}}/pets/{{petId}}"),
+        ("verify_deleted", "GET", "/owners/{{ownerId}}/pets/{{petId}}"),
+        ("delete", "DELETE", "/owners/{{ownerId}}"),
+    ]
+    # The parent's id is saved under the name the nested path uses.
+    assert pet.steps[0].extract[0].variable == "ownerId"
+    assert pet.steps[-1].always_run is True
+    assert "It first creates an owner with POST /owners for {ownerId}." in pet.rationale
 
 
 def test_suggest_route_infers_flows_for_a_saved_overview(client):
@@ -253,6 +283,28 @@ def test_a_missing_value_fails_the_step_that_should_provide_it(client, mock_http
     assert result["steps"][0]["status"] == "FAIL"
     assert result["steps"][0]["reason"] == "Could not save {{petId}}: /id in the response body has no value."
     assert result["skipped"] == 4
+
+
+def test_an_undocumented_id_can_come_from_the_location_header(client, mock_http, sample_spec):
+    steps = only_flow(sample_spec).model_dump()["steps"]
+    assert steps[0]["extract"][0]["fallback"] == "location_header"
+
+    def created_without_body(request):
+        if request.method == "POST":
+            return httpx.Response(201, headers={"Location": "http://127.0.0.1:8000/pets/p%2042"})
+        return httpx.Response(200 if request.method == "GET" else 204, json={})
+
+    mock_http.respond_with(created_without_body)
+    result = run(client, steps, headers={"X-Key": "k"}).json()
+
+    assert result["steps"][0]["saved_values"] == {"id": "p 42"}
+    assert str(mock_http.requests[1].url) == f"{BASE_URL}/pets/p%2042"
+
+    mock_http.respond_with(lambda request: httpx.Response(201))
+    result = run(client, steps).json()
+    assert result["steps"][0]["reason"] == (
+        "Could not save {{id}}: the response body is not JSON. The response has no Location header to fall back on either."
+    )
 
 
 def test_saved_values_are_encoded_in_the_path_and_cannot_escape_it(client, mock_http):
