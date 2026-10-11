@@ -347,6 +347,29 @@ test("matches a renamed contract by its source and offers to merge one with the 
   await expect(page.locator(".spec-card").filter({ hasText: "E2E Pets Renamed" })).toHaveCount(1);
 });
 
+test("opening an endpoint from Coverage scrolls the endpoint list to it", async ({ page }) => {
+  const paths = Object.fromEntries(Array.from({ length: 40 }, (_, index) => [`/items${String(index).padStart(2, "0")}`, { get: { summary: `Item ${index}`, responses: { 200: { description: "ok" } } } }]));
+  const contract = { openapi: "3.0.3", info: { title: "Long API", version: "1.0.0" }, servers: [{ url: TARGET_URL }], paths };
+  await page.goto("/");
+  await nav(page, "API specs");
+  await page.getByRole("button", { name: "Import API" }).first().click();
+  await page.getByRole("tab", { name: "Upload file" }).click();
+  await page.locator(".import-card input[type=file]").setInputFiles({ name: "long.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(contract)) });
+  await page.locator(".import-card").getByRole("button", { name: /Import API/ }).click();
+  await expect(page.locator(".overview-heading")).toBeVisible();
+
+  await nav(page, "Coverage");
+  await page.locator(".coverage-row").filter({ hasText: "/items39" }).click();
+  const selected = page.locator(".endpoint-list .endpoint-row.selected");
+  await expect(selected).toContainText("/items39");
+  const visible = await selected.evaluate((row) => {
+    const list = row.closest(".endpoint-list").getBoundingClientRect();
+    const box = row.getBoundingClientRect();
+    return box.top >= list.top && box.bottom <= list.bottom;
+  });
+  expect(visible).toBe(true);
+});
+
 test("deletes all saved data", async ({ page }) => {
   await page.goto("/");
   await nav(page, "Settings");

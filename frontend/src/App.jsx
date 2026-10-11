@@ -153,6 +153,7 @@ function App() {
   // After "Save as check": { operationKey, title, scenarioIndex } for the notice and highlight.
   const [savedCheck, setSavedCheck] = useState(null);
   const [highlightedCheck, setHighlightedCheck] = useState(null);
+  const endpointList = useRef(null);
   const [showExecutionConfirmation, setShowExecutionConfirmation] = useState(false);
   const [results, setResults] = useState({});
   // Request details per saved API and endpoint: { [apiId]: { "METHOD /path": inputs } }.
@@ -324,6 +325,19 @@ function App() {
     setSelectedScenarios(availableScenarios.map((scenario, index) => pendingSelection.titles.includes(scenario.title) ? index : -1).filter((index) => index >= 0));
     setPendingSelection(null);
   }, [pendingSelection, activeApiId, operationKey, availableScenarios, inputsReady]);
+
+  // Keep the selected endpoint visible in the scrolling endpoint list, for example after opening it from
+  // Coverage or Run history. Only the list scrolls; a row that is already visible stays where it is.
+  useEffect(() => {
+    if (page !== "overview") return;
+    const list = endpointList.current;
+    const row = list?.querySelector(".endpoint-row.selected");
+    if (!list || !row) return;
+    const listBox = list.getBoundingClientRect();
+    const rowBox = row.getBoundingClientRect();
+    if (rowBox.top >= listBox.top && rowBox.bottom <= listBox.bottom) return;
+    list.scrollTop += rowBox.top - listBox.top - (list.clientHeight - row.offsetHeight) / 2;
+  }, [page, selectedOperation, activeApiId]);
 
   // Bring a just-saved check into view and highlight it briefly.
   useEffect(() => {
@@ -1234,7 +1248,7 @@ function App() {
             <div className="workspace-grid">
               <section className="panel endpoints-panel">
                 <div className="panel-header"><div><h2>Endpoints</h2><p>Select an endpoint to review its scenarios.</p></div><span className="count-pill">{overview.operation_count}</span></div>
-                <div className="endpoint-list">
+                <div className="endpoint-list" ref={endpointList}>
                   {overview.operations.map((item, index) => (
                     <button key={`${item.method}-${item.path}-${index}`} className={`endpoint-row ${selectedOperation === index ? "selected" : ""}`} onClick={() => selectOperation(index)}>
                       <span className={`method-tag method-${item.method.toLowerCase()}`}>{item.method}</span>
