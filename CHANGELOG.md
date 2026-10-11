@@ -2,6 +2,15 @@
 
 The version lives in the [`VERSION`](VERSION) file and follows [Semantic Versioning](https://semver.org/). Before 1.0.0, a new feature raises the minor number (0.**x**.0) and a fix or visual change raises the patch number (0.x.**y**).
 
+## 1.1.0 — 2026-10-11
+
+### Explainable risk score
+- Every endpoint on **Coverage & Risk** has a risk score from 0 to 100 (high from 50, medium from 25), and the list is ordered by it, highest first.
+- The score is the sum of fixed rules, and each rule that added points is shown next to it, for example *+20 Deletes data*, *+10 Sensitive area: orders*, *+35 Failing in latest run*.
+- Impact rules come from the contract: deletes or changes data, requires authentication, a path that names accounts, users, orders, payments, or access control. Evidence rules come from Run history: failing, flaky, never tested, auth not checked, only happy path tested, checks not run yet, not run in 7+ days.
+- **How the risk score works** lists every rule with its points. No AI is involved, so the same history always gives the same score.
+- A **High-risk endpoints** card and a **High risk** filter; the Markdown and JSON reports include each score, its level, and its reasons.
+
 ## 1.0.2 — 2026-10-11
 
 ### Security
