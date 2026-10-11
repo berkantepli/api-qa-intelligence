@@ -2,6 +2,14 @@
 
 The version lives in the [`VERSION`](VERSION) file and follows [Semantic Versioning](https://semver.org/). Before 1.0.0, a new feature raises the minor number (0.**x**.0) and a fix or visual change raises the patch number (0.x.**y**).
 
+## Unreleased
+
+### Flows
+- `api-qa run --flows` runs the contract's lifecycle flows in CI. They need `--include-writes` and are reported as skipped without it; path parameters a flow cannot derive come from `--param` or `--inputs`. Each flow is a JUnit test suite with one test case per step, the JSON report gains `flows` and flow totals, and a failing flow exits 1.
+- Importing a CLI report on Coverage & Risk also brings its flows into Run history.
+- A nested collection such as `/owners/{ownerId}/pets` no longer needs `ownerId` typed in: its flow first creates an owner with the owner's flow and deletes it at the end.
+- When the create response is not documented and has no `id` field, the new record's id is taken from the last part of the `Location` header.
+
 ## 1.6.0 — 2026-10-11
 
 ### Re-imports
