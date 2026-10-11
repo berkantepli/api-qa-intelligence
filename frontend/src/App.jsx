@@ -161,6 +161,9 @@ function App() {
   const { operationParameters, bodyFields, isFormBody, fileFields, sendsJsonBody, rawJsonFallback, validBodyTemplate, needsRawJsonBody } = describedOperation;
   const { getParameterValue, getBodyFieldValue, rawJsonBodyValue, rawJsonBodyIsValid } = requestValues(describedOperation, operationInputs);
   const { ready: inputsReady } = requestReadiness(describedOperation, operationInputs, requestFiles[operationKey]);
+  // Marks the same empty fields that keep the checks from running, on the fields themselves.
+  const bodyFieldMissing = (field) => Boolean(operation?.request_body_required) && field.required
+    && (field.is_file ? !requestFiles[operationKey]?.[field.name]?.length : !getBodyFieldValue(field).trim());
   const hasInvalidJsonValue = (field) => !field.is_file && ["object", "array"].includes(field.field_type)
     && Boolean(getBodyFieldValue(field).trim()) && !isValidJson(getBodyFieldValue(field));
   const scenarioTemplates = operationScenarios
@@ -525,6 +528,14 @@ function App() {
   function updateRequestInput(name, value) {
     mergeOperationInputs(activeApiId, operationKey, { [name]: value });
     clearFillMark(name);
+    clearFillSummary();
+  }
+
+  // A summary such as "Every field already has a value." is only true until a field changes.
+  function clearFillSummary() {
+    setSampleFill((current) => current[operationKey]?.summary
+      ? { ...current, [operationKey]: { ...current[operationKey], summary: "" } }
+      : current);
   }
 
   function updateRequestFiles(name, files) {
@@ -533,6 +544,7 @@ function App() {
       [operationKey]: { ...(current[operationKey] ?? {}), [name]: files },
     }));
     clearFillMark(`body:${name}`);
+    clearFillSummary();
   }
 
   async function fillWithAi() {
@@ -1006,16 +1018,18 @@ function App() {
                     <button className="secondary-button fill-button" type="button" onClick={fillWithAi} disabled={operationFill.loading || running} title="Fill empty fields with schema-valid sample values. Only field names and schemas are sent to your AI model.">{operationFill.loading ? <><span className="spinner" /> Filling…</> : <><Icon name="spark" size={14} /> Fill with AI</>}</button>
                   </div>
                   {(operationFill.summary || operationFill.error) && <p className={`fill-summary ${operationFill.error ? "request-input-error" : ""}`} role="status">{operationFill.error || operationFill.summary}</p>}
-                  {operationParameters.map((parameter) => <label className="request-input" key={`${parameter.location}:${parameter.name}`}>
+                  {operationParameters.map((parameter) => <label className={`request-input ${parameter.required && !getParameterValue(parameter).trim() ? "request-input-missing" : ""}`} key={`${parameter.location}:${parameter.name}`}>
                     <span>{parameter.name}<small>{parameterLabel(parameter)}</small></span>
                     <input type={parameter.location === "header" ? "password" : "text"} value={getParameterValue(parameter)} onChange={(event) => updateRequestInput(`parameter:${parameter.location}:${parameter.name}`, event.target.value)} placeholder={parameter.example == null ? `Enter ${parameter.name}` : String(parameter.example)} />
                     {inputHelp(parameter) && <small className="request-input-help">{inputHelp(parameter)}</small>}
+                    {parameter.required && !getParameterValue(parameter).trim() && <small className="request-input-help request-input-required">Required to run the checks.</small>}
                     <FillHint hint={fillMarkFor(parameterInputKey(parameter))} />
                   </label>)}
-                  {bodyFields.map((field) => <label className="request-input" key={`body:${field.name}`}>
+                  {bodyFields.map((field) => <label className={`request-input ${bodyFieldMissing(field) ? "request-input-missing" : ""}`} key={`body:${field.name}`}>
                     <span>{field.name}<small>{field.is_file ? (field.multiple ? "file · multiple" : "file") : `${isFormBody ? "form field" : "request body"}${field.required ? " · required" : " · optional"}`}</small></span>
                     {field.is_file ? <><input type="file" multiple={field.multiple} onChange={(event) => updateRequestFiles(field.name, Array.from(event.target.files ?? []))} /><small className="request-input-help">{requestFiles[operationKey]?.[field.name]?.map((item) => item.name).join(", ") || (field.required ? "Choose a file to run this check." : "Optional file upload.")}</small></> : field.field_type === "object" || field.field_type === "array" ? <textarea rows="3" value={getBodyFieldValue(field)} onChange={(event) => updateRequestInput(`body:${field.name}`, event.target.value)} placeholder={`Enter ${field.name}${field.required ? " (required)" : ""}`} /> : <input type="text" value={getBodyFieldValue(field)} onChange={(event) => updateRequestInput(`body:${field.name}`, event.target.value)} placeholder={field.example == null ? `Enter ${field.name}${field.required ? " (required)" : ""}` : String(field.example)} />}
                     {inputHelp(field) && <small className="request-input-help">{inputHelp(field)}</small>}
+                    {bodyFieldMissing(field) && !field.is_file && <small className="request-input-help request-input-required">Required to run the checks.</small>}
                     <FillHint hint={fillMarkFor(bodyInputKey(field))} />
                     {hasInvalidJsonValue(field) && <small className="request-input-help request-input-error">Enter valid JSON for this field.</small>}
                   </label>)}
