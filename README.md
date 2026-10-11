@@ -117,6 +117,10 @@ Each step shows its request, the status it expects, and the value it saves for l
 
 APIs saved before 1.3 get their flows suggested the first time the Flows page opens.
 
+**Edit** changes a flow's steps: their names, method, path, expected status codes, query parameters, JSON body, the values each step saves for later steps (a name, *the response* or *the request*, and a JSON Pointer such as `/id`), and whether a step runs even after an earlier one fails. Steps can be added, removed, and reordered, and **New flow** builds one from scratch. The editor marks a `{{value}}` that no earlier step saves before the flow can be saved. Edited and custom flows are saved with the API, survive importing the contract again, and run like suggested ones; **Reset to suggested** discards the edits. Body fields that look like credentials are not saved, like other request details.
+
+On **Coverage & Risk**, a *Lifecycle flows passing* card counts the flows whose latest run passed, and a create endpoint whose flows have never run gets *Lifecycle not tested* (+10 to its risk score).
+
 ### Settings and backups
 
 ### Where data is saved
