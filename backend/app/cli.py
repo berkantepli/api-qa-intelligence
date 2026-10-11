@@ -1,4 +1,5 @@
-"""Command-line runner for CI pipelines: ``api-qa run --spec openapi.json --junit report.xml``.
+"""Command-line tools for CI pipelines: ``api-qa run --spec openapi.json --junit report.xml`` and
+``api-qa diff old.yaml new.yaml`` (see compare_contracts).
 
 It runs an OpenAPI contract's runnable checks against a target API without the web app and
 exits with 0 when every check passes, 1 when a check fails or errors, and 2 on a usage or
@@ -19,6 +20,7 @@ import yaml
 from fastapi import HTTPException
 from pydantic import ValidationError
 
+from app.domain.contract_diff import SEVERITY_ORDER, diff_contracts, diff_markdown
 from app.domain.execution import ScenarioExecutionRequest, execute_scenario
 from app.domain.flows import UNFILLED_PATH_PARAMETER, ApiFlow, FlowExecutionRequest, execute_flow
 from app.domain.network import request_error_reason
@@ -66,6 +68,14 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--fail-on-skipped", action="store_true", help="Exit 1 when an endpoint is skipped for missing inputs.")
     run.add_argument("--junit", type=Path, metavar="FILE", help="Write a JUnit XML report.")
     run.add_argument("--json", type=Path, metavar="FILE", help="Write a JSON report.")
+
+    diff = commands.add_parser("diff", help="Compare two versions of a contract and classify every change.")
+    diff.add_argument("base", help="The earlier contract: a file path or an http(s) URL.")
+    diff.add_argument("head", help="The new contract: a file path or an http(s) URL.")
+    diff.add_argument("--markdown", metavar="FILE", help="Write a Markdown report, for example for a pull request comment; - writes it to standard output.")
+    diff.add_argument("--json", type=Path, metavar="FILE", help="Write a JSON report.")
+    diff.add_argument("--fail-on", choices=["breaking", "warning", "never"], default="breaking",
+                      help="Exit 1 when a change is at least this severe (default: breaking).")
     return parser
 
 
@@ -289,8 +299,43 @@ def redact_secrets(text: str, secrets: list[str]) -> str:
     return text
 
 
+def compare_contracts(args: argparse.Namespace) -> int:
+    try:
+        base, head = load_contract(args.base), load_contract(args.head)
+    except UsageError as error:
+        print(f"api-qa: {error}", file=sys.stderr)
+        return EXIT_USAGE
+    diff = diff_contracts(base, head)
+    totals = diff.totals
+    print(
+        f"{diff.base_title} {diff.base_version} → {diff.head_title} {diff.head_version}: "
+        f"{totals['breaking']} breaking, {totals['warning']} warning, {totals['safe']} safe "
+        f"across {plural(totals['endpoints'], 'endpoint')}",
+        file=sys.stderr,
+    )
+    for endpoint in diff.endpoints:
+        for change in endpoint.changes:
+            if change.severity != "safe":
+                print(f"  {change.severity.upper():<8} {endpoint.key} · {change.location}: {change.message}", file=sys.stderr)
+    try:
+        if args.markdown == "-":
+            sys.stdout.write(diff_markdown(diff))
+        elif args.markdown:
+            Path(args.markdown).write_text(diff_markdown(diff), encoding="utf-8")
+        if args.json:
+            args.json.write_text(diff.model_dump_json(indent=2), encoding="utf-8")
+    except OSError as error:
+        print(f"api-qa: the report could not be written: {error}", file=sys.stderr)
+        return EXIT_USAGE
+    if args.fail_on == "never" or diff.severity is None:
+        return EXIT_OK
+    return EXIT_FAILED if SEVERITY_ORDER[diff.severity] <= SEVERITY_ORDER[args.fail_on] else EXIT_OK
+
+
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    if args.command == "diff":
+        return compare_contracts(args)
     try:
         report = asyncio.run(run_checks(args))
     except UsageError as error:
