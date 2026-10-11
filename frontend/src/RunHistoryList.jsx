@@ -7,6 +7,7 @@ function CountSummary({ summary }) {
     <i className="history-pass">{summary.passed} passed</i>
     {summary.failed > 0 && <i className="history-fail">{summary.failed} failed</i>}
     {summary.errors > 0 && <i className="history-fail">{summary.errors} {summary.errors === 1 ? "error" : "errors"}</i>}
+    {summary.skipped > 0 && <i>{summary.skipped} skipped</i>}
   </span>;
 }
 
@@ -62,7 +63,7 @@ export default function RunHistoryList({ runs, savedApis, openGroups, onToggleGr
               <button className="history-run" type="button" onClick={() => onOpenRun(run.id)}>
                 <span className={`history-run-dot ${healthy ? "pass" : "fail"}`} aria-hidden="true" />
                 <span className="history-run-endpoint">{run.endpoint}{run.source === "cli" && <i className="run-source-badge" title="Imported from an api-qa run report">CI</i>}</span>
-                <span className="history-run-meta">{summary.total} {summary.total === 1 ? "check" : "checks"} · <CountSummary summary={summary} /></span>
+                <span className="history-run-meta">{summary.total} {run.kind === "flow" ? (summary.total === 1 ? "step" : "steps") : (summary.total === 1 ? "check" : "checks")} · <CountSummary summary={summary} /></span>
                 <time className="history-run-time">{new Date(run.createdAt).toLocaleString()}</time>
                 <Icon className="history-chevron" name="chevron" size={15} />
               </button>

@@ -165,6 +165,27 @@ test("lists the coverage gaps of an endpoint", async ({ page }) => {
   await expect(item.locator(".coverage-gap-codes")).toContainText("200Received");
 });
 
+test("runs a flow that passes the created id to the next request", async ({ page }) => {
+  await page.goto("/");
+  await nav(page, "Flows");
+  const flow = page.locator(".flow-card").filter({ has: page.getByRole("heading", { name: "Pet lifecycle" }) });
+  await expect(flow.locator(".flow-step")).toHaveCount(2);
+
+  await flow.getByRole("button", { name: "Run flow" }).click();
+  await expect(flow.locator(".execution-confirmation")).toContainText("This flow changes data.");
+  await flow.getByRole("button", { name: "Confirm and run" }).click();
+
+  // The created pet's id reaches GET /pets/{id}, whose body breaks the contract.
+  await expect(flow.locator(".flow-step").nth(0)).toContainText("id = 2");
+  await expect(flow.locator(".flow-step").nth(1)).toContainText("$.name: required property is missing");
+  await expect(flow.locator(".flow-card-pills .history-status")).toHaveText("FAIL");
+
+  await flow.getByRole("button", { name: "View run details" }).click();
+  await expect(page.getByRole("heading", { name: "Flow: Pet lifecycle" })).toBeVisible();
+  await expect(page.locator(".run-check").nth(1)).toContainText("GET http://127.0.0.1");
+  await expect(page.locator(".run-check").nth(1)).toContainText("/pets/2");
+});
+
 test("imports a CLI report so CI runs count on Coverage", async ({ page }) => {
   const reportPath = join(mkdtempSync(join(tmpdir(), "api-qa-cli-")), "report.json");
   // The CLI runs from the backend folder, so a relative interpreter path is resolved first.

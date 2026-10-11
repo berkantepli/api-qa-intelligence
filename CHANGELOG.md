@@ -2,13 +2,23 @@
 
 The version lives in the [`VERSION`](VERSION) file and follows [Semantic Versioning](https://semver.org/). Before 1.0.0, a new feature raises the minor number (0.**x**.0) and a fix or visual change raises the patch number (0.x.**y**).
 
-## 1.3.0 — 2026-10-11
+## 1.4.0 — 2026-10-11
 
 ### CI runs on Coverage
 - **Import CI report** on **Coverage & Risk** adds the checks from an `api-qa run --json` report, so checks run in CI count on coverage, risk scores, and coverage gaps like checks run in the browser.
 - The report is matched to the saved API with the same title (the active API first, then the same version). Each endpoint that ran becomes a run marked **CI** in Run history and Run details; skipped endpoints add nothing.
 - Importing the same report again adds nothing. Endpoints the saved API does not have, and a report for another API version, are named in the result message.
 - The GitHub Actions example installs a 1.x release and explains how to use the uploaded report.
+
+## 1.3.0 — 2026-10-11
+
+### Flows
+- A new **Flows** page, next to Coverage in the sidebar, suggests multi-step checks that follow one record through its lifecycle: create it, read it back, update it, delete it, and confirm it is gone. A created record's id is passed to the following requests.
+- Flows come from the contract: an OpenAPI `link` names the value to pass on; without one, the item path's parameter (`{petId}`) is matched to a field of the create response or the request body, and the flow says how it was found.
+- **Run flow** asks for confirmation and runs the steps in order against the active target, each judged like a single check (status, documented schema, time limit). After a failure the remaining steps are skipped, but the cleanup delete still runs when the record was created.
+- Path parameters a flow cannot derive and credentials are entered on the flow; credentials typed in the overview are reused and never stored. Values saved under sensitive names (such as a token) are redacted in the evidence.
+- Flow runs appear in Run history with each step's request and response, the values it saved, and why a step was skipped. **Run again** opens the API's flows. Endpoint coverage still counts single-endpoint runs only.
+- Backend: `POST /api/v1/flows/execute` runs a flow and `POST /api/v1/flows/suggest` suggests flows for a list of operations; the API overview gains `flows` and each operation its `links`. APIs saved before this version get their flows the first time the Flows page opens.
 
 ## 1.2.0 — 2026-10-11
 

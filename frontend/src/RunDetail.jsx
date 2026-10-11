@@ -10,6 +10,7 @@ import {
   sortedHeaders,
   summarizeResults,
 } from "./runDetail.js";
+import { ROLE_LABELS } from "./flows.js";
 import { isEditedScenario } from "./scenarioDraft.js";
 
 function HeaderTable({ headers }) {
@@ -46,6 +47,16 @@ export function SchemaDifferences({ check }) {
 
 function CheckDetail({ result, index, analysisStatus, onAnalyze }) {
   const outcome = result.result || "ERROR";
+  if (outcome === "SKIPPED") {
+    return <div className="run-check run-check-skipped">
+      <div className="run-check-summary">
+        <span className="history-status status-skipped">SKIPPED</span>
+        <span className="run-check-title"><strong>{result.title || `Step ${index + 1}`}</strong></span>
+        <span className="run-check-meta">{result.reason}</span>
+      </div>
+    </div>;
+  }
+  const savedValues = Object.entries(result.saved_values ?? {});
   return <details className={`run-check run-check-${outcome.toLowerCase()}`} open={outcome !== "PASS"}>
     <summary className="run-check-summary">
       <span className={`history-status status-${outcome.toLowerCase()}`}>{outcome}</span>
@@ -54,6 +65,7 @@ function CheckDetail({ result, index, analysisStatus, onAnalyze }) {
         <span className="run-check-pills">
           {result.category && <span className={`category-pill category-${result.category}`}>{categoryLabels[result.category] || result.category}</span>}
           {isEditedScenario(result) && <span className="edited-pill">AI idea · edited</span>}
+          {result.role && <span className="review-pill">{ROLE_LABELS[result.role] ?? result.role}</span>}
         </span>
       </span>
       <span className="run-check-meta">{result.response_status != null ? `HTTP ${result.response_status}` : "No response"}{result.duration_ms != null && ` · ${result.duration_ms} ms`}</span>
@@ -69,6 +81,7 @@ function CheckDetail({ result, index, analysisStatus, onAnalyze }) {
       </dl>
       <p className={`run-outcome run-outcome-${outcome.toLowerCase()}`}>{outcomeSummary(result)}</p>
       {result.error && <p className="history-error">{result.error}</p>}
+      {savedValues.length > 0 && <p className="flow-saved-values">Saved for later steps: {savedValues.map(([name, value]) => <code key={name} className="flow-saved">{name} = {String(value)}</code>)}</p>}
       <SchemaDifferences check={result.schema_check} />
 
       <div className="evidence-grid">
@@ -106,23 +119,25 @@ function CheckDetail({ result, index, analysisStatus, onAnalyze }) {
 
 export default function RunDetail({ run, analysisState, onAnalyze, onBack, onRerun, canRerun }) {
   const summary = summarizeResults(run.results);
+  const flow = run.kind === "flow";
   return <section className="history-page run-detail">
     <button className="back-link" type="button" onClick={onBack}><Icon name="back" size={15} /> Run history</button>
-    <div className="page-eyebrow">RUN DETAILS</div>
+    <div className="page-eyebrow">{flow ? "FLOW RUN DETAILS" : "RUN DETAILS"}</div>
     <div className="run-detail-heading">
       <div>
-        <h1 className="run-detail-endpoint">{run.endpoint}</h1>
+        <h1 className={flow ? undefined : "run-detail-endpoint"}>{run.endpoint}</h1>
         <p className="page-lede">{run.api} · {new Date(run.createdAt).toLocaleString()}{run.source === "cli" && <> · <i className="run-source-badge">CI</i> from an api-qa run report{run.toolVersion ? ` (api-qa ${run.toolVersion})` : ""}</>}</p>
       </div>
-      {canRerun && <button className="secondary-button" type="button" onClick={onRerun} title="Open this endpoint with the same checks selected"><Icon name="run" size={14} /> Run again</button>}
+      {canRerun && <button className="secondary-button" type="button" onClick={onRerun} title={flow ? "Open this API's flows" : "Open this endpoint with the same checks selected"}><Icon name="run" size={14} /> Run again</button>}
     </div>
 
     <div className="run-summary">
       <div><span>Target</span><strong title={run.target}>{run.target}</strong></div>
-      <div><span>Checks</span><strong>{summary.total}</strong></div>
+      <div><span>{flow ? "Steps" : "Checks"}</span><strong>{summary.total}</strong></div>
       <div><span>Passed</span><strong className="history-pass">{summary.passed}</strong></div>
       <div><span>Failed</span><strong className={summary.failed ? "history-fail" : undefined}>{summary.failed}</strong></div>
       <div><span>Errors</span><strong className={summary.errors ? "history-fail" : undefined}>{summary.errors}</strong></div>
+      {summary.skipped > 0 && <div><span>Skipped</span><strong>{summary.skipped}</strong></div>}
     </div>
     <p className="run-redaction-note"><Icon name="shield" size={14} /> Credential-like headers, query values, and body fields were redacted before this run was saved. Uploaded file contents are not stored.</p>
 
