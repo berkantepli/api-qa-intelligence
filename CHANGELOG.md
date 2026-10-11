@@ -2,6 +2,15 @@
 
 The version lives in the [`VERSION`](VERSION) file and follows [Semantic Versioning](https://semver.org/). Before 1.0.0, a new feature raises the minor number (0.**x**.0) and a fix or visual change raises the patch number (0.x.**y**).
 
+## Unreleased
+
+### Contract changes
+- `api-qa diff BASE HEAD` compares two versions of a contract and classifies every change from a client's point of view: **breaking** (removed endpoints or success responses, new required inputs, stricter request rules, changed types, authentication now required, response fields removed), **warning** (removed request inputs, new success statuses, response values that can be null or take new enum values, authentication no longer documented), or **safe**.
+- Requests and responses are judged in opposite directions, and a renamed path parameter counts as the same endpoint.
+- Each endpoint with breaking changes or warnings lists the checks worth running again.
+- `--markdown` writes a report for a pull request comment (`-` for standard output) and `--json` the full result; the command exits 1 on breaking changes (`--fail-on warning|never` changes that). A GitHub Actions example comments the report on pull requests.
+- `POST /api/v1/specs/diff` runs the same comparison on two API overviews.
+
 ## 1.7.0 — 2026-10-12
 
 ### Flows

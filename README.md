@@ -169,6 +169,22 @@ api-qa run --spec openapi.yaml --target https://staging.example.com \
 
 A ready-to-copy GitHub Actions job is in [`docs/examples/github-actions-api-qa.yml`](docs/examples/github-actions-api-qa.yml).
 
+## Comparing contract versions
+
+`api-qa diff` compares two versions of a contract, as files or URLs, from a client's point of view:
+
+```bash
+api-qa diff openapi-v1.yaml openapi-v2.yaml --markdown contract-diff.md --json contract-diff.json
+```
+
+- **Breaking** changes can make an existing client fail: a removed endpoint or success response, a new required parameter or body field, a stricter rule on a request value (a lower `maxLength`, a removed enum value, a new `pattern`), a changed type, authentication that is now required, or a response field that was removed or is no longer always present.
+- **Warnings** deserve a look: a removed request input, a new success status, a response value that can now be null or take new enum values, or authentication that is no longer documented.
+- **Safe** changes add something: new endpoints, optional inputs, response fields, or looser request rules.
+
+Requests and responses are judged in opposite directions: a stricter rule breaks a client that sends values, but only promises less to one that reads them. Renaming a path parameter (`/pets/{id}` → `/pets/{petId}`) is the same URL and is reported as safe. For every endpoint with breaking changes or warnings, the report lists the checks worth running again (the valid request, and checks named after a changed input or about authentication).
+
+`--markdown -` writes the report to standard output, for example for a pull request comment. The command exits `1` when a change is breaking (`--fail-on warning` also counts warnings, `--fail-on never` always exits `0`), and `2` when a contract cannot be read. [`docs/examples/github-actions-contract-diff.yml`](docs/examples/github-actions-contract-diff.yml) compares the contract in a pull request with the base branch, comments the report, and fails on breaking changes. The same comparison is available as `POST /api/v1/specs/diff`.
+
 ## Running tests
 
 ```bash

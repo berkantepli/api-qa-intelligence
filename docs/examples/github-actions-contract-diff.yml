@@ -1,0 +1,39 @@
+# Example: compare the OpenAPI contract in a pull request with the one on the base branch,
+# post the classified changes as a pull request comment, and fail on breaking changes.
+# Copy this into .github/workflows/ in the repository that owns the contract.
+name: Contract changes
+
+on:
+  pull_request:
+    paths: ["openapi.yaml"]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  contract-diff:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install API QA Intelligence
+        run: pip install "git+https://github.com/berkantepli/api-qa-intelligence@v1.8.0"
+      - name: Read the base branch's contract
+        run: git show "origin/${{ github.base_ref }}:openapi.yaml" > base-openapi.yaml
+      - name: Compare
+        id: diff
+        continue-on-error: true
+        run: api-qa diff base-openapi.yaml openapi.yaml --markdown contract-diff.md --fail-on breaking
+      - name: Comment on the pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+        # Updates the previous comment instead of adding one per push.
+        run: gh pr comment "${{ github.event.pull_request.number }}" --body-file contract-diff.md --edit-last || gh pr comment "${{ github.event.pull_request.number }}" --body-file contract-diff.md
+      - name: Fail on breaking changes
+        if: steps.diff.outcome == 'failure'
+        run: exit 1
