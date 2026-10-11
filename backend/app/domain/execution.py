@@ -12,8 +12,10 @@ from fastapi import HTTPException
 from pydantic import AnyHttpUrl, BaseModel, Field, field_validator
 
 from app.domain.evidence import redact_headers, redact_text, redact_value, sanitize_url
-from app.domain.network import parse_target_base_url
+from app.domain.network import parse_target_base_url, request_error_reason
 from app.domain.schema_check import SchemaCheck, check_response
+
+REQUEST_TIMEOUT_SECONDS = 15
 
 MAX_RESPONSE_SIZE_BYTES = 250_000
 MAX_DISPLAY_BODY_CHARS = 10_000
@@ -135,7 +137,7 @@ async def execute_scenario(
 
     started = time.perf_counter()
     try:
-        async with httpx.AsyncClient(timeout=httpx.Timeout(15, connect=5), follow_redirects=False) as client:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(REQUEST_TIMEOUT_SECONDS, connect=5), follow_redirects=False) as client:
             async with client.stream(payload.method, target, **request_options) as response:
                 response_content = bytearray()
                 truncated = False
@@ -173,10 +175,8 @@ async def execute_scenario(
                     max_duration_ms=payload.max_duration_ms,
                     too_slow=too_slow,
                 )
-    except httpx.TimeoutException:
-        error = "The API did not respond before the 15 second timeout."
-    except httpx.RequestError:
-        error = "The request could not reach the target API."
+    except httpx.RequestError as request_error:
+        error = request_error_reason(request_error, "the target API", REQUEST_TIMEOUT_SECONDS)
     return ScenarioExecutionResult(
         result="ERROR",
         method=payload.method,

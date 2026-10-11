@@ -6,7 +6,7 @@ from fastapi import APIRouter
 from pydantic import AnyHttpUrl, BaseModel
 
 from app.domain.evidence import sanitize_url
-from app.domain.network import HostResolutionError, parse_target_base_url
+from app.domain.network import HostResolutionError, parse_target_base_url, request_error_reason
 
 router = APIRouter(prefix="/api/v1/targets", tags=["Scenario execution"])
 CHECK_TIMEOUT_SECONDS = 5
@@ -57,12 +57,8 @@ async def check_target(payload: TargetCheckRequest) -> TargetCheckResult:
                 method = "GET"
                 async with client.stream("GET", base) as streamed:
                     response = streamed
-    except httpx.TimeoutException:
-        error = f"No response within {CHECK_TIMEOUT_SECONDS} seconds."
-    except httpx.ConnectError:
-        error = "The connection was refused or the host is unreachable."
-    except httpx.RequestError:
-        error = "The request could not reach the target API."
+    except httpx.RequestError as request_error:
+        error = request_error_reason(request_error, "the target API", CHECK_TIMEOUT_SECONDS)
     else:
         return TargetCheckResult(
             url=url,

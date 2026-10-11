@@ -38,8 +38,8 @@ def test_server_errors_are_reachable_with_their_code(client, mock_http):
     ("error", "message"),
     [
         (httpx.ConnectError("refused"), "refused"),
-        (httpx.ReadTimeout("slow"), "No response within 5 seconds"),
-        (httpx.RemoteProtocolError("broken"), "could not reach"),
+        (httpx.ReadTimeout("slow"), "did not respond within 5 seconds"),
+        (httpx.RemoteProtocolError("broken"), "closed the connection"),
     ],
 )
 def test_unreachable_targets_explain_why(client, mock_http, error, message):
