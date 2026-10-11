@@ -36,6 +36,7 @@ The backend has no login and is meant to run on your own machine; it answers onl
 
 | Method | Path | Purpose |
 |---|---|---|
+| POST | `/api/v1/results/parse` | Read a Newman JSON report or JUnit XML (multipart field `file`, at most 5 MB) into test cases with their method, path, response status, outcome, and redacted failure message where the report records them. Nothing is stored; the web app matches the cases to endpoints. |
 | POST | `/api/v1/runs/execute` | Send one check's request to a target and judge it: expected status codes, the documented response schema (`response_schemas`), and an optional time limit (`max_duration_ms`). Returns PASS / FAIL / ERROR with redacted request and response evidence. |
 | POST | `/api/v1/runs/execute-batch` | The same for up to 20 checks, with totals. |
 | POST | `/api/v1/runs/analyze-failure` | Ask the configured Ollama model to explain a failed check from its redacted evidence (advisory; it never changes the result). |

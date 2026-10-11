@@ -2,6 +2,14 @@
 
 The version lives in the [`VERSION`](VERSION) file and follows [Semantic Versioning](https://semver.org/). Before 1.0.0, a new feature raises the minor number (0.**x**.0) and a fix or visual change raises the patch number (0.x.**y**).
 
+## 1.9.0 — 2026-10-12
+
+### Results from other tools
+- **Import test results** on **Coverage & Risk** (formerly Import CI report) also reads a Newman JSON report or JUnit XML, so a Postman collection or another test suite counts on coverage, risk scores, and coverage gaps for the active API.
+- Newman tests are matched to endpoints by method and path, even with a base path such as `/api/v3` in front. A JUnit test is matched when its suite, class, or name contains a request line such as `GET /pets/{id}`, as in the `api-qa` JUnit report. Tests that match no endpoint and skipped tests are counted in the result message and left out.
+- Imported tests appear in Run history as **Newman** or **JUnit** runs with their outcome, response status, and failure message (redacted like other evidence). Importing the same file again adds nothing.
+- Backend: `POST /api/v1/results/parse` reads such a file into test cases. JUnit XML with a DOCTYPE or entities is refused.
+
 ## 1.8.2 — 2026-10-12
 
 - The sidebar no longer shows a flow count next to **Flows**.

@@ -63,7 +63,7 @@ function CheckDetail({ result, index, analysisStatus, onAnalyze }) {
       <span className="run-check-title">
         <strong>{result.title || `Check ${index + 1}`}</strong>
         <span className="run-check-pills">
-          {result.category && <span className={`category-pill category-${result.category}`}>{categoryLabels[result.category] || result.category}</span>}
+          {result.category && <span className={`category-pill category-${result.category}`}>{result.category === "imported" ? "Imported test" : categoryLabels[result.category] || result.category}</span>}
           {isEditedScenario(result) && <span className="edited-pill">AI idea · edited</span>}
           {result.role && <span className="review-pill">{ROLE_LABELS[result.role] ?? result.role}</span>}
         </span>
@@ -126,13 +126,13 @@ export default function RunDetail({ run, analysisState, onAnalyze, onBack, onRer
     <div className="run-detail-heading">
       <div>
         <h1 className={flow ? undefined : "run-detail-endpoint"}>{run.endpoint}</h1>
-        <p className="page-lede">{run.api} · {new Date(run.createdAt).toLocaleString()}{run.source === "cli" && <> · <i className="run-source-badge">CI</i> from an api-qa run report{run.toolVersion ? ` (api-qa ${run.toolVersion})` : ""}</>}</p>
+        <p className="page-lede">{run.api} · {new Date(run.createdAt).toLocaleString()}{run.source === "cli" && <> · <i className="run-source-badge">CI</i> from an api-qa run report{run.toolVersion ? ` (api-qa ${run.toolVersion})` : ""}</>}{(run.source === "newman" || run.source === "junit") && <> · <i className="run-source-badge">{run.source === "newman" ? "Newman" : "JUnit"}</i> from “{run.importName}”</>}</p>
       </div>
       {canRerun && <button className="secondary-button" type="button" onClick={onRerun} title={flow ? "Open this API's flows" : "Open this endpoint with the same checks selected"}><Icon name="run" size={14} /> Run again</button>}
     </div>
 
     <div className="run-summary">
-      <div><span>Target</span><strong title={run.target}>{run.target}</strong></div>
+      <div><span>Target</span><strong title={run.target}>{run.target || "Not in the report"}</strong></div>
       <div><span>{flow ? "Steps" : "Checks"}</span><strong>{summary.total}</strong></div>
       <div><span>Passed</span><strong className="history-pass">{summary.passed}</strong></div>
       <div><span>Failed</span><strong className={summary.failed ? "history-fail" : undefined}>{summary.failed}</strong></div>

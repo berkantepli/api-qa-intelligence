@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { categoryLabels, inputHelp, parameterLabel } from "./categories.js";
 import { cliImportMessage, cliReportRuns, matchReportApi, parseCliReport } from "./cliReport.js";
+import { testResultRuns, testResultsMessage } from "./testResults.js";
 import { reimportedApi, staleCheckReasons } from "./contractDiff.js";
 import { classifyContractChanges, withClassification } from "./contractSeverity.js";
 import CoveragePage from "./CoveragePage.jsx";
@@ -52,6 +53,16 @@ function writeStored(key, value) {
 }
 
 const isValidTimeLimit = (text) => /^\d+$/.test(text) && Number(text) >= 1 && Number(text) <= 120000;
+
+// An `api-qa run --json` report names its API and lists endpoints; other files go to the backend.
+function isApiQaReport(text) {
+  try {
+    const report = JSON.parse(text);
+    return typeof report?.api === "string" && Array.isArray(report?.endpoints);
+  } catch {
+    return false;
+  }
+}
 
 function reimportNotice(api, previousTitle = api.title) {
   const name = previousTitle === api.title ? api.title : `${previousTitle} again, now titled ${api.title}`;
@@ -875,6 +886,22 @@ function App() {
     }
   }
 
+  // Adds test results to Run history, so they count on Coverage: an `api-qa run --json` report is read
+  // here; a Newman JSON report or JUnit XML is read by the backend and matched to the active API's endpoints.
+  async function importTestResults(file) {
+    const text = await file.text();
+    if (isApiQaReport(text)) return importCliReport(text);
+    if (!overview) throw new Error("Open the API these tests are for first.");
+    const data = new FormData();
+    data.append("file", file);
+    const parsed = await requestJson("/api/v1/results/parse", { method: "POST", body: data }, "The test results could not be read.");
+    const outcome = testResultRuns(parsed, activeApi, runHistory);
+    if (outcome.runs.length) {
+      setRunHistory((current) => [...outcome.runs, ...current].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)));
+    }
+    return { message: testResultsMessage(parsed, activeApi, outcome), otherApi: null };
+  }
+
   // Adds the checks from an `api-qa run --json` report to Run history, so CI runs count on Coverage.
   function importCliReport(text) {
     const report = parseCliReport(text);
@@ -1082,7 +1109,7 @@ function App() {
             onBulkRun={runBulk}
             onStopBulkRun={() => { bulkStopRequested.current = true; }}
             onDismissBulkRun={() => setBulkRun(null)}
-            onImportCliReport={importCliReport}
+            onImportTestResults={importTestResults}
             contractChanges={activeApi?.contractChanges}
             lifecycle={apiLifecycle}
             onOpenFlows={openFlowsPage}
@@ -1108,7 +1135,7 @@ function App() {
             onGoToSpecs={openSpecsPage}
           />
         ) : page === "history" && selectedRun ? (
-          <RunDetail run={selectedRun} analysisState={analysisState} onAnalyze={analyzeFailure} onBack={() => openRunHistory()} onRerun={() => (isFlowRun(selectedRun) ? openSavedFlows(selectedRun) : rerunInOverview(selectedRun))} canRerun={savedApis.some((api) => api.id === selectedRun.apiId || api.title === selectedRun.api)} />
+          <RunDetail run={selectedRun} analysisState={analysisState} onAnalyze={analyzeFailure} onBack={() => openRunHistory()} onRerun={() => (isFlowRun(selectedRun) ? openSavedFlows(selectedRun) : rerunInOverview(selectedRun))} canRerun={!["newman", "junit"].includes(selectedRun.source) && savedApis.some((api) => api.id === selectedRun.apiId || api.title === selectedRun.api)} />
         ) : page === "history" ? (
           <RunHistoryList
             runs={runHistory}

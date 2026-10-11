@@ -19,7 +19,14 @@ export function requestLine(result) {
   return `${result.method || ""} ${result.request_url || result.path || ""}`.trim();
 }
 
+const IMPORTED_FROM = { newman: "Newman", junit: "JUnit" };
+
 export function outcomeSummary(result) {
+  // Results imported from another tool have no expected status; they say what that tool reported.
+  if (result.imported) {
+    if ((result.result || "ERROR") !== "PASS") return result.reason || `Did not pass in ${IMPORTED_FROM[result.imported] ?? result.imported}.`;
+    return `Passed in ${IMPORTED_FROM[result.imported] ?? result.imported}${result.response_status != null ? ` with HTTP ${result.response_status}` : ""}.`;
+  }
   // Flow steps say why they were skipped, or why a step failed after the expected response.
   if ((result.result || "ERROR") !== "PASS" && result.reason) return result.reason;
   const expected = result.expected_status_codes?.length ? result.expected_status_codes.join(" or ") : "a documented status";

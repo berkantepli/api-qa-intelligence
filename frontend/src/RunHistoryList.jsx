@@ -2,6 +2,13 @@ import { useState } from "react";
 import Icon from "./Icon.jsx";
 import { groupRunsByApi, summarizeResults } from "./runDetail.js";
 
+// Runs imported from a report rather than run here.
+const SOURCE_BADGES = {
+  cli: { label: "CI", title: "Imported from an api-qa run report" },
+  newman: { label: "Newman", title: "Imported from a Newman (Postman) report" },
+  junit: { label: "JUnit", title: "Imported from a JUnit XML report" },
+};
+
 function CountSummary({ summary }) {
   return <span className="run-counts">
     <i className="history-pass">{summary.passed} passed</i>
@@ -62,7 +69,7 @@ export default function RunHistoryList({ runs, savedApis, openGroups, onToggleGr
             <div className="history-run-item">
               <button className="history-run" type="button" onClick={() => onOpenRun(run.id)}>
                 <span className={`history-run-dot ${healthy ? "pass" : "fail"}`} aria-hidden="true" />
-                <span className="history-run-endpoint">{run.endpoint}{run.source === "cli" && <i className="run-source-badge" title="Imported from an api-qa run report">CI</i>}</span>
+                <span className="history-run-endpoint">{run.endpoint}{SOURCE_BADGES[run.source] && <i className="run-source-badge" title={SOURCE_BADGES[run.source].title}>{SOURCE_BADGES[run.source].label}</i>}</span>
                 <span className="history-run-meta">{summary.total} {run.kind === "flow" ? (summary.total === 1 ? "step" : "steps") : (summary.total === 1 ? "check" : "checks")} · <CountSummary summary={summary} /></span>
                 <time className="history-run-time">{new Date(run.createdAt).toLocaleString()}</time>
                 <Icon className="history-chevron" name="chevron" size={15} />

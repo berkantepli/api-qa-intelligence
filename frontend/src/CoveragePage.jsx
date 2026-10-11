@@ -120,18 +120,18 @@ function download(content, fileName, type) {
 
 export default function CoveragePage({
   overview, apiRuns, onOpenEndpoint, onGoToSpecs,
-  inputsByOperation, filesByOperation, targetUrl, targetProblem, bulkRun, onBulkRun, onStopBulkRun, onDismissBulkRun, onImportCliReport, contractChanges,
+  inputsByOperation, filesByOperation, targetUrl, targetProblem, bulkRun, onBulkRun, onStopBulkRun, onDismissBulkRun, onImportTestResults, contractChanges,
   lifecycle = null, onOpenFlows,
 }) {
   const [filterId, setFilterId] = useState("all");
   const [importMessage, setImportMessage] = useState(null);
   const reportInput = useRef(null);
-  async function importCliReport(event) {
+  async function importTestResults(event) {
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file) return;
     try {
-      const result = onImportCliReport(await file.text());
+      const result = await onImportTestResults(file);
       const text = result.otherApi ? `${result.message} Open ${result.otherApi} to see its coverage.` : result.message;
       setImportMessage({ tone: "success", text });
     } catch (caught) {
@@ -163,8 +163,8 @@ export default function CoveragePage({
     <div className="coverage-heading">
       <p className="page-lede">{overview.title} · based on {totals.checksExecuted} {totals.checksExecuted === 1 ? "check" : "checks"} in Run history.</p>
       <div className="coverage-export">
-        <button className="secondary-button" type="button" onClick={() => reportInput.current?.click()} title="Add the checks from an api-qa run --json report"><Icon name="upload" size={14} /> Import CI report</button>
-        <input ref={reportInput} type="file" accept="application/json,.json" hidden onChange={importCliReport} />
+        <button className="secondary-button" type="button" onClick={() => reportInput.current?.click()} title="Add test results: an api-qa run --json report, a Newman JSON report, or JUnit XML"><Icon name="upload" size={14} /> Import test results</button>
+        <input ref={reportInput} type="file" accept="application/json,.json,application/xml,text/xml,.xml" hidden onChange={importTestResults} />
         <button className="secondary-button" type="button" onClick={() => exportReport("md")}><Icon name="arrow" size={14} /> Export Markdown</button>
         <button className="secondary-button" type="button" onClick={() => exportReport("json")}><Icon name="arrow" size={14} /> Export JSON</button>
       </div>
