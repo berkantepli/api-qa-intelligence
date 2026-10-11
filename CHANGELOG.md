@@ -2,6 +2,11 @@
 
 The version lives in the [`VERSION`](VERSION) file and follows [Semantic Versioning](https://semver.org/). Before 1.0.0, a new feature raises the minor number (0.**x**.0) and a fix or visual change raises the patch number (0.x.**y**).
 
+## Unreleased
+
+### Added
+- **Flows (backend):** multi-step lifecycle checks that pass a created record's id to the next request. Imports suggest a flow for each collection whose POST creates records that an item path reads or deletes (create → read → update → delete → confirm it is gone), using OpenAPI `links` when the contract has them. `POST /api/v1/flows/execute` runs a flow step by step; cleanup steps still run after a failure. The API overview gains `flows`, and each operation its `links`. The Flows page in the web app follows in the next change.
+
 ## 1.2.0 — 2026-10-11
 
 ### Coverage gaps

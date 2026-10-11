@@ -3,6 +3,7 @@ from typing import Any
 
 from pydantic import AnyHttpUrl, BaseModel, Field
 
+from app.domain.flows import ApiFlow, infer_flows
 from app.domain.schema_check import response_schemas
 from app.domain.swagger2 import convert_swagger2, is_swagger2
 
@@ -66,6 +67,18 @@ class QaScenario(BaseModel):
     request_example: ScenarioRequestExample | None = None
 
 
+class OperationLink(BaseModel):
+    """An OpenAPI link: a value from this operation's response feeds a parameter of another operation."""
+
+    name: str
+    status: str
+    operation_id: str | None = None
+    # The target as "METHOD /path" when the link names it with a local operationRef.
+    operation: str | None = None
+    # Target parameter name -> runtime expression such as "$response.body#/id".
+    parameters: dict[str, str] = Field(default_factory=dict)
+
+
 class ApiOperation(BaseModel):
     method: str
     path: str
@@ -81,6 +94,7 @@ class ApiOperation(BaseModel):
     # Every documented response code ("200", "404", "4XX", "DEFAULT"), with or without a JSON body.
     response_codes: list[str] = Field(default_factory=list)
     scenarios: list[QaScenario] = Field(default_factory=list)
+    links: list[OperationLink] = Field(default_factory=list)
 
 
 class ApiOverview(BaseModel):
@@ -90,6 +104,8 @@ class ApiOverview(BaseModel):
     servers: list[str] = Field(default_factory=list)
     operation_count: int
     operations: list[ApiOperation]
+    # Multi-step checks (create, read, update, delete) that pass values from one request to the next.
+    flows: list[ApiFlow] = Field(default_factory=list)
 
 
 class SpecUrlRequest(BaseModel):
@@ -178,6 +194,7 @@ def summarize_openapi(document: Any) -> ApiOverview:
                         method.upper(), path, details, global_security, document, body_content_type, body_fields,
                         [parameter for parameter in parameters if parameter.credential],
                     ),
+                    links=_operation_links(details.get("responses"), document),
                 )
             )
 
@@ -188,7 +205,47 @@ def summarize_openapi(document: Any) -> ApiOverview:
         servers=server_urls,
         operation_count=len(operations),
         operations=operations,
+        flows=infer_flows(operations),
     )
+
+
+def _operation_links(responses: Any, document: Mapping[str, Any]) -> list[OperationLink]:
+    if not isinstance(responses, Mapping):
+        return []
+    links = []
+    for status, response in responses.items():
+        response = _resolve_schema(response, document) if isinstance(response, Mapping) else None
+        raw_links = response.get("links") if isinstance(response, Mapping) else None
+        if not isinstance(raw_links, Mapping):
+            continue
+        for name, raw_link in raw_links.items():
+            link = _resolve_schema(raw_link, document) if isinstance(raw_link, Mapping) else None
+            if not isinstance(link, Mapping) or not isinstance(link.get("parameters"), Mapping):
+                continue
+            parameters = {
+                # A parameter may be qualified with its location ("path.petId").
+                str(key).split(".", 1)[-1]: value
+                for key, value in link["parameters"].items()
+                if isinstance(value, str)
+            }
+            links.append(OperationLink(
+                name=str(name),
+                status=str(status).upper(),
+                operation_id=_optional_string(link.get("operationId")),
+                operation=_local_operation_ref(link.get("operationRef")),
+                parameters=parameters,
+            ))
+    return links
+
+
+def _local_operation_ref(reference: Any) -> str | None:
+    """Turns "#/paths/~1pet~1{petId}/get" into "GET /pet/{petId}"; other references are ignored."""
+    if not isinstance(reference, str) or not reference.startswith("#/paths/"):
+        return None
+    path, _, method = reference[len("#/paths/"):].rpartition("/")
+    if not path or method.lower() not in HTTP_METHODS:
+        return None
+    return f"{method.upper()} {path.replace('~1', '/').replace('~0', '~')}"
 
 
 def _optional_string(value: Any) -> str | None:

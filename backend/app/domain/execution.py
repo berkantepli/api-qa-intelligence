@@ -105,6 +105,15 @@ async def execute_scenario(
     payload: ScenarioExecutionRequest, *, allow_private_network: bool = False
 ) -> ScenarioExecutionResult:
     """Sends one check's request and judges the response; shared by the web API and the CLI."""
+    result, _ = await send_check(payload, allow_private_network=allow_private_network)
+    return result
+
+
+async def send_check(
+    payload: ScenarioExecutionRequest, *, allow_private_network: bool = False
+) -> tuple[ScenarioExecutionResult, bytes | None]:
+    """Like execute_scenario, but also returns the raw response body (unredacted, None when no
+    complete body was received) so a flow can read values such as a created record's id."""
     base = parse_target_base_url(str(payload.base_url), allow_private_network=allow_private_network)
 
     # OpenAPI servers often carry a base path (e.g. /api/v3); operation paths are relative to it.
@@ -174,7 +183,7 @@ async def execute_scenario(
                     schema_check=schema_check,
                     max_duration_ms=payload.max_duration_ms,
                     too_slow=too_slow,
-                )
+                ), None if truncated else bytes(response_content)
     except httpx.RequestError as request_error:
         error = request_error_reason(request_error, "the target API", REQUEST_TIMEOUT_SECONDS)
     return ScenarioExecutionResult(
@@ -187,7 +196,7 @@ async def execute_scenario(
         request_headers=request_headers,
         request_body=request_body_evidence,
         error=error,
-    )
+    ), None
 
 
 def _request_headers(payload: ScenarioExecutionRequest) -> dict[str, str]:
