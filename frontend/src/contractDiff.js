@@ -114,6 +114,9 @@ export function reimportedApi(existing, imported) {
     overview: { ...imported.overview, operations },
     targetUrl: existing.targetUrl || imported.targetUrl,
     ...(existing.maxDurationMs != null ? { maxDurationMs: existing.maxDurationMs } : {}),
+    // Flow edits and flows the user built belong to the API, not to one version of its contract.
+    ...(existing.flowEdits ? { flowEdits: existing.flowEdits } : {}),
+    ...(existing.customFlows ? { customFlows: existing.customFlows } : {}),
     // A re-import without changes keeps the previous comparison, so its pending changes stay visible.
     contractChanges: changes ? { ...changes, droppedChecks } : existing.contractChanges ?? null,
   };
