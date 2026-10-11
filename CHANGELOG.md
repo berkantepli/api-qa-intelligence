@@ -2,6 +2,11 @@
 
 The version lives in the [`VERSION`](VERSION) file and follows [Semantic Versioning](https://semver.org/). Before 1.0.0, a new feature raises the minor number (0.**x**.0) and a fix or visual change raises the patch number (0.x.**y**).
 
+## 1.9.1 — 2026-10-12
+
+- The connection indicator shows **Slow to respond** when the target does not answer within the probe's time limit, instead of **API unavailable**; refused connections and unknown hosts still show API unavailable. The probe now waits up to 8 seconds, and its result includes `timed_out`.
+- A check, bulk run, or flow step that gets a response marks the target as reachable, so the indicator no longer contradicts a run that just worked.
+
 ## 1.9.0 — 2026-10-12
 
 ### Results from other tools
