@@ -58,6 +58,6 @@ async def analyze_failed_check(payload: FailureAnalysisRequest) -> FailureAnalys
     except AIProviderUnavailable as error:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="The configured local AI model is unavailable. Check Ollama and OLLAMA_MODEL.",
+            detail="The local AI model is not available. Check that Ollama is running and the configured model is installed.",
         ) from error
     return analysis

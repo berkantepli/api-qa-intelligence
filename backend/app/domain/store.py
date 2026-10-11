@@ -56,7 +56,10 @@ class WorkspaceStore:
             row = db.execute("SELECT value FROM meta WHERE key = 'schema_version'").fetchone()
             version = int(row[0]) if row else 0
             if version > SCHEMA_VERSION:
-                raise RuntimeError(f"The workspace database is from a newer version (schema {version}).")
+                raise RuntimeError(
+                    f"The workspace database was saved by a newer version of API QA Intelligence (schema {version}). "
+                    "Update the app to open it."
+                )
             for target in range(version + 1, SCHEMA_VERSION + 1):
                 db.executescript(MIGRATIONS[target])
             db.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('schema_version', ?)", (str(SCHEMA_VERSION),))

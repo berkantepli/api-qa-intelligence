@@ -64,7 +64,7 @@ def test_error_when_target_is_unreachable(client, mock_http):
 
     assert result["result"] == "ERROR"
     assert result["response_status"] is None
-    assert "could not reach" in result["error"]
+    assert "Could not connect to the target API: the connection was refused" in result["error"]
 
 
 def test_sends_real_values_but_records_redacted_evidence(client, mock_http):

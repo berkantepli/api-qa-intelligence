@@ -105,11 +105,21 @@ def test_include_writes_and_smoke(spec, mock_http):
         (["--spec", "{spec}", "--header", "bad"], "must look like 'Name: value'"),
         (["--spec", "{spec}", "--target", "http://10.0.0.5"], "public host or localhost"),
         (["--spec", "{spec}", "--endpoint", "GET /nope"], "No endpoint matches 'GET /nope'"),
+        (["--spec", "{spec}", "--target", "api.example.com"], "must be an http:// or https:// URL"),
+        (["--spec", "http://127.0.0.1:9/openapi.json"], "Could not connect to http://127.0.0.1:9/openapi.json"),
     ],
 )
 def test_usage_problems_exit_2(spec, mock_http, capsys, args, message):
     assert main(["run", *[arg.format(spec=spec) for arg in args]]) == 2
     assert message in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("value", ["0", "200000", "fast"])
+def test_max_duration_is_checked_before_running(spec, capsys, value):
+    with pytest.raises(SystemExit) as exit_info:
+        main(["run", "--spec", spec, "--max-duration-ms", value])
+    assert exit_info.value.code == 2
+    assert "from 1 to 120000" in capsys.readouterr().err
 
 
 def test_private_targets_need_an_explicit_flag(spec, mock_http):

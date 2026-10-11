@@ -20,6 +20,7 @@ from fastapi import HTTPException
 from pydantic import ValidationError
 
 from app.domain.execution import ScenarioExecutionRequest, execute_scenario
+from app.domain.network import request_error_reason
 from app.domain.openapi import ApiOverview, OpenApiDocumentError, summarize_openapi
 from app.domain.reports import CheckOutcome, EndpointOutcome, RunReport, junit_xml
 from app.domain.request_builder import (
@@ -57,12 +58,22 @@ def build_parser() -> argparse.ArgumentParser:
                      help="Also run POST, PUT, PATCH, and DELETE checks. They may create or delete real data.")
     run.add_argument("--allow-private-network", action="store_true",
                      help="Allow private-network targets such as Docker service names or 10.x addresses.")
-    run.add_argument("--max-duration-ms", type=int, metavar="MS",
+    run.add_argument("--max-duration-ms", type=duration_ms, metavar="MS",
                      help="Fail a check whose response takes longer than this many milliseconds.")
     run.add_argument("--fail-on-skipped", action="store_true", help="Exit 1 when an endpoint is skipped for missing inputs.")
     run.add_argument("--junit", type=Path, metavar="FILE", help="Write a JUnit XML report.")
     run.add_argument("--json", type=Path, metavar="FILE", help="Write a JSON report.")
     return parser
+
+
+def duration_ms(value: str) -> int:
+    try:
+        number = int(value)
+    except ValueError:
+        number = 0
+    if not 1 <= number <= 120_000:
+        raise argparse.ArgumentTypeError(f"{value!r} must be a whole number of milliseconds from 1 to 120000.")
+    return number
 
 
 def load_contract(spec: str) -> ApiOverview:
@@ -74,8 +85,12 @@ def load_contract(spec: str) -> ApiOverview:
                 contents = response.content
         else:
             contents = Path(spec).read_bytes()
-    except (OSError, httpx.HTTPError) as error:
-        raise UsageError(f"The contract could not be read from {spec}: {error}") from error
+    except OSError as error:
+        raise UsageError(f"The contract could not be read from {spec}: {error.strerror or error}.") from error
+    except httpx.HTTPStatusError as error:
+        raise UsageError(f"The contract could not be read from {spec}: HTTP {error.response.status_code}.") from error
+    except httpx.HTTPError as error:
+        raise UsageError(f"The contract could not be read: {request_error_reason(error, spec, 15)}") from error
     if len(contents) > MAX_SPEC_SIZE_BYTES:
         raise UsageError("The contract must be smaller than 2 MB.")
     try:
@@ -89,6 +104,9 @@ def load_contract(spec: str) -> ApiOverview:
 
 def resolve_target(target: str | None, overview: ApiOverview, spec: str) -> str:
     if target:
+        parsed = httpx.URL(target) if "://" in target else None
+        if parsed is None or parsed.scheme not in {"http", "https"} or not parsed.host:
+            raise UsageError(f"--target {target!r} must be an http:// or https:// URL, for example https://api.example.com/v1.")
         return target.rstrip("/")
     if not overview.servers:
         raise UsageError("The contract declares no server; pass --target.")

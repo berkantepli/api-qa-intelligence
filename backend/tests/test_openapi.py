@@ -14,8 +14,11 @@ def scenario(op, title):
 @pytest.mark.parametrize(
     ("document", "message"),
     [
-        ([], "root must be"),
-        ({"swagger": "1.2"}, "OpenAPI 3.x or Swagger 2.0"),
+        ([], "This is not an OpenAPI document"),
+        ("<html></html>", "This is not an OpenAPI document"),
+        ({"name": "package.json"}, "no 'openapi' or 'swagger' version field"),
+        ({"swagger": "1.2"}, "Version 1.2 is not supported"),
+        ({"openapi": "4.0.0"}, "Version 4.0.0 is not supported"),
         ({"swagger": "2.0", "paths": {}}, "'info' object"),
         ({"openapi": "3.0.0"}, "'info' object"),
         ({"openapi": "3.0.0", "info": {"version": "1"}}, "title"),

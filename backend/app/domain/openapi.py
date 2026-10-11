@@ -100,7 +100,9 @@ class OpenApiDocumentError(ValueError):
 
 def summarize_openapi(document: Any) -> ApiOverview:
     if not isinstance(document, Mapping):
-        raise OpenApiDocumentError("The document root must be a JSON or YAML object.")
+        raise OpenApiDocumentError(
+            "This is not an OpenAPI document. Expected a JSON or YAML object with an 'openapi' or 'swagger' version field."
+        )
 
     # Swagger 2.0 documents are converted to OpenAPI 3 first; the overview names the original version.
     source_version = None
@@ -109,8 +111,15 @@ def summarize_openapi(document: Any) -> ApiOverview:
         document = convert_swagger2(document)
 
     openapi_version = document.get("openapi")
+    if openapi_version is None and document.get("swagger") is None:
+        raise OpenApiDocumentError(
+            "This is not an OpenAPI document: it has no 'openapi' or 'swagger' version field."
+        )
     if not isinstance(openapi_version, str) or not openapi_version.startswith("3."):
-        raise OpenApiDocumentError("An OpenAPI 3.x or Swagger 2.0 document is required.")
+        raise OpenApiDocumentError(
+            f"Version {openapi_version or document.get('swagger')} is not supported. "
+            "Use an OpenAPI 3.x or Swagger 2.0 document."
+        )
 
     info = document.get("info")
     if not isinstance(info, Mapping):
