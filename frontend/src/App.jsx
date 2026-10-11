@@ -6,6 +6,7 @@ import { duplicatePairKey, filterNewIdeas, findDuplicateScenarios, findSameReque
 import { computeCoverage, runsForApi } from "./coverage.js";
 import CoverageRing from "./CoverageRing.jsx";
 import { connectionLabel, targetUrlProblem } from "./targetConnection.js";
+import { postJson, requestJson } from "./apiClient.js";
 import Icon from "./Icon.jsx";
 import RunDetail, { SchemaDifferences } from "./RunDetail.jsx";
 import { outcomeSummary } from "./runDetail.js";
@@ -41,28 +42,6 @@ function readStoredJson(key, fallback) {
 function writeStored(key, value) {
   try { localStorage.setItem(key, value); }
   catch { /* the backend database still has the data */ }
-}
-
-async function postJson(url, body, fallbackMessage) {
-  const response = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  return readJsonResponse(response, fallbackMessage);
-}
-
-async function readJsonResponse(response, fallbackMessage) {
-  const payload = await response.json();
-  if (!response.ok) {
-    // FastAPI validation errors arrive as a list of { msg } objects.
-    const detail = Array.isArray(payload.detail) ? payload.detail.map((item) => item.msg).join("; ") : payload.detail;
-    const error = new Error(detail || fallbackMessage);
-    error.status = response.status;
-    error.validation = Array.isArray(payload.detail);
-    throw error;
-  }
-  return payload;
 }
 
 function runnableCheckCount(operation) {
@@ -240,7 +219,7 @@ function App() {
     let cancelled = false;
     (async () => {
       try {
-        const remote = await readJsonResponse(await fetch("/api/v1/workspace"), "The saved workspace could not be loaded.");
+        const remote = await requestJson("/api/v1/workspace", undefined, "The saved workspace could not be loaded.");
         if (cancelled) return;
         if (isEmptyWorkspace(remote) && (savedApis.length || runHistory.length)) {
           synced.current = { savedApis: [], runHistory: [], requestInputs: {} };
@@ -322,18 +301,17 @@ function App() {
     // Wait briefly so typing in the target field does not send a probe per keystroke.
     const delay = window.setTimeout(async () => {
       try {
-        const response = await fetch("/api/v1/targets/check", {
+        const result = await requestJson("/api/v1/targets/check", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ base_url: url }),
           signal: controller.signal,
-        });
-        const result = await readJsonResponse(response, "The connection check could not be completed.");
+        }, "The connection check could not be completed.");
         setConnection({ status: "done", url, result });
       } catch (caught) {
         if (controller.signal.aborted) return;
         const status = caught.validation ? "invalid" : caught.status === 422 ? "blocked" : "error";
-        setConnection({ status, url, message: caught.validation ? "The target base URL is not a valid URL." : caught.message });
+        setConnection({ status, url, message: caught.message });
       }
     }, 400);
     return () => { window.clearTimeout(delay); controller.abort(); };
@@ -457,7 +435,7 @@ function App() {
         if (!file) throw new Error("Choose an OpenAPI JSON or YAML file first.");
         const data = new FormData();
         data.append("file", file);
-        payload = await readJsonResponse(await fetch("/api/v1/specs/import", { method: "POST", body: data }), failureMessage);
+        payload = await requestJson("/api/v1/specs/import", { method: "POST", body: data }, failureMessage);
       }
       const source = fromUrl ? urlToImport.trim() : file.name;
       const id = `${payload.title || "API"}::${source}`;
@@ -712,8 +690,7 @@ function App() {
   async function refreshAiStatus() {
     setAiStatus((current) => ({ ...current, loading: true }));
     try {
-      const response = await fetch("/api/v1/ai/status");
-      setAiStatus(await readJsonResponse(response, "The AI status could not be checked."));
+      setAiStatus(await requestJson("/api/v1/ai/status", undefined, "The AI status could not be checked."));
     } catch (caught) {
       setAiStatus({ error: caught.message || "The AI status could not be checked." });
     }
@@ -723,8 +700,7 @@ function App() {
     if (aiDiagnosis?.loading) return;
     setAiDiagnosis({ loading: true });
     try {
-      const response = await fetch("/api/v1/ai/diagnose");
-      const result = await readJsonResponse(response, "The AI diagnosis could not be completed.");
+      const result = await requestJson("/api/v1/ai/diagnose", undefined, "The AI diagnosis could not be completed.");
       setAiDiagnosis({ result, checkedAt: new Date().toISOString() });
     } catch (caught) {
       setAiDiagnosis({ error: caught.message || "The AI diagnosis could not be completed." });
