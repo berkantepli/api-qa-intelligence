@@ -7,6 +7,7 @@ import { computeCoverage, runsForApi } from "./coverage.js";
 import CoverageRing from "./CoverageRing.jsx";
 import { connectionLabel, targetUrlProblem } from "./targetConnection.js";
 import { postJson, requestJson } from "./apiClient.js";
+import ErrorAlert from "./ErrorAlert.jsx";
 import Icon from "./Icon.jsx";
 import RunDetail, { SchemaDifferences } from "./RunDetail.jsx";
 import { outcomeSummary } from "./runDetail.js";
@@ -1043,9 +1044,9 @@ function App() {
                 </div>
                 {hasInputsToVary ? <section className="ai-suggestions">
                   <div className="ai-suggestions-heading"><div><div className="panel-kicker"><Icon name="spark" size={14} /> AI SUGGESTIONS</div><p>Ideas based on this endpoint’s contract. Review them before turning them into checks.</p></div><button className="secondary-button" type="button" disabled={scenarioIdeaStatus.loading} onClick={generateScenarioIdeas}>{scenarioIdeaStatus.loading ? <><span className="spinner" /> Thinking…</> : <><Icon name="spark" size={14} /> {aiScenarioIdeas.length ? "Refresh suggestions" : "Suggest scenarios"}</>}</button></div>
+                  <ErrorAlert message={scenarioIdeaStatus.error} />
                   <small className="ai-suggestions-note">Sends endpoint details to your configured AI model. No credentials or API requests are sent.</small>
                   {savedCheck?.operationKey === operationKey && <div className="alert success-alert saved-check-notice" role="status"><Icon name="check" size={16} /><span>“{savedCheck.title}” was saved as a check under Runnable checks{inputsReady ? "." : "; complete the request details above to run it."}</span>{inputsReady && <button className="text-button" type="button" onClick={() => setHighlightedCheck(savedCheck.scenarioIndex)}>Show it</button>}</div>}
-                  {scenarioIdeaStatus.error && <div className="alert error-alert" role="alert">{scenarioIdeaStatus.error}</div>}
                   {scenarioIdeaStatus.skipped > 0 && <small className="ai-suggestions-note">Skipped {scenarioIdeaStatus.skipped} {scenarioIdeaStatus.skipped === 1 ? "idea that repeats" : "ideas that repeat"} an existing check.</small>}
                   {aiScenarioIdeas.length ? <div className="ai-suggestions-list">{aiScenarioIdeas.map(({ scenario, scenarioIndex }) => <article className="ai-suggestion-card" key={`${scenario.title}-${scenarioIndex}`}>
                     <div className="scenario-title-row"><span className={`category-pill category-${scenario.category}`}>{categoryLabels[scenario.category] || scenario.category}</span><span className="review-pill">Review · not runnable</span>{duplicateIndexes.has(scenarioIndex) && <span className="duplicate-pill">Possible duplicate</span>}{draftStash[draftKey(scenario)] && editingDraft?.scenarioIndex !== scenarioIndex && <span className="edited-pill">Draft in progress</span>}</div>
@@ -1062,8 +1063,8 @@ function App() {
                   <div><strong>This request may change data.</strong><p>You are about to run {selectedCount} {operation.method} {operation.path} check{selectedCount === 1 ? "" : "s"} against {targetUrl}. This can create, update, or delete data in the target API.</p></div>
                   <div className="execution-confirmation-actions"><button className="secondary-button" type="button" onClick={() => setShowExecutionConfirmation(false)}>Cancel</button><button className="primary-button" type="button" onClick={confirmRun}>Confirm and run</button></div>
                 </div>}
+                <ErrorAlert message={error} className="run-error" />
                 <div className="run-footer">{inputsReady && availableScenarios.length > 0 && <button className="text-button" type="button" disabled={running} onClick={toggleAllScenarios}>{allSelected ? "Clear selection" : "Select all"}</button>}{lastRunId && !running && <button className="text-button" type="button" onClick={() => openRunHistory(lastRunId)}>View run details</button>}{inputsReady && targetProblem ? <span className="run-footer-warning" role="status">{targetProblem}</span> : <span>{inputsReady ? `${availableScenarios.length} ${availableScenarios.length === 1 ? "check" : "checks"} ready to run` : "Complete required request details first"}</span>}<button className="primary-button" disabled={!inputsReady || selectedCount === 0 || running || Boolean(targetProblem)} onClick={requestRun}>{running ? <><span className="spinner" /> Running…</> : <><Icon name="run" size={15} /> Run selected{selectedCount ? ` (${selectedCount})` : ""}</>}</button></div>
-                {error && <div className="alert error-alert run-error" role="alert"><Icon name="close" size={17} />{error}</div>}
               </section>
             </div>
           </section>
