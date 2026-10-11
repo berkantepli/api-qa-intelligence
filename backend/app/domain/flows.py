@@ -9,7 +9,7 @@ import json
 import re
 from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING, Any, Literal
-from urllib.parse import quote
+from urllib.parse import quote, unquote, urlsplit
 
 from fastapi import HTTPException
 from pydantic import AnyHttpUrl, BaseModel, Field, ValidationError, field_validator
@@ -40,6 +40,9 @@ class FlowExtract(BaseModel):
     source: Literal["response_body", "request_body"] = "response_body"
     # A JSON Pointer into the body, such as /id or /data/id.
     pointer: str = Field(pattern=r"^(/[^/]*)+$", max_length=200)
+    # When the response body has no such value, use the last segment of the Location header
+    # (201 Created responses often name the new record there instead of returning it).
+    fallback: Literal["location_header"] | None = None
 
 
 class FlowStep(BaseModel):
@@ -136,7 +139,64 @@ def infer_flows(operations: Sequence["ApiOperation"]) -> list[ApiFlow]:
             if flow is not None:
                 flows.append(flow)
                 break
-    return flows
+    parents = [flow for flow in flows if not flow.missing_inputs]
+    return [_with_parent(flow, parents) if flow.missing_inputs else flow for flow in flows]
+
+
+def _shape(path: str) -> str:
+    return re.sub(r"\{\{[^{}]+\}\}|\{[^{}]+\}", "{}", path)
+
+
+def _with_parent(flow: ApiFlow, parents: Sequence[ApiFlow]) -> ApiFlow:
+    """A nested collection (/owners/{ownerId}/pets) needs a parent record. When the contract has a
+    flow for the parent (/owners), its create step runs first and its delete step cleans up last."""
+    if len(flow.missing_inputs) != 1:
+        return flow
+    name = flow.missing_inputs[0]
+    create_path = flow.steps[0].path
+    marker = f"{{{name}}}"
+    if marker not in create_path:
+        return flow
+    prefix = create_path[: create_path.index(marker) + len(marker)]
+    parent = next((item for item in parents if _shape(prefix) == _shape(item.resource) + "/{}"), None)
+    if parent is None or not parent.steps[0].extract:
+        return flow
+    variable = _variable_name(name)
+    if variable in {rule.variable for step in flow.steps for rule in step.extract}:
+        return flow
+    old = parent.steps[0].extract[0].variable
+    parent_create = _renamed(parent.steps[0], old, variable)
+    parent_delete = next((_renamed(step, old, variable) for step in parent.steps if step.role == "delete"), None)
+    child = [step.model_copy(update={"path": step.path.replace(marker, f"{{{{{variable}}}}}")}) for step in flow.steps]
+    steps = [parent_create, *child, *([parent_delete] if parent_delete else [])]
+    if len(steps) > MAX_FLOW_STEPS:
+        return flow
+    parent_resource = _resource_name(parent.resource)
+    return flow.model_copy(update={
+        "steps": steps,
+        "missing_inputs": [],
+        "rationale": f"{flow.rationale} It first creates {_article(parent_resource)} {parent_resource} "
+                     f"with POST {parent.steps[0].path} for {marker}.",
+        "notes": [note for note in flow.notes if not note.startswith("Fill in ")] + parent.notes,
+    })
+
+
+def _renamed(step: FlowStep, old: str, new: str) -> FlowStep:
+    def swap(value: Any) -> Any:
+        if isinstance(value, str):
+            return value.replace(f"{{{{{old}}}}}", f"{{{{{new}}}}}")
+        if isinstance(value, list):
+            return [swap(item) for item in value]
+        if isinstance(value, Mapping):
+            return {key: swap(item) for key, item in value.items()}
+        return value
+
+    return step.model_copy(update={
+        "path": swap(step.path),
+        "query_params": swap(step.query_params),
+        "json_body": swap(step.json_body),
+        "extract": [rule.model_copy(update={"variable": new}) if rule.variable == old else rule for rule in step.extract],
+    })
 
 
 def _item_parameter(collection: str, path: str) -> str | None:
@@ -257,9 +317,9 @@ def _identifier_source(
     if schema is None and id_like:
         # No response schema is documented; most APIs return the new record with an "id".
         return (
-            FlowExtract(variable=variable, pointer="/id"),
+            FlowExtract(variable=variable, pointer="/id", fallback="location_header"),
             "inferred",
-            f"assuming the create response has an 'id' field for {{{parameter}}} (not documented)",
+            f"assuming the create response has an 'id' field, or names the new record in its Location header, for {{{parameter}}} (not documented)",
         )
     return None
 
@@ -383,7 +443,7 @@ async def execute_flow(payload: FlowExecutionRequest, *, allow_private_network: 
             results.append(FlowStepResult(title=step.title, role=step.role, status=check.result, check=check))
             stopped = True
             continue
-        saved, problem = _extract(step, request, raw_body)
+        saved, problem = _extract(step, request, check, raw_body)
         if problem:
             results.append(FlowStepResult(title=step.title, role=step.role, status="FAIL", check=check, reason=problem))
             stopped = True
@@ -437,25 +497,47 @@ def _concrete_request(payload: FlowExecutionRequest, step: FlowStep, values: Map
     })
 
 
-def _extract(step: FlowStep, request: ScenarioExecutionRequest, raw_body: bytes | None) -> tuple[dict[str, Any], str | None]:
+def _extract(
+    step: FlowStep, request: ScenarioExecutionRequest, check: ScenarioExecutionResult, raw_body: bytes | None
+) -> tuple[dict[str, Any], str | None]:
     saved: dict[str, Any] = {}
     for rule in step.extract:
-        if rule.source == "request_body":
-            document, where = request.json_body, "the request body"
-        else:
-            where = "the response body"
-            if raw_body is None:
-                return saved, f"Could not save {{{{{rule.variable}}}}}: the response body was too large to read."
-            try:
-                document = json.loads(raw_body.decode("utf-8"))
-            except (UnicodeDecodeError, json.JSONDecodeError):
-                return saved, f"Could not save {{{{{rule.variable}}}}}: {where} is not JSON."
-        value = _resolve_pointer(document, rule.pointer)
-        if value is None or isinstance(value, (Mapping, list)):
-            found = "has no value" if value is None else "is not a single value"
-            return saved, f"Could not save {{{{{rule.variable}}}}}: {rule.pointer} in {where} {found}."
+        value, problem = _value_from_body(rule, request, raw_body)
+        if problem and rule.fallback == "location_header":
+            location = _location_id(check.response_headers)
+            if location:
+                value, problem = location, None
+            else:
+                problem += " The response has no Location header to fall back on either."
+        if problem:
+            return saved, problem
         saved[rule.variable] = value
     return saved, None
+
+
+def _value_from_body(rule: FlowExtract, request: ScenarioExecutionRequest, raw_body: bytes | None) -> tuple[Any, str | None]:
+    if rule.source == "request_body":
+        document, where = request.json_body, "the request body"
+    else:
+        where = "the response body"
+        if raw_body is None:
+            return None, f"Could not save {{{{{rule.variable}}}}}: the response body was too large to read."
+        try:
+            document = json.loads(raw_body.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            return None, f"Could not save {{{{{rule.variable}}}}}: {where} is not JSON."
+    value = _resolve_pointer(document, rule.pointer)
+    if value is None or isinstance(value, (Mapping, list)):
+        found = "has no value" if value is None else "is not a single value"
+        return None, f"Could not save {{{{{rule.variable}}}}}: {rule.pointer} in {where} {found}."
+    return value, None
+
+
+def _location_id(headers: Mapping[str, str]) -> str | None:
+    """The last path segment of a Location header: "/pets/42" or "https://api/pets/42" gives "42"."""
+    location = next((value for name, value in headers.items() if name.lower() == "location"), "")
+    segment = urlsplit(location).path.rstrip("/").rpartition("/")[2]
+    return unquote(segment) or None
 
 
 def _resolve_pointer(document: Any, pointer: str) -> Any:

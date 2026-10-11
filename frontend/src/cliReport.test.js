@@ -65,4 +65,24 @@ describe("cliReportRuns", () => {
     expect(message).toContain("Skipped endpoints not in this API: GET /gone.");
     expect(message).toContain("The report is for version 2.0; the saved API is 1.0.");
   });
+
+  it("imports flows that ran as flow runs", () => {
+    const withFlows = {
+      ...report,
+      flows: [
+        { id: "lifecycle:/pets", title: "Pet lifecycle", result: { result: "FAIL", steps: [
+          { title: "Create a pet", role: "create", status: "PASS", saved_values: { id: 5 }, check: result("PASS", 201) },
+          { title: "Read the new pet", role: "read", status: "SKIPPED", reason: "Skipped because an earlier step did not pass.", check: null },
+        ] } },
+        { id: "lifecycle:/orders", title: "Order lifecycle", result: null, skipped_reason: "Creates and deletes data; pass --include-writes to run it." },
+      ],
+    };
+    const outcome = cliReportRuns(withFlows, api);
+    const flowRun = outcome.runs.find((run) => run.kind === "flow");
+
+    expect(flowRun).toMatchObject({ endpoint: "Flow: Pet lifecycle", flowId: "lifecycle:/pets", source: "cli", apiId: "pets" });
+    expect(flowRun.results.map((step) => step.result)).toEqual(["PASS", "SKIPPED"]);
+    expect(cliImportMessage(withFlows, api, outcome)).toContain("Imported 1 check on 1 endpoint and 1 flow");
+    expect(cliReportRuns(withFlows, api, outcome.runs).duplicates).toBe(2);
+  });
 });

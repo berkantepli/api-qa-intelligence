@@ -152,3 +152,57 @@ def test_summary_counts_read_naturally(spec, mock_http, capsys):
 
     assert main(["run", "--spec", spec, "--header", "X-Key: secret", "--endpoint", "GET /pets", "--smoke"]) == 0
     assert "1 check: 1 passed, 0 failed, 0 errors; 0 endpoints skipped" in capsys.readouterr().err
+
+
+def flow_api(request: httpx.Request) -> httpx.Response:
+    if request.method == "POST":
+        return httpx.Response(201, json={"id": 5})
+    if request.url.path == "/v1/pets/5":
+        return httpx.Response(200, json={"id": 5})
+    return pets_api(request)
+
+
+def test_flows_are_skipped_without_include_writes(spec, mock_http, tmp_path):
+    mock_http.respond_with(flow_api)
+
+    code = main(["run", "--spec", spec, "--header", "X-Key: secret", "--param", "id=7", "--flows", "--json", str(tmp_path / "r.json")])
+    strict = main(["run", "--spec", spec, "--header", "X-Key: secret", "--param", "id=7", "--flows", "--fail-on-skipped"])
+
+    report = json.loads((tmp_path / "r.json").read_text())
+    assert (code, strict) == (0, 1)
+    assert report["flows"][0]["skipped_reason"] == "Creates and deletes data; pass --include-writes to run it."
+    assert report["totals"]["flows_skipped"] == 1
+    assert not any(request.method == "POST" for request in mock_http.requests)
+
+
+def test_a_flow_passes_the_created_id_and_reaches_the_reports(spec, mock_http, tmp_path):
+    mock_http.respond_with(flow_api)
+
+    code = main([
+        "run", "--spec", spec, "--header", "X-Key: secret", "--param", "id=7", "--include-writes", "--flows",
+        "--endpoint", "GET /pets/*", "--json", str(tmp_path / "r.json"), "--junit", str(tmp_path / "r.xml"),
+    ])
+
+    report = json.loads((tmp_path / "r.json").read_text())
+    assert code == 0
+    flow = report["flows"][0]
+    assert (flow["title"], flow["result"]["result"]) == ("Pet lifecycle", "PASS")
+    assert flow["result"]["steps"][0]["saved_values"] == {"id": 5}
+    assert "http://127.0.0.1:8000/v1/pets/5" in [str(request.url) for request in mock_http.requests]
+    assert "secret" not in (tmp_path / "r.json").read_text()
+    suite = ElementTree.parse(tmp_path / "r.xml").getroot().find("testsuite[@name='Flow: Pet lifecycle']")
+    assert [case.get("name") for case in suite.findall("testcase")] == ["1. Create a pet", "2. Read the new pet"]
+
+
+def test_a_failing_flow_exits_1_and_explains_the_step(spec, mock_http, tmp_path):
+    mock_http.respond_with(lambda request: httpx.Response(201, json={}) if request.method == "POST" else flow_api(request))
+
+    code = main(["run", "--spec", spec, "--param", "id=7", "--include-writes", "--flows", "--endpoint", "GET /pets/*", "--junit", str(tmp_path / "r.xml")])
+
+    suites = ElementTree.parse(tmp_path / "r.xml").getroot()
+    suite = suites.find("testsuite[@name='Flow: Pet lifecycle']")
+    assert code == 1
+    assert (suite.get("failures"), suite.get("skipped")) == ("1", "1")
+    failure = suite.find("testcase[@name='1. Create a pet']/failure")
+    assert failure.get("message").startswith("Could not save {{id}}: /id in the response body has no value.")
+    assert suite.find("testcase[@name='2. Read the new pet']/skipped").get("message") == "Skipped because an earlier step did not pass."

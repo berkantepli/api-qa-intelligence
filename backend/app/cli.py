@@ -12,7 +12,7 @@ import json
 import sys
 from pathlib import Path
 from typing import Any
-from urllib.parse import urljoin
+from urllib.parse import quote, urljoin
 
 import httpx
 import yaml
@@ -20,9 +20,10 @@ from fastapi import HTTPException
 from pydantic import ValidationError
 
 from app.domain.execution import ScenarioExecutionRequest, execute_scenario
+from app.domain.flows import UNFILLED_PATH_PARAMETER, ApiFlow, FlowExecutionRequest, execute_flow
 from app.domain.network import request_error_reason
 from app.domain.openapi import ApiOverview, OpenApiDocumentError, summarize_openapi
-from app.domain.reports import CheckOutcome, EndpointOutcome, RunReport, junit_xml
+from app.domain.reports import CheckOutcome, EndpointOutcome, FlowOutcome, RunReport, junit_xml
 from app.domain.request_builder import (
     SAFE_METHODS,
     build_check_request,
@@ -60,6 +61,8 @@ def build_parser() -> argparse.ArgumentParser:
                      help="Allow private-network targets such as Docker service names or 10.x addresses.")
     run.add_argument("--max-duration-ms", type=duration_ms, metavar="MS",
                      help="Fail a check whose response takes longer than this many milliseconds.")
+    run.add_argument("--flows", action="store_true",
+                     help="Also run the contract's lifecycle flows (create, read, update, delete). Needs --include-writes.")
     run.add_argument("--fail-on-skipped", action="store_true", help="Exit 1 when an endpoint is skipped for missing inputs.")
     run.add_argument("--junit", type=Path, metavar="FILE", help="Write a JUnit XML report.")
     run.add_argument("--json", type=Path, metavar="FILE", help="Write a JSON report.")
@@ -206,7 +209,51 @@ async def run_checks(args: argparse.Namespace) -> RunReport:
                 raise UsageError(f"{key}: {detail}") from error
             endpoint.checks.append(CheckOutcome(title=scenario.title, category=scenario.category, result=result))
             print(f"  {result.result:<5} {key} · {scenario.title}", file=sys.stderr)
+    if args.flows:
+        for flow in overview.flows:
+            report.flows.append(await run_flow(flow, args, target, headers, inputs_file))
     return report
+
+
+def flow_path_values(flow: ApiFlow, params: list[str], inputs_file: dict[str, Any]) -> dict[str, str]:
+    """Values for path parameters a flow cannot derive, from --param (name= or path:name=) or --inputs."""
+    values: dict[str, str] = {}
+    for section in ("*", flow.steps[0].method + " " + flow.steps[0].path):
+        section_inputs = inputs_file.get(section, {})
+        if isinstance(section_inputs, dict):
+            for name in flow.missing_inputs:
+                value = section_inputs.get(f"parameter:path:{name}")
+                if value is not None:
+                    values[name] = value if isinstance(value, str) else json.dumps(value)
+    for param in params:
+        key, separator, value = param.partition("=")
+        location, _, name = key.rpartition(":")
+        if separator and name in flow.missing_inputs and location in {"", "path"}:
+            values[name] = value
+    return values
+
+
+async def run_flow(flow: ApiFlow, args: argparse.Namespace, target: str, headers: dict[str, str], inputs_file: dict[str, Any]) -> FlowOutcome:
+    titles = [step.title for step in flow.steps]
+    if not args.include_writes:
+        return FlowOutcome(id=flow.id, title=flow.title, skipped_reason="Creates and deletes data; pass --include-writes to run it.", skipped_steps=titles)
+    values = flow_path_values(flow, args.param, inputs_file)
+    missing = [name for name in flow.missing_inputs if not values.get(name, "").strip()]
+    if missing:
+        return FlowOutcome(id=flow.id, title=flow.title, skipped_reason=f"Missing {', '.join(missing)} (path); pass --param.", skipped_steps=titles)
+    steps = [
+        step.model_copy(update={"path": UNFILLED_PATH_PARAMETER.sub(lambda match: quote(values[match.group(1)].strip(), safe=""), step.path)})
+        for step in flow.steps
+    ]
+    try:
+        payload = FlowExecutionRequest(base_url=target, headers=headers, max_duration_ms=args.max_duration_ms, steps=steps)
+        result = await execute_flow(payload, allow_private_network=args.allow_private_network)
+    except (HTTPException, ValidationError) as error:
+        detail = error.detail if isinstance(error, HTTPException) else error.errors()[0]["msg"]
+        raise UsageError(f"Flow {flow.title!r}: {detail}") from error
+    for step in result.steps:
+        print(f"  {step.status:<5} Flow: {flow.title} · {step.title}", file=sys.stderr)
+    return FlowOutcome(id=flow.id, title=flow.title, result=result)
 
 
 def plural(count: int, noun: str) -> str:
@@ -224,6 +271,15 @@ def print_summary(report: RunReport) -> None:
     for endpoint in report.endpoints:
         if endpoint.skipped_reason and endpoint.skipped_checks:
             print(f"  SKIP  {endpoint.key}: {endpoint.skipped_reason}", file=sys.stderr)
+    if report.flows:
+        print(
+            f"{plural(totals['flows'], 'flow')}: {totals['flows_passed']} passed, {totals['flows_failed']} failed, "
+            f"{totals['flows_skipped']} skipped",
+            file=sys.stderr,
+        )
+        for flow in report.flows:
+            if flow.skipped_reason:
+                print(f"  SKIP  Flow: {flow.title}: {flow.skipped_reason}", file=sys.stderr)
 
 
 def redact_secrets(text: str, secrets: list[str]) -> str:
@@ -251,8 +307,10 @@ def main(argv: list[str] | None = None) -> int:
         print(f"api-qa: the report could not be written: {error}", file=sys.stderr)
         return EXIT_USAGE
     totals = report.totals
-    failed = totals["failed"] + totals["errors"] > 0
-    skipped = args.fail_on_skipped and any(endpoint.skipped_checks for endpoint in report.endpoints)
+    failed = totals["failed"] + totals["errors"] + totals["flows_failed"] > 0
+    skipped = args.fail_on_skipped and (
+        any(endpoint.skipped_checks for endpoint in report.endpoints) or totals["flows_skipped"] > 0
+    )
     return EXIT_FAILED if failed or skipped else EXIT_OK
 
 

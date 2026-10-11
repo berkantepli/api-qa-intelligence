@@ -1,6 +1,10 @@
 // Turns the JSON report of `api-qa run --json` into Run history entries, so checks that ran in CI
 // count on Coverage & Risk like checks run here. Each endpoint that ran becomes one run, marked as
-// coming from the CLI; skipped endpoints add nothing.
+// coming from the CLI; skipped endpoints add nothing. Flows that ran (--flows) become flow runs.
+import { flowRunEntry } from "./flows.js";
+
+// Flow run ids sit after the endpoint run ids of the same report.
+const FLOW_ID_OFFSET = 100_000;
 
 const isObject = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
 
@@ -64,6 +68,24 @@ export function cliReportRuns(report, api, existingRuns = []) {
     });
   });
 
+  (Array.isArray(report.flows) ? report.flows : []).forEach((flow, index) => {
+    if (!isObject(flow) || !isObject(flow.result) || !Array.isArray(flow.result.steps)) return;
+    const id = baseId + FLOW_ID_OFFSET + index;
+    if (existingIds.has(id)) {
+      duplicates += 1;
+      return;
+    }
+    // The saved flow, when the API has it, adds each step's method and path for skipped steps.
+    const definition = api.overview?.flows?.find((item) => item.id === flow.id) ?? { id: flow.id, title: flow.title, steps: [] };
+    runs.push({
+      ...flowRunEntry({ ...definition, title: flow.title }, flow.result, {
+        id, apiId: api.id, api: api.title, target: typeof report.target === "string" ? report.target : "", createdAt,
+      }),
+      source: "cli",
+      toolVersion: typeof report.tool_version === "string" ? report.tool_version : undefined,
+    });
+  });
+
   return {
     runs,
     duplicates,
@@ -73,9 +95,15 @@ export function cliReportRuns(report, api, existingRuns = []) {
 }
 
 export function cliImportMessage(report, api, outcome) {
-  const checks = outcome.runs.reduce((sum, run) => sum + run.results.length, 0);
-  const parts = [outcome.runs.length
-    ? `Imported ${checks} ${checks === 1 ? "check" : "checks"} on ${outcome.runs.length} ${outcome.runs.length === 1 ? "endpoint" : "endpoints"} from the CLI report of ${new Date(report.generated_at).toLocaleString()} into ${api.title}.`
+  const endpointRuns = outcome.runs.filter((run) => run.kind !== "flow");
+  const flows = outcome.runs.length - endpointRuns.length;
+  const checks = endpointRuns.reduce((sum, run) => sum + run.results.length, 0);
+  const imported = [
+    ...(endpointRuns.length ? [`${checks} ${checks === 1 ? "check" : "checks"} on ${endpointRuns.length} ${endpointRuns.length === 1 ? "endpoint" : "endpoints"}`] : []),
+    ...(flows ? [`${flows} ${flows === 1 ? "flow" : "flows"}`] : []),
+  ];
+  const parts = [imported.length
+    ? `Imported ${imported.join(" and ")} from the CLI report of ${new Date(report.generated_at).toLocaleString()} into ${api.title}.`
     : "Nothing new to import from this report."];
   if (outcome.duplicates) parts.push(`${outcome.duplicates} ${outcome.duplicates === 1 ? "run was" : "runs were"} already imported.`);
   if (outcome.unknownEndpoints.length) parts.push(`Skipped endpoints not in this API: ${outcome.unknownEndpoints.join(", ")}.`);
