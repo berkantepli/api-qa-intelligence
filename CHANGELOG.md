@@ -2,6 +2,10 @@
 
 The version lives in the [`VERSION`](VERSION) file and follows [Semantic Versioning](https://semver.org/). Before 1.0.0, a new feature raises the minor number (0.**x**.0) and a fix or visual change raises the patch number (0.x.**y**).
 
+## 1.8.2 — 2026-10-12
+
+- The sidebar no longer shows a flow count next to **Flows**.
+
 ## 1.8.1 — 2026-10-12
 
 Security and robustness fixes from a scan with a hostile target API and hostile contracts. No API, CLI option, or data format changes.
