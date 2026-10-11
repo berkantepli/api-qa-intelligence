@@ -433,7 +433,7 @@ async def execute_flow(payload: FlowExecutionRequest, *, allow_private_network: 
         except (ValidationError, HTTPException):
             results.append(FlowStepResult(
                 title=step.title, role=step.role, status="ERROR",
-                reason="A saved value cannot be used in this request (for example a '..' path segment).",
+                reason="A saved value cannot be used in this request (for example a '..' path segment or a line break in a header).",
             ))
             stopped = True
             continue

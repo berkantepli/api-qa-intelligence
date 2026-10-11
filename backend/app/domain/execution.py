@@ -155,8 +155,9 @@ async def send_check(
     started = time.perf_counter()
     try:
         # The read timeout applies per chunk; the overall deadline also stops a server that trickles bytes.
-        async with asyncio.timeout(REQUEST_TIMEOUT_SECONDS), httpx.AsyncClient(
-            timeout=httpx.Timeout(REQUEST_TIMEOUT_SECONDS, connect=5), follow_redirects=False
+        async with asyncio.timeout(REQUEST_TIMEOUT_SECONDS), target_client(
+            allow_private_network=allow_private_network,
+            timeout=httpx.Timeout(REQUEST_TIMEOUT_SECONDS, connect=5), follow_redirects=False,
         ) as client:
             async with client.stream(payload.method, target, **request_options) as response:
                 response_content = bytearray()
