@@ -2,6 +2,23 @@
 
 The version lives in the [`VERSION`](VERSION) file and follows [Semantic Versioning](https://semver.org/). Before 1.0.0, a new feature raises the minor number (0.**x**.0) and a fix or visual change raises the patch number (0.x.**y**).
 
+## 1.8.1 — 2026-10-12
+
+Security and robustness fixes from a scan with a hostile target API and hostile contracts. No API, CLI option, or data format changes.
+
+### Robustness
+- A 1 KB YAML contract whose anchors and aliases expand to billions of values could freeze the whole app (and hang `api-qa diff`). Contracts are now refused past 1,000,000 values or 100 levels, and parsing runs off the event loop.
+- A server that trickles its response held a check, flow step, connection probe, or OpenAPI download far past the stated timeout. Each now has an overall deadline.
+- A deeply nested JSON response, a deeply nested or oddly shaped contract, and an overlong path no longer return HTTP 500; each gets a clear message.
+- Request bodies over 32 MB are refused.
+
+### Security
+- The app can no longer be framed by other sites (clickjacking protection headers).
+- Evidence masks `Bearer`/`Basic` credentials, JWTs, and card numbers found in free text, not only values under sensitive key names.
+- Connections go to the address that was just checked, so a DNS answer that changes after validation (DNS rebinding) cannot reach a private network. NAT64, 6to4, and Teredo addresses that carry a private IPv4 address are blocked.
+- Header names and values with line breaks are refused with a clear message.
+- `localhost.` is treated like `localhost`.
+
 ## 1.8.0 — 2026-10-12
 
 ### Contract changes
