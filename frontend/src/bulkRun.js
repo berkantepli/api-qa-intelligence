@@ -1,6 +1,7 @@
 // Plans a Coverage-page bulk run: which endpoints can run now, which still need request details,
 // and which are left out because they change data (unless the user opts in). Planning is pure;
 // App executes the plan.
+import { persistableOperationInputs } from "./credentials.js";
 import { describeOperation, requestReadiness, SAFE_METHODS } from "./requestBuilder.js";
 
 export const BULK_MODES = {
@@ -45,6 +46,7 @@ export function planBulkRun(overview, endpoints, { inputsByOperation = {}, files
 }
 
 // Only non-credential request details are kept between sessions; credentials stay in memory.
+// A credential is one the contract marks, or a field whose name says it is one (password, pin, session…).
 export function persistableInputs(overview, inputsByOperation = {}) {
   const credentialKeys = new Map((overview?.operations ?? []).map((operation) => [
     `${operation.method} ${operation.path}`,
@@ -54,7 +56,7 @@ export function persistableInputs(overview, inputsByOperation = {}) {
   for (const [operationKey, inputs] of Object.entries(inputsByOperation)) {
     const credentials = credentialKeys.get(operationKey);
     if (!credentials) continue;
-    const values = Object.fromEntries(Object.entries(inputs ?? {}).filter(([key]) => !credentials.has(key)));
+    const values = persistableOperationInputs(inputs ?? {}, credentials);
     if (Object.keys(values).length) kept[operationKey] = values;
   }
   return kept;

@@ -18,7 +18,7 @@ OpenAPI / Swagger → API understanding → QA scenarios → selected test execu
 - Inspect operations, parameters, request bodies, and response schemas.
 - Generate editable happy-path, negative, boundary, validation, and security-minded scenarios.
 - Let a user select scenarios and execute them against an explicitly configured base URL.
-- Show each result as **PASS**, **FAIL**, or **ERROR**, with request/response evidence in browser-local Run history.
+- Show each result as **PASS**, **FAIL**, or **ERROR**, with redacted request/response evidence in Run history.
 - Explain failed checks with evidence from the test result; AI analysis is advisory and does not change the result.
 
 ## Technology
@@ -113,7 +113,7 @@ The **Coverage** page summarizes, for the active API, how many endpoints have be
 
 ### Where data is saved
 
-Saved APIs (with edited AI checks), Run history, and request details are saved by the backend in a SQLite database: `data/workspace.db` in a source checkout, `~/.api-qa-intelligence/workspace.db` for an installed package, or the folder set in `API_QA_DATA_DIR` (`GET /api/v1/workspace` and the `PUT`/`DELETE` routes under it). They survive clearing the browser and are shared by every browser that opens the same backend. Credential values are never stored: the backend drops request details marked as credentials even if a client sends them. The database records its schema version and upgrades older files when the app starts.
+Saved APIs (with edited AI checks), Run history, and request details are saved by the backend in a SQLite database: `data/workspace.db` in a source checkout, `~/.api-qa-intelligence/workspace.db` for an installed package, or the folder set in `API_QA_DATA_DIR` (`GET /api/v1/workspace` and the `PUT`/`DELETE` routes under it). They survive clearing the browser and are shared by every browser that opens the same backend. Credential values are never stored: the backend drops request details that the contract marks as credentials or whose name says they are one (for example `password`, `pin`, `otp`, `session`, `token`), removes such keys from JSON bodies, and does so even if a client sends them. Request details saved by an older version are cleaned the next time the workspace loads. The database records its schema version and upgrades older files when the app starts.
 
 The first time the app starts with an empty database, the saved APIs and runs from this browser's earlier storage move into it automatically; the browser keeps a copy only as a fallback. If the backend cannot be reached, the app keeps working with that browser copy and says so at the top of the page. To move data between machines, use **Export workspace** and **Import workspace**.
 
