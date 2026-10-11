@@ -19,7 +19,8 @@ const hasProblems = (results) => {
 
 export function runsForApi(runs = [], apiId, savedApis = []) {
   const idsByTitle = apiIdsByTitle(savedApis);
-  return runs.filter((run) => runApiKey(run, idsByTitle) === apiId);
+  // Flow runs follow a record across endpoints; endpoint coverage counts single-endpoint runs.
+  return runs.filter((run) => run.kind !== "flow" && runApiKey(run, idsByTitle) === apiId);
 }
 
 // A check is flaky when its recent outcomes flip at least twice (for example PASS → FAIL → PASS);

@@ -2,7 +2,7 @@
 
 export function summarizeResults(results = []) {
   const count = (outcome) => results.filter((result) => (result.result || "ERROR") === outcome).length;
-  return { total: results.length, passed: count("PASS"), failed: count("FAIL"), errors: count("ERROR") };
+  return { total: results.length, passed: count("PASS"), failed: count("FAIL"), errors: count("ERROR"), skipped: count("SKIPPED") };
 }
 
 export function formatEvidenceBody(text) {
@@ -20,6 +20,8 @@ export function requestLine(result) {
 }
 
 export function outcomeSummary(result) {
+  // Flow steps say why they were skipped, or why a step failed after the expected response.
+  if ((result.result || "ERROR") !== "PASS" && result.reason) return result.reason;
   const expected = result.expected_status_codes?.length ? result.expected_status_codes.join(" or ") : "a documented status";
   if (result.response_status == null) return `Expected HTTP ${expected}, but no response was received.`;
   const schema = result.schema_check;

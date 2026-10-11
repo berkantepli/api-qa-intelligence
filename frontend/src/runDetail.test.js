@@ -14,7 +14,7 @@ describe("summarizeResults", () => {
   it("counts errors separately from failures", () => {
     const results = [{ result: "PASS" }, { result: "FAIL" }, { result: "ERROR" }, {}];
 
-    expect(summarizeResults(results)).toEqual({ total: 4, passed: 1, failed: 1, errors: 2 });
+    expect(summarizeResults(results)).toEqual({ total: 4, passed: 1, failed: 1, errors: 2, skipped: 0 });
   });
 });
 
@@ -90,7 +90,7 @@ describe("groupRunsByApi", () => {
     expect(groups.map((group) => group.key)).toEqual(["bugs-id", "pets-id"]);
     expect(groups[1].runs.map((run) => run.id)).toEqual([3, 1]);
     expect(groups[1].latestAt).toBe("2026-10-02T10:00:00Z");
-    expect(groups[1].summary).toEqual({ total: 2, passed: 1, failed: 1, errors: 0 });
+    expect(groups[1].summary).toEqual({ total: 2, passed: 1, failed: 1, errors: 0, skipped: 0 });
   });
 
   it("matches legacy runs by unique title and keeps unknown APIs separate", () => {
