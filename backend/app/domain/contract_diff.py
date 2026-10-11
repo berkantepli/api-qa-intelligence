@@ -69,6 +69,12 @@ class ContractDiff(BaseModel):
             "retest": sum(bool(endpoint.retest) for endpoint in self.endpoints),
         }
 
+    @computed_field
+    @property
+    def markdown(self) -> str:
+        """The report as Markdown, for a pull request comment or an issue."""
+        return diff_markdown(self)
+
     @property
     def severity(self) -> Severity | None:
         if not self.endpoints:

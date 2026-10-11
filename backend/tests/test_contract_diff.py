@@ -187,6 +187,7 @@ def test_diff_route_compares_two_overviews(client):
     body = response.json()
     assert body["totals"] == {"endpoints": 1, "breaking": 1, "warning": 0, "safe": 0, "retest": 0}
     assert body["endpoints"][0]["severity"] == "breaking"
+    assert body["markdown"].startswith("## Contract changes: Pets 1.0 → 1.0")
 
 
 @pytest.fixture
