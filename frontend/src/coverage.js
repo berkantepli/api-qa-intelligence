@@ -2,6 +2,7 @@
 import { categoryLabels } from "./categories.js";
 import { pendingChange } from "./contractDiff.js";
 import { computeGaps } from "./coverageGaps.js";
+import { stepOperation } from "./flows.js";
 import { RISK_LEVELS, scoreEndpoint } from "./riskScore.js";
 import { apiIdsByTitle, runApiKey, summarizeResults } from "./runDetail.js";
 
@@ -22,6 +23,27 @@ export function runsForApi(runs = [], apiId, savedApis = []) {
   const idsByTitle = apiIdsByTitle(savedApis);
   // Flow runs follow a record across endpoints; endpoint coverage counts single-endpoint runs.
   return runs.filter((run) => run.kind !== "flow" && runApiKey(run, idsByTitle) === apiId);
+}
+
+export function flowRunsForApi(runs = [], apiId, savedApis = []) {
+  const idsByTitle = apiIdsByTitle(savedApis);
+  return runs.filter((run) => run.kind === "flow" && runApiKey(run, idsByTitle) === apiId);
+}
+
+// Each flow's latest outcome, and the endpoints it creates records with. A flow whose latest run
+// skipped a step counts as failing: part of the lifecycle did not run.
+export function flowCoverage(overview, flows = [], flowRuns = []) {
+  const items = flows.map((flow) => {
+    const latest = flowRuns.filter((run) => run.flowId === flow.id).sort(byNewest)[0];
+    const status = !latest ? "untested"
+      : hasProblems(latest.results) || latest.results?.some((result) => result.result === "SKIPPED") ? "failing"
+      : "passing";
+    const createKeys = flow.steps.filter((step) => step.role === "create")
+      .map((step) => stepOperation(overview, step)).filter(Boolean).map(endpointKey);
+    return { id: flow.id, title: flow.title, status, lastRunAt: latest?.createdAt, createKeys };
+  });
+  const count = (status) => items.filter((item) => item.status === status).length;
+  return { flows: items, totals: { flows: items.length, passing: count("passing"), failing: count("failing"), untested: count("untested") } };
 }
 
 // A check is flaky when its recent outcomes flip at least twice (for example PASS → FAIL → PASS);
@@ -61,8 +83,9 @@ function categoryCoverage(runnable, outcomes) {
   });
 }
 
-// `contractChanges` is the saved API's comparison with its previous import, if any.
-export function computeCoverage(overview, apiRuns = [], now = Date.now(), contractChanges = null) {
+// `contractChanges` is the saved API's comparison with its previous import, if any; `lifecycle` is
+// flowCoverage() for the API's flows, which flags create endpoints whose flows never ran.
+export function computeCoverage(overview, apiRuns = [], now = Date.now(), contractChanges = null, lifecycle = null) {
   const endpoints = (overview?.operations ?? []).map((operation, operationIndex) => {
     const key = endpointKey(operation);
     const runs = apiRuns.filter((run) => run.endpoint === key).sort(byNewest);
@@ -88,6 +111,10 @@ export function computeCoverage(overview, apiRuns = [], now = Date.now(), contra
     if (needsAuth && !executedCategories.has("security_minded")) risks.push({ id: "auth", label: "Auth not checked" });
     if (flakyChecks.length) risks.push({ id: "flaky", label: "Flaky results", detail: `Outcome keeps changing: ${flakyChecks.join(", ")}` });
     if (stale) risks.push({ id: "stale", label: `Not run in ${STALE_AFTER_DAYS}+ days` });
+    const flowsThrough = lifecycle?.flows.filter((flow) => flow.createKeys.includes(key)) ?? [];
+    if (flowsThrough.length && flowsThrough.every((flow) => flow.status === "untested")) {
+      risks.push({ id: "lifecycle", label: "Lifecycle not tested", detail: `Run the ${flowsThrough.map((flow) => flow.title).join(", ")} flow on the Flows page.` });
+    }
 
     const coveredChecks = runnable.filter((scenario) => executedTitles.has(scenario.title)).length;
     const contractChange = pendingChange(contractChanges, key, latest?.createdAt);
