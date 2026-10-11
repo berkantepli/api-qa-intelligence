@@ -250,6 +250,37 @@ test("imports a CLI report so CI runs count on Coverage", async ({ page }) => {
   await expect(page.locator(".history-run").filter({ hasText: "GET /pets" }).locator(".run-source-badge")).toHaveText("CI");
 });
 
+test("imports Newman and JUnit results so other test suites count on Coverage", async ({ page }) => {
+  // A real JUnit file: the CLI's report names each suite after its endpoint, such as GET /pets/{id}.
+  const junitPath = join(mkdtempSync(join(tmpdir(), "api-qa-junit-")), "report.xml");
+  const cli = spawnSync(python.includes("/") ? resolve(python) : python, ["-m", "app.cli", "run", "--spec", `${TARGET_URL}/openapi.json`, "--target", TARGET_URL, "--allow-private-network", "--endpoint", "GET /pets/{id}", "--param", "id=1", "--junit", junitPath], {
+    cwd: "../backend", encoding: "utf-8",
+  });
+  expect(cli.status, cli.stderr).toBe(1);
+  const newman = {
+    collection: { info: { name: "Pets in Postman" } },
+    run: { timings: { started: Date.now() }, executions: [
+      { item: { name: "List orders" }, request: { method: "GET", url: { raw: "{{baseUrl}}/orders", path: ["orders"] } }, response: { code: 401, responseTime: 9 }, assertions: [{ assertion: "Status code is 200", error: { message: "expected 401 to equal 200" } }] },
+      { item: { name: "Health" }, request: { method: "GET", url: { raw: "{{baseUrl}}/health", path: ["health"] } }, response: { code: 200, responseTime: 3 }, assertions: [] },
+    ] },
+  };
+
+  await page.goto("/");
+  await nav(page, "Coverage");
+  const input = page.locator(".coverage-export input[type=file]");
+  await input.setInputFiles({ name: "newman.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(newman)) });
+  await expect(page.locator(".success-alert")).toContainText("Imported 1 Newman test on 1 endpoint of E2E Pets from “Pets in Postman”. Left out 1 that matched no endpoint: GET /health.");
+  await input.setInputFiles(junitPath);
+  await expect(page.locator(".success-alert")).toContainText("JUnit test");
+
+  await nav(page, "Run history");
+  await page.locator(".history-group-toggle").first().click();
+  const newmanRun = page.locator(".history-run").filter({ hasText: "GET /orders" }).filter({ has: page.locator(".run-source-badge", { hasText: "Newman" }) });
+  await expect(page.locator(".history-run").filter({ hasText: "GET /pets/{id}" }).locator(".run-source-badge", { hasText: "JUnit" })).toBeVisible();
+  await newmanRun.click();
+  await expect(page.locator(".run-outcome").first()).toContainText("Status code is 200: expected 401 to equal 200");
+});
+
 test("shows what changed when a contract is imported again", async ({ page }) => {
   const contract = await (await fetch(`${TARGET_URL}/openapi.json`)).json();
   const upload = (document) => ({ name: "pets-contract.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(document)) });
