@@ -2,7 +2,7 @@
 
 The version lives in the [`VERSION`](VERSION) file and follows [Semantic Versioning](https://semver.org/). Before 1.0.0, a new feature raises the minor number (0.**x**.0) and a fix or visual change raises the patch number (0.x.**y**).
 
-## Unreleased
+## 1.7.0 — 2026-10-12
 
 ### Flows
 - `api-qa run --flows` runs the contract's lifecycle flows in CI. They need `--include-writes` and are reported as skipped without it; path parameters a flow cannot derive come from `--param` or `--inputs`. Each flow is a JUnit test suite with one test case per step, the JSON report gains `flows` and flow totals, and a failing flow exits 1.
