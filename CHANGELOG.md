@@ -2,6 +2,15 @@
 
 The version lives in the [`VERSION`](VERSION) file and follows [Semantic Versioning](https://semver.org/). Before 1.0.0, a new feature raises the minor number (0.**x**.0) and a fix or visual change raises the patch number (0.x.**y**).
 
+## 1.2.0 — 2026-10-11
+
+### Coverage gaps
+- Below each endpoint on **Coverage & Risk**, **coverage gaps** list what its checks do not cover yet, as sentences such as *No invalid-value check for path parameter id* or *HTTP 404 is documented, but no check expects it*.
+- For every input (parameters other than credentials, body fields other than files) the contract decides which checks apply: leaving out a required query, header, or body input; boundary values for documented limits; an invalid value for path parameters, numbers, booleans, and inputs with a `format`, `pattern`, or `enum`. Each is shown as passed, failing, not run, idea only, or no check.
+- Every documented response code is shown as received in a run, never received, or not expected by any check.
+- A **Has gaps** filter; the Markdown report has a Coverage gaps section and the JSON report lists gaps, inputs, and response codes per endpoint.
+- The API overview's operations include `response_codes`: every documented response code, with or without a JSON body. APIs imported before this version list only codes with a JSON body until they are imported again.
+
 ## 1.1.0 — 2026-10-11
 
 ### Explainable risk score
