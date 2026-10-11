@@ -106,6 +106,8 @@ def test_include_writes_and_smoke(spec, mock_http):
         (["--spec", "{spec}", "--target", "http://10.0.0.5"], "public host or localhost"),
         (["--spec", "{spec}", "--endpoint", "GET /nope"], "No endpoint matches 'GET /nope'"),
         (["--spec", "{spec}", "--target", "api.example.com"], "must be an http:// or https:// URL"),
+        # Checked before the contract is fetched, so an unreachable spec URL does not hide it.
+        (["--spec", "http://127.0.0.1:9/openapi.json", "--target", "api.example.com"], "must be an http:// or https:// URL"),
         (["--spec", "http://127.0.0.1:9/openapi.json"], "Could not connect to http://127.0.0.1:9/openapi.json"),
     ],
 )
