@@ -21,7 +21,10 @@ export function parseWorkspaceImport(text) {
   try { data = JSON.parse(text); }
   catch { throw new Error("The file is not valid JSON."); }
   if (!isObject(data) || data.format !== WORKSPACE_FORMAT) throw new Error("This is not an API QA Intelligence workspace export.");
-  if (data.version !== WORKSPACE_VERSION) throw new Error(`Unsupported workspace version ${data.version}.`);
+  if (typeof data.version === "number" && data.version > WORKSPACE_VERSION) {
+    throw new Error("This workspace was exported by a newer version of API QA Intelligence. Update the app, then import it again.");
+  }
+  if (data.version !== WORKSPACE_VERSION) throw new Error(`This workspace file has an unknown format version (${data.version}).`);
   if (!Array.isArray(data.savedApis) || !Array.isArray(data.runHistory)) throw new Error("The workspace file is missing saved APIs or Run history.");
   const invalidApi = data.savedApis.findIndex((api) => !isSavedApi(api));
   if (invalidApi >= 0) throw new Error(`Saved API #${invalidApi + 1} is incomplete.`);

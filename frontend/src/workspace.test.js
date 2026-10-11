@@ -15,7 +15,8 @@ describe("workspace export and import", () => {
   it.each([
     ["not json", "not valid JSON"],
     [JSON.stringify({ format: "other" }), "not an API QA Intelligence"],
-    [JSON.stringify({ format: "api-qa-intelligence-workspace", version: 2 }), "Unsupported workspace version"],
+    [JSON.stringify({ format: "api-qa-intelligence-workspace", version: 2 }), "exported by a newer version"],
+    [JSON.stringify({ format: "api-qa-intelligence-workspace", version: "x" }), "unknown format version"],
     [JSON.stringify({ format: "api-qa-intelligence-workspace", version: 1, savedApis: [] }), "missing saved APIs"],
     [JSON.stringify({ format: "api-qa-intelligence-workspace", version: 1, savedApis: [{ id: "a" }], runHistory: [] }), "Saved API #1 is incomplete"],
     [JSON.stringify({ format: "api-qa-intelligence-workspace", version: 1, savedApis: [], runHistory: [{ id: 1 }] }), "Run #1 is incomplete"],

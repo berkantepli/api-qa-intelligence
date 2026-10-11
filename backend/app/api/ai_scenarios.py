@@ -65,7 +65,7 @@ async def generate_scenario_ideas(payload: ScenarioIdeasRequest) -> ScenarioIdea
     except AIProviderUnavailable as error:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="The configured AI model is unavailable. Check the Ollama service and selected model.",
+            detail="The local AI model is not available. Check that Ollama is running and the configured model is installed.",
         ) from error
 
     return ScenarioIdeasResponse(scenarios=[
