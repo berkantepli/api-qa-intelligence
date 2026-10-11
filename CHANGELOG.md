@@ -2,6 +2,29 @@
 
 The version lives in the [`VERSION`](VERSION) file and follows [Semantic Versioning](https://semver.org/). Before 1.0.0, a new feature raises the minor number (0.**x**.0) and a fix or visual change raises the patch number (0.x.**y**).
 
+## 1.0.1 — 2026-10-11
+
+Fixes from a review of every error path and negative scenario. No API, CLI option, or data format changes.
+
+### Behaviour
+- Run selected and the bulk run stay disabled while the target URL is empty, malformed, or blocked, and say why. The topbar shows **No target URL** or **Invalid target URL**, and an unknown host is reported as unreachable rather than blocked.
+- Results and errors from an earlier run no longer stay on screen after a rejected run or when another endpoint is opened.
+- "Omit a required parameter" leaves out only query and header parameters; leaving out a path parameter used to test a different URL.
+- CLI: an `--endpoint` pattern that matches nothing exits 2 instead of passing with zero checks; `--target` and `--max-duration-ms` are checked before anything is downloaded.
+
+### Messages
+- Failed checks and connection probes say why: connection refused, unknown host, timeout, or a broken response.
+- OpenAPI import names the OpenAPI URL, tells 404, authentication, redirects, server errors, and a closed port apart, and calls out HTML pages and other files that are not OpenAPI documents.
+- A blocked private address explains `API_QA_ALLOW_PRIVATE_NETWORK=1` / `--allow-private-network`.
+- One AI-unavailable message; files and databases from a newer version say to update the app.
+- The web app shows field-level messages instead of raw validation text, and says the app server is not responding instead of "Failed to fetch".
+
+### Interface
+- Run and AI errors appear next to their button, with an icon, and scroll into view.
+- Empty required request fields are marked on the field; a stale "Every field already has a value." summary disappears.
+- An out-of-range response time limit shows an error instead of being silently changed.
+- Settings clears old messages and confirms Delete all; copy that still said data lives in this browser is updated.
+
 ## 1.0.0 — 2026-10-09
 
 The first stable release. API QA Intelligence turns an OpenAPI 3.x or Swagger 2.0 contract into risk-aware QA checks, runs them from the browser, in bulk, or from CI, judges each response by its status, documented schema, and time limit, keeps redacted evidence, and shows coverage and risk per endpoint. A local Ollama model can add scenario ideas, sample values, and failure explanations.
