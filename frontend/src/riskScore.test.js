@@ -34,9 +34,10 @@ describe("scoreEndpoint", () => {
 });
 
 describe("contract changes", () => {
-  it("adds points for a new or changed endpoint that has not run since", () => {
-    expect(scoreEndpoint(endpoint({ contractChange: { type: "added" } })).factors).toEqual([{ id: "contract-changed", kind: "evidence", points: 15, label: "New in the contract" }]);
-    expect(scoreEndpoint(endpoint({ contractChange: { type: "changed" } })).factors[0].label).toBe("Changed in the contract");
+  it("adds points for a changed endpoint that has not run since, but not twice for a new one", () => {
+    expect(scoreEndpoint(endpoint({ contractChange: { type: "changed" } })).factors).toEqual([{ id: "contract-changed", kind: "evidence", points: 15, label: "Changed in the contract" }]);
+    const added = scoreEndpoint(endpoint({ status: "untested", coveredChecks: 0, contractChange: { type: "added" } }));
+    expect(added.factors.map((factor) => factor.id)).toEqual(["untested"]);
   });
 });
 

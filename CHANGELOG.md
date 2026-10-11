@@ -2,6 +2,16 @@
 
 The version lives in the [`VERSION`](VERSION) file and follows [Semantic Versioning](https://semver.org/). Before 1.0.0, a new feature raises the minor number (0.**x**.0) and a fix or visual change raises the patch number (0.x.**y**).
 
+## 1.6.0 — 2026-10-11
+
+### Re-imports
+- Importing from the same URL or file name counts as the same API even when the contract's title changed: the contracts are compared and the saved API keeps its runs, checks, and settings under the new title.
+- When a new import has the same title as a saved API from another source, the overview offers **Merge into it** (a new version: compare and keep its runs, checks, target URL, and time limit) or **Keep separate** (for example staging and production).
+- Saved AI checks that no longer fit the contract are marked *Review against the current contract* on their card and listed under **Contract changes**: they send or leave out a parameter or body field the contract no longer has, send a body the endpoint no longer takes, or expect an undocumented status code.
+
+### Fixes
+- A new endpoint is scored once, as *Never tested*, instead of also getting +15 *New in the contract*. Changed endpoints still add +15 *Changed in the contract* until they run again.
+
 ## 1.5.0 — 2026-10-11
 
 ### Contract changes

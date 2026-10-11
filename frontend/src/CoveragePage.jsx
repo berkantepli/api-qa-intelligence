@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { computeCoverage, coverageReportFileName, coverageReportJson, coverageReportMarkdown } from "./coverage.js";
 import BulkRunPanel from "./BulkRunPanel.jsx";
+import { staleChecks } from "./contractDiff.js";
 import { GAP_KINDS } from "./coverageGaps.js";
 import ErrorAlert from "./ErrorAlert.jsx";
 import Icon from "./Icon.jsx";
@@ -51,8 +52,9 @@ function GapDetails({ endpoint }) {
   </details>;
 }
 
-function ContractChanges({ changes, endpoints }) {
+function ContractChanges({ changes, endpoints, overview }) {
   if (!changes) return null;
+  const stale = staleChecks(overview);
   const pending = new Set(endpoints.filter((endpoint) => endpoint.contractChange).map((endpoint) => endpoint.key));
   const version = changes.fromVersion !== changes.toVersion ? ` · ${changes.fromVersion} → ${changes.toVersion}` : "";
   const status = (key) => pending.has(key) ? <i className="coverage-risk coverage-risk-contract-changed">Not run since</i> : <i className="coverage-category coverage-category-passing">Run since</i>;
@@ -66,7 +68,11 @@ function ContractChanges({ changes, endpoints }) {
       {changes.removed.map((key) => <li key={`removed-${key}`}><b className="contract-change-removed">Removed</b><code>{key}</code></li>)}
     </ul>
     {changes.droppedChecks > 0 && <p>{changes.droppedChecks} saved AI {changes.droppedChecks === 1 ? "check was" : "checks were"} dropped with the removed endpoints.</p>}
-    <p>New and changed endpoints add +15 to their risk score until they run again. Edited AI checks are kept on changed endpoints; review them against the new contract.</p>
+    {stale.length > 0 ? <div className="stale-check">
+      <strong>{stale.length} saved AI {stale.length === 1 ? "check needs" : "checks need"} a review</strong>
+      <ul>{stale.map((item) => <li key={`${item.key}-${item.title}`}><code>{item.key}</code> · {item.title}: {item.reasons.join("; ")}</li>)}</ul>
+    </div> : <p>Every saved AI check still fits the current contract.</p>}
+    <p>A changed endpoint adds +15 to its risk score until it runs again; a new one counts as never tested.</p>
   </details>;
 }
 
@@ -141,7 +147,7 @@ export default function CoveragePage({
       <button className="stat-card stat-card-link" type="button" onClick={() => setFilterId("high")} title="Show high-risk endpoints"><span className="stat-label">High-risk endpoints</span><strong className={totals.highRisk ? "history-fail" : undefined}>{totals.highRisk}</strong><span className="stat-note">risk score {RISK_LEVELS[0].min} or more</span></button>
     </div>
 
-    <ContractChanges changes={contractChanges} endpoints={endpoints} />
+    <ContractChanges changes={contractChanges} endpoints={endpoints} overview={overview} />
 
     {(planning || bulkRun) && <BulkRunPanel
       overview={overview}

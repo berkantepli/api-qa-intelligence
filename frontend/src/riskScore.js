@@ -13,7 +13,7 @@ export const RISK_RULES = [
   { id: "writes", kind: "impact", points: 15, label: "Changes data", description: "POST, PUT, or PATCH endpoint." },
   { id: "auth-required", kind: "impact", points: 10, label: "Requires authentication", description: "The contract documents a credential for it." },
   { id: "sensitive", kind: "impact", points: 10, label: "Sensitive area", description: "Its path names accounts, users, orders, payments, or access control." },
-  { id: "contract-changed", kind: "evidence", points: 15, label: "Changed in the contract", description: "New or changed since the previous import, and not run since." },
+  { id: "contract-changed", kind: "evidence", points: 15, label: "Changed in the contract", description: "Changed since the previous import, and not run since. (A new endpoint counts as Never tested.)" },
   { id: "failing", kind: "evidence", points: 35, label: "Failing in latest run", description: "A check failed or errored in its latest run." },
   { id: "flaky", kind: "evidence", points: 15, label: "Flaky results", description: "A check's outcome flipped at least twice in its last five results." },
   { id: "untested", kind: "evidence", points: 15, label: "Never tested", description: "No check has run against it." },
@@ -52,7 +52,8 @@ export function scoreEndpoint(endpoint) {
   const word = sensitivePathWord(endpoint.path);
   if (word) add("sensitive", `Sensitive area: ${word}`);
 
-  if (endpoint.contractChange) add("contract-changed", endpoint.contractChange.type === "added" ? "New in the contract" : "Changed in the contract");
+  // A new endpoint has never run, so Never tested already scores it; only changed endpoints add points here.
+  if (endpoint.contractChange?.type === "changed") add("contract-changed");
   if (endpoint.status === "failing") add("failing");
   if (flags.has("flaky")) add("flaky");
   if (endpoint.status === "untested") add("untested");

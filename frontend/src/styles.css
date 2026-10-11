@@ -213,6 +213,12 @@ h1, h2, h3, p { margin-top: 0; }
 .risk-score-low { background: var(--surface-soft); color: var(--muted); }
 .coverage-risk-contract-changed { background: #fff3db; color: #9a6b19; }
 .import-notice span { flex: 1; }
+.merge-offer span { flex: 1 1 280px; }
+.merge-offer { flex-wrap: wrap; align-items: center; border: 1px solid var(--line); background: var(--surface); color: var(--text); }
+.merge-offer code { overflow-wrap: anywhere; }
+.stale-check { margin-top: 8px; padding: 8px 10px; border: 1px solid #f0d9a8; border-radius: 6px; background: #fff8ea; color: #7a5413; font-size: 12px; }
+.stale-check ul { margin: 4px 0 0; padding-left: 18px; }
+.stale-check code { color: inherit; }
 .contract-changes { margin-top: 14px; padding: 13px 16px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--muted); font-size: 12px; }
 .contract-changes summary { color: var(--text); cursor: pointer; font-size: 14px; font-weight: 700; }
 .contract-changes summary small { margin-left: 6px; color: var(--muted); font-size: 12px; font-weight: 400; }
@@ -716,6 +722,7 @@ h1, h2, h3, p { margin-top: 0; }
 :root[data-theme="dark"] .execution-confirmation { border-color: #69512e; background: #292319; }
 :root[data-theme="dark"] .execution-confirmation strong { color: #f1c477; }
 :root[data-theme="dark"] .execution-confirmation p { color: #d4c09e; }
+:root[data-theme="dark"] .stale-check { border-color: #5a4720; background: #2a2416; color: #eac578; }
 :root[data-theme="dark"] .success-alert { border-color: #28543e; background: #14231b; color: #86d8aa; }
 :root[data-theme="dark"] .error-alert { border-color: #593139; background: #281a1e; color: #f08e97; }
 :root[data-theme="dark"] .workflow-step > span { color: #bac2ce; }

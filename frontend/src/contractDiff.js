@@ -1,5 +1,6 @@
 // Compares two imports of the same API contract, endpoint by endpoint, and keeps the user's own
 // work (edited AI checks and ideas, target URL, time limit) when an API is imported again.
+import { isEditedScenario } from "./scenarioDraft.js";
 
 const SCHEMA_RULES = ["type", "format", "pattern", "enum", "minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum", "minLength", "maxLength", "minItems", "maxItems"];
 
@@ -116,4 +117,45 @@ export function reimportedApi(existing, imported) {
     // A re-import without changes keeps the previous comparison, so its pending changes stay visible.
     contractChanges: changes ? { ...changes, droppedChecks } : existing.contractChanges ?? null,
   };
+}
+
+function documents(codes, status) {
+  return codes.some((code) => code === "DEFAULT" || code === String(status) || (/^\dXX$/.test(code) && code[0] === String(status)[0]));
+}
+
+// Why a saved AI check may no longer fit its endpoint's contract: it sends or leaves out inputs the
+// contract no longer has, sends a body the endpoint no longer takes, or expects an undocumented status.
+export function staleCheckReasons(scenario, operation) {
+  const example = scenario.request_example;
+  if (!example || !operation) return [];
+  const reasons = [];
+  const parameters = new Set((operation.parameters ?? []).map((parameter) => `${parameter.location}:${parameter.name}`));
+  const fields = new Set((operation.request_body_fields ?? []).map((field) => field.name));
+  for (const item of example.omitted_parameters ?? []) {
+    if (!parameters.has(`${item.location}:${item.name}`)) reasons.push(`Leaves out ${item.location} parameter ${item.name}, which the contract no longer has`);
+  }
+  for (const key of Object.keys(example.parameter_values ?? {})) {
+    if (!parameters.has(key)) reasons.push(`Sends ${key.replace(":", " parameter ")}, which the contract no longer has`);
+  }
+  const body = example.form_body ? example.form_fields : example.json_body;
+  if (body != null && !operation.request_body_content_type) {
+    reasons.push("Sends a request body, but the endpoint no longer takes one");
+  } else if (fields.size && body && typeof body === "object" && !Array.isArray(body)) {
+    for (const name of Object.keys(body)) if (!fields.has(name)) reasons.push(`Sends body field ${name}, which the contract no longer has`);
+  }
+  const codes = operation.response_codes ?? [];
+  if (codes.length) {
+    for (const status of example.expected_status_codes ?? []) {
+      if (!documents(codes, status)) reasons.push(`Expects HTTP ${status}, which the contract does not document`);
+    }
+  }
+  return reasons;
+}
+
+// Every saved AI check in an API that may need a review, with its reasons.
+export function staleChecks(overview) {
+  return (overview?.operations ?? []).flatMap((operation) => (operation.scenarios ?? [])
+    .filter(isEditedScenario)
+    .map((scenario) => ({ key: keyOf(operation), title: scenario.title, reasons: staleCheckReasons(scenario, operation) }))
+    .filter((item) => item.reasons.length));
 }
