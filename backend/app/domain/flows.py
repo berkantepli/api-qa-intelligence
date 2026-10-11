@@ -526,6 +526,8 @@ def _value_from_body(rule: FlowExtract, request: ScenarioExecutionRequest, raw_b
             document = json.loads(raw_body.decode("utf-8"))
         except (UnicodeDecodeError, json.JSONDecodeError):
             return None, f"Could not save {{{{{rule.variable}}}}}: {where} is not JSON."
+        except RecursionError:
+            return None, f"Could not save {{{{{rule.variable}}}}}: {where} is nested too deeply to read."
     value = _resolve_pointer(document, rule.pointer)
     if value is None or isinstance(value, (Mapping, list)):
         found = "has no value" if value is None else "is not a single value"

@@ -21,8 +21,9 @@ class FlowSuggestionResponse(BaseModel):
     flows: list[ApiFlow]
 
 
+# A plain def runs in the thread pool, so a large API does not block other requests.
 @router.post("/suggest", response_model=FlowSuggestionResponse)
-async def suggest_flows(payload: FlowSuggestionRequest) -> FlowSuggestionResponse:
+def suggest_flows(payload: FlowSuggestionRequest) -> FlowSuggestionResponse:
     """Suggests flows for an API overview saved before flows were part of the import."""
     return FlowSuggestionResponse(flows=infer_flows(payload.operations))
 

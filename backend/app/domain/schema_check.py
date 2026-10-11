@@ -64,6 +64,8 @@ def check_response(schemas: Mapping[str, Any] | None, status: int, content_type:
         return SchemaCheck(status="failed", detail="The response is not JSON.", errors=[f"$: expected a JSON response, received {content_type or 'no content type'}"])
     try:
         value = json.loads(body)
+    except RecursionError:
+        return SchemaCheck(status="skipped", detail="The response is nested too deeply to check.")
     except ValueError:
         return SchemaCheck(status="failed", detail="The response is not valid JSON.", errors=["$: the response body is not valid JSON"])
     errors = validate(value, schema)

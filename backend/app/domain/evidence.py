@@ -50,7 +50,7 @@ def redact_text(value: str) -> str:
     try:
         parsed = json.loads(value)
         return json.dumps(redact_value(parsed), ensure_ascii=False, indent=2)
-    except json.JSONDecodeError:
+    except (json.JSONDecodeError, RecursionError):
         pattern = re.compile(
             r"((?:authorization|authentication|auth|cookie|token|secret|password|passwd|passphrase|credential|"
             r"api[-_]?key|private[-_]?key|\bkey|session\w*|signature|\bpwd|\bpin|\botp)"
