@@ -886,3 +886,17 @@ h1, h2, h3, p { margin-top: 0; }
   .flow-edit-step-actions { margin-left: auto; }
   .flow-editor .flow-edit-title { order: 3; flex-basis: 100%; }
 }
+
+/* Contract change severity */
+.contract-severity { display: inline-flex; margin-left: 6px; padding: 1px 6px; border-radius: 4px; font-size: 10px; font-style: normal; font-weight: 700; vertical-align: 1px; }
+.contract-severity-breaking { background: var(--red-soft); color: var(--red); }
+.contract-severity-warning { background: #fff3db; color: #9a6b19; }
+.contract-severity-safe { background: var(--green-soft); color: var(--green); }
+:root[data-theme="dark"] .contract-severity-warning { background: #3a301c; color: #eac578; }
+.contract-changes li > ul > li .contract-severity { margin: 0 6px 0 0; }
+.contract-change-where { color: var(--muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; }
+.contract-severity-summary { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; margin: 10px 0 4px; color: var(--muted); font-size: 13px; }
+.contract-severity-summary strong { color: var(--text); }
+.contract-severity-summary strong.history-fail { color: var(--red); }
+.contract-changes > ul > li > .contract-retest { flex-basis: 100%; margin: 0 0 4px 86px; color: var(--muted); font-size: 12px; }
+.contract-retest b { min-width: 0; padding: 0; color: var(--text); font-size: 12px; text-align: left; }
