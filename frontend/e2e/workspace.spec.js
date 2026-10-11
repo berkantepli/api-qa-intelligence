@@ -186,6 +186,49 @@ test("runs a flow that passes the created id to the next request", async ({ page
   await expect(page.locator(".run-check").nth(1)).toContainText("/pets/2");
 });
 
+test("edits a flow to clean up after itself, and shows untested lifecycles on Coverage", async ({ page }) => {
+  await page.goto("/");
+  await nav(page, "Flows");
+  const flow = page.locator(".flow-card").filter({ has: page.getByRole("heading", { name: "Pet lifecycle" }) });
+  await flow.getByRole("button", { name: "Edit" }).click();
+
+  const addStep = async ({ title, method, path, codes, cleanup = false }) => {
+    await flow.getByRole("button", { name: "+ Add step" }).click();
+    const step = flow.locator(".flow-edit-step").last();
+    await step.getByPlaceholder("Step name, such as Create a pet").fill(title);
+    await step.getByRole("combobox").first().selectOption(method);
+    await step.getByPlaceholder("/pets/{{petId}}").fill(path);
+    await step.getByPlaceholder("200, 201").fill(codes);
+    if (cleanup) await step.getByRole("checkbox", { name: /Run even after an earlier step fails/ }).check();
+  };
+  await addStep({ title: "Delete the pet", method: "DELETE", path: "/pets/{{id}}", codes: "204", cleanup: true });
+  await addStep({ title: "Confirm the pet is gone", method: "GET", path: "/pets/{{nope}}", codes: "404" });
+  // A value no earlier step saves is caught before saving.
+  await expect(flow.locator(".flow-edit-step").last()).toContainText("Uses {{nope}}, which no earlier step saves.");
+  await flow.locator(".flow-edit-step").last().getByPlaceholder("/pets/{{petId}}").fill("/pets/{{id}}");
+  await flow.getByRole("button", { name: "Save flow" }).click();
+
+  await expect(flow.locator(".edited-pill")).toHaveText("Edited");
+  await expect(flow.locator(".flow-step")).toHaveCount(4);
+  await flow.getByRole("button", { name: "Run flow" }).click();
+  await expect(flow.locator(".execution-confirmation")).toContainText("The last steps delete what the flow created");
+  await flow.getByRole("button", { name: "Confirm and run" }).click();
+
+  // Reading fails on the target's schema bug; the cleanup still deletes the pet, the check after it is skipped.
+  await expect(flow.locator(".flow-step").nth(2)).toContainText("HTTP 204");
+  await expect(flow.locator(".flow-step").nth(2).locator(".history-status")).toHaveText("PASS");
+  await expect(flow.locator(".flow-step").nth(3).locator(".history-status")).toHaveText("SKIPPED");
+
+  await nav(page, "Coverage");
+  await expect(page.locator(".stat-card").filter({ hasText: "Lifecycle flows passing" })).toContainText("0 / 1");
+
+  await nav(page, "Flows");
+  await flow.getByRole("button", { name: "Reset to suggested" }).click();
+  await flow.getByRole("button", { name: "Reset", exact: true }).click();
+  await expect(flow.locator(".flow-step")).toHaveCount(2);
+  await expect(flow.locator(".edited-pill")).toHaveCount(0);
+});
+
 test("imports a CLI report so CI runs count on Coverage", async ({ page }) => {
   const reportPath = join(mkdtempSync(join(tmpdir(), "api-qa-cli-")), "report.json");
   // The CLI runs from the backend folder, so a relative interpreter path is resolved first.
