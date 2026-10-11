@@ -14,6 +14,7 @@ from app.api.sample_values import router as sample_values_router
 from app.api.specs import router as specs_router
 from app.api.targets import router as targets_router
 from app.api.workspace import router as workspace_router
+from app.middleware import RequestSizeLimitMiddleware
 from app.version import APP_VERSION
 
 app = FastAPI(
@@ -29,6 +30,7 @@ ALLOWED_HOSTS = ["localhost", "127.0.0.1", *(
     host.strip() for host in os.getenv("API_QA_ALLOWED_HOSTS", "").split(",") if host.strip()
 )]
 app.add_middleware(TrustedHostMiddleware, allowed_hosts=ALLOWED_HOSTS)
+app.add_middleware(RequestSizeLimitMiddleware)
 
 
 @app.get("/health", tags=["Health"])
