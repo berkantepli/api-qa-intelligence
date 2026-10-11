@@ -84,6 +84,12 @@ test("does not run checks without a usable target", async ({ page }) => {
   await target.fill(TARGET_URL);
   await expect(page.locator(".connection-status")).toContainText("API reachable");
   await expect(run).toBeEnabled();
+
+  const limit = page.locator(".time-limit-field input");
+  await limit.fill("0");
+  await expect(page.getByText("Enter a whole number from 1 to 120000 ms.")).toBeVisible();
+  await limit.blur();
+  await expect(limit).toHaveValue("");
 });
 
 test("keeps the workspace after the browser is cleared", async ({ page }) => {
