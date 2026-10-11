@@ -143,3 +143,10 @@ def test_slow_responses_fail_with_a_time_limit(spec, mock_http, tmp_path):
     assert main([*args, "--max-duration-ms", "1"]) == 1
     failure = ElementTree.parse(tmp_path / "r.xml").getroot().find(".//failure")
     assert failure.get("message").startswith("HTTP 200 as expected, but it took")
+
+
+def test_summary_counts_read_naturally(spec, mock_http, capsys):
+    mock_http.respond_with(pets_api)
+
+    assert main(["run", "--spec", spec, "--header", "X-Key: secret", "--endpoint", "GET /pets", "--smoke"]) == 0
+    assert "1 check: 1 passed, 0 failed, 0 errors; 0 endpoints skipped" in capsys.readouterr().err

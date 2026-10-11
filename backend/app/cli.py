@@ -202,12 +202,16 @@ async def run_checks(args: argparse.Namespace) -> RunReport:
     return report
 
 
+def plural(count: int, noun: str) -> str:
+    return f"{count} {noun}" if count == 1 else f"{count} {noun}s"
+
+
 def print_summary(report: RunReport) -> None:
     totals = report.totals
     print(
         f"\n{report.api} {report.api_version} → {report.target}\n"
-        f"{totals['checks']} checks: {totals['passed']} passed, {totals['failed']} failed, {totals['errors']} errors; "
-        f"{totals['skipped_endpoints']} endpoints skipped",
+        f"{plural(totals['checks'], 'check')}: {totals['passed']} passed, {totals['failed']} failed, "
+        f"{plural(totals['errors'], 'error')}; {plural(totals['skipped_endpoints'], 'endpoint')} skipped",
         file=sys.stderr,
     )
     for endpoint in report.endpoints:
