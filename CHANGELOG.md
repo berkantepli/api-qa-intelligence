@@ -2,6 +2,13 @@
 
 The version lives in the [`VERSION`](VERSION) file and follows [Semantic Versioning](https://semver.org/). Before 1.0.0, a new feature raises the minor number (0.**x**.0) and a fix or visual change raises the patch number (0.x.**y**).
 
+## 1.0.2 — 2026-10-11
+
+### Security
+- Credentials typed into a request body are no longer saved. Saved request details used to leave out only parameters the contract marks as credentials, so a body field such as `password` was kept in the workspace database and the browser copy. Fields whose name gives them away (`password`, `pwd`, `pin`, `otp`, `session`, `signature`, `private_key`, `token`, …) are now left out, and such keys are removed from JSON bodies too.
+- Request details saved by an earlier version are cleaned the next time the workspace loads.
+- Run evidence and the evidence sent to **Analyze with AI** also mask session ids, signatures, PINs, and one-time codes; **Fill with AI** never generates them.
+
 ## 1.0.1 — 2026-10-11
 
 Fixes from a review of every error path and negative scenario. No API, CLI option, or data format changes.

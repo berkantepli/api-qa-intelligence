@@ -67,3 +67,38 @@ def test_database_records_its_schema_and_refuses_newer_ones(tmp_path):
         db.execute("UPDATE meta SET value = ? WHERE key = 'schema_version'", (str(SCHEMA_VERSION + 1),))
     with pytest.raises(RuntimeError, match="newer version"):
         WorkspaceStore(path)
+
+
+def test_credentials_named_in_a_body_or_header_are_not_stored(client):
+    client.put(f"/api/v1/workspace/apis/{API['id']}", params={"position": 0}, json=API)
+    inputs = {"POST /login": {
+        "body:email": "qa@example.com",
+        "body:password": "p",
+        "parameter:header:X-Session": "s",
+        "body:profile": '{"name":"qa","pin":"1234"}',
+        "body:__raw": '{\n  "email": "qa@example.com",\n  "otp": "999"\n}',
+    }}
+    assert client.put(f"/api/v1/workspace/inputs/{API['id']}", json=inputs).status_code == 204
+
+    assert client.get("/api/v1/workspace").json()["requestInputs"] == {API["id"]: {"POST /login": {
+        "body:email": "qa@example.com",
+        "body:profile": '{"name":"qa"}',
+        "body:__raw": '{\n  "email": "qa@example.com"\n}',
+    }}}
+
+
+def test_raw_bodies_that_are_not_json_are_dropped_when_they_name_a_credential(client):
+    client.put(f"/api/v1/workspace/apis/{API['id']}", params={"position": 0}, json=API)
+    inputs = {"POST /a": {"body:__raw": '{"password": "p",'}, "POST /b": {"body:__raw": '{"name": "qa",'}}
+    client.put(f"/api/v1/workspace/inputs/{API['id']}", json=inputs)
+
+    assert client.get("/api/v1/workspace").json()["requestInputs"] == {API["id"]: {"POST /b": inputs["POST /b"]}}
+
+
+def test_credentials_saved_by_older_versions_are_removed_on_load(client, workspace_store):
+    workspace_store.save_api(API, 0)
+    workspace_store.save_inputs(API["id"], {"POST /login": {"body:password": "p"}, "GET /pets": {"parameter:query:limit": "5"}})
+
+    expected = {API["id"]: {"GET /pets": {"parameter:query:limit": "5"}}}
+    assert client.get("/api/v1/workspace").json()["requestInputs"] == expected
+    assert workspace_store.load()["requestInputs"] == expected
