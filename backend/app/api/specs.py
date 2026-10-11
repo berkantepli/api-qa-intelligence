@@ -3,7 +3,9 @@ import json
 import httpx
 import yaml
 from fastapi import APIRouter, File, HTTPException, UploadFile, status
+from pydantic import BaseModel
 
+from app.domain.contract_diff import ContractDiff, diff_contracts
 from app.domain.network import ensure_safe_target_host, request_error_reason
 from app.domain.openapi import ApiOverview, OpenApiDocumentError, SpecUrlRequest, summarize_openapi
 
@@ -97,3 +99,14 @@ def _parse_specification(contents: bytes, filename: str) -> ApiOverview:
     except OpenApiDocumentError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
 
+
+
+class ContractDiffRequest(BaseModel):
+    base: ApiOverview
+    head: ApiOverview
+
+
+@router.post("/diff", response_model=ContractDiff)
+async def compare_specifications(payload: ContractDiffRequest) -> ContractDiff:
+    """Compares two API overviews (the earlier version as base) and classifies every change."""
+    return diff_contracts(payload.base, payload.head)

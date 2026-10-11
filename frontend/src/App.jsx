@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { categoryLabels, inputHelp, parameterLabel } from "./categories.js";
 import { cliImportMessage, cliReportRuns, matchReportApi, parseCliReport } from "./cliReport.js";
 import { reimportedApi, staleCheckReasons } from "./contractDiff.js";
+import { classifyContractChanges, withClassification } from "./contractSeverity.js";
 import CoveragePage from "./CoveragePage.jsx";
 import DuplicateNotice from "./DuplicateNotice.jsx";
 import { duplicatePairKey, filterNewIdeas, findDuplicateScenarios, findSameRequest } from "./duplicates.js";
@@ -502,6 +503,7 @@ function App() {
       setSelectedOperation(firstRunnableOperationIndex(savedApi.overview));
       resetRunState();
       setNotice(existing ? reimportNotice(savedApi, existing.title) : `Imported ${payload.operation_count} operations. Review the suggested scenarios below.`);
+      if (existing) classifyChanges(savedApi, existing.overview);
     } catch (caught) {
       setError(caught.message || "Something went wrong while importing the specification.");
     } finally {
@@ -857,6 +859,20 @@ function App() {
     setSelectedOperation(firstRunnableOperationIndex(merged.overview));
     resetRunState();
     setNotice(reimportNotice(merged, older.title));
+    classifyChanges(merged, older.overview);
+  }
+
+  // Asks the backend how severe each change of a new import is for clients; without an answer the
+  // changes still show, unclassified.
+  async function classifyChanges(api, previousOverview) {
+    const changes = api.contractChanges;
+    if (!changes || changes.classified || changes.comparedAt !== api.importedAt) return;
+    try {
+      const classified = await classifyContractChanges(previousOverview, api.overview);
+      setSavedApis((current) => current.map((item) => item.id === api.id ? withClassification(item, changes.comparedAt, classified) : item));
+    } catch {
+      // The plain list of changes is still shown.
+    }
   }
 
   // Adds the checks from an `api-qa run --json` report to Run history, so CI runs count on Coverage.

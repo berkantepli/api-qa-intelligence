@@ -276,8 +276,12 @@ test("shows what changed when a contract is imported again", async ({ page }) =>
   const panel = page.locator(".contract-changes");
   await expect(panel).toContainText("1.0.0 → 1.1.0");
   await expect(panel).toContainText("DELETE /pets/{id}");
-  await expect(panel).toContainText("New response 410");
+  await expect(panel).toContainText("response 410");
   await expect(panel).toContainText("GET /orders");
+  // The backend classifies each change for clients: removing an endpoint breaks them, a new response does not.
+  await expect(panel.locator(".contract-severity-summary")).toContainText("1 breaking · 0 warnings · 2 safe");
+  await expect(panel.locator("li").filter({ hasText: "GET /orders" }).locator(".contract-severity")).toHaveText("Breaking");
+  await expect(panel.locator("li").filter({ hasText: "GET /pets/{id}" }).first()).toContainText("New documented response.");
   // A new endpoint is scored once, as never tested; a changed one adds Changed in the contract.
   await expect(page.locator(".coverage-row").filter({ hasText: "/pets/{id}" }).filter({ has: page.locator(".method-delete") })).not.toContainText("in the contract");
   await expect(page.locator(".coverage-row").filter({ hasText: "/pets/{id}" }).filter({ has: page.locator(".method-get") })).toContainText("+15 Changed in the contract");

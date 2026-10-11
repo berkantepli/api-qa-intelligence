@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { classifiedEndpoint, SEVERITY_LABELS, severitySummary } from "./contractSeverity.js";
 import { computeCoverage, coverageReportFileName, coverageReportJson, coverageReportMarkdown } from "./coverage.js";
 import BulkRunPanel from "./BulkRunPanel.jsx";
 import { staleChecks } from "./contractDiff.js";
@@ -52,20 +53,50 @@ function GapDetails({ endpoint }) {
   </details>;
 }
 
+function SeverityBadge({ severity }) {
+  return severity ? <i className={`contract-severity contract-severity-${severity}`}>{SEVERITY_LABELS[severity]}</i> : null;
+}
+
+// The classified changes of one endpoint, or its plain list when the import was not classified.
+function EndpointChanges({ classified, plain }) {
+  if (!classified) return <ul>{plain.map((change) => <li key={change}>{change}</li>)}</ul>;
+  return <>
+    <ul>{classified.changes.map((change, index) => <li key={index}><SeverityBadge severity={change.severity} /><span className="contract-change-where">{change.location}</span> {change.message}</li>)}</ul>
+    {classified.retest.length > 0 && <p className="contract-retest"><b>Run again:</b> {classified.retest.join(", ")}</p>}
+  </>;
+}
+
 function ContractChanges({ changes, endpoints, overview }) {
+  const [copied, setCopied] = useState(false);
   if (!changes) return null;
+  const classified = changes.classified;
+  const copyMarkdown = async () => {
+    try {
+      await navigator.clipboard.writeText(classified.markdown);
+      setCopied(true);
+    } catch {
+      download(classified.markdown, `${overview.title.replace(/[^\w.-]+/g, "-")}-contract-changes.md`, "text/markdown");
+    }
+  };
   const stale = staleChecks(overview);
   const pending = new Set(endpoints.filter((endpoint) => endpoint.contractChange).map((endpoint) => endpoint.key));
   const version = changes.fromVersion !== changes.toVersion ? ` · ${changes.fromVersion} → ${changes.toVersion}` : "";
   const status = (key) => pending.has(key) ? <i className="coverage-risk coverage-risk-contract-changed">Not run since</i> : <i className="coverage-category coverage-category-passing">Run since</i>;
   return <details className="contract-changes" open={pending.size > 0}>
     <summary>Contract changes since the previous import<small>{version} · imported {new Date(changes.comparedAt).toLocaleString()}</small></summary>
+    {classified && <div className="contract-severity-summary">
+      <span>For clients: <strong className={classified.totals.breaking ? "history-fail" : undefined}>{severitySummary(classified)}</strong></span>
+      <button className="secondary-button" type="button" onClick={copyMarkdown} title="Copy the report as Markdown, for example for a pull request">{copied ? <><Icon name="check" size={14} /> Copied</> : "Copy as Markdown"}</button>
+    </div>}
     <ul>
       {changes.added.map((key) => <li key={`added-${key}`}><b className="contract-change-new">New</b><code>{key}</code>{status(key)}</li>)}
-      {changes.changed.map((item) => <li key={`changed-${item.key}`}><b className="contract-change-changed">Changed</b><code>{item.key}</code>{status(item.key)}
-        <ul>{item.changes.map((change) => <li key={change}>{change}</li>)}</ul>
-      </li>)}
-      {changes.removed.map((key) => <li key={`removed-${key}`}><b className="contract-change-removed">Removed</b><code>{key}</code></li>)}
+      {changes.changed.map((item) => {
+        const endpoint = classifiedEndpoint(classified, item.key);
+        return <li key={`changed-${item.key}`}><b className="contract-change-changed">Changed</b><code>{item.key}</code>{status(item.key)}<SeverityBadge severity={endpoint?.severity} />
+          <EndpointChanges classified={endpoint} plain={item.changes} />
+        </li>;
+      })}
+      {changes.removed.map((key) => <li key={`removed-${key}`}><b className="contract-change-removed">Removed</b><code>{key}</code>{classified && <SeverityBadge severity="breaking" />}</li>)}
     </ul>
     {changes.droppedChecks > 0 && <p>{changes.droppedChecks} saved AI {changes.droppedChecks === 1 ? "check was" : "checks were"} dropped with the removed endpoints.</p>}
     {stale.length > 0 ? <div className="stale-check">
