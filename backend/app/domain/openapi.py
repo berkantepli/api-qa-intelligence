@@ -91,6 +91,8 @@ class ApiOperation(BaseModel):
     request_body_fields: list[ApiBodyField] = Field(default_factory=list)
     # Resolved JSON response schemas keyed by response code ("200", "4XX", "DEFAULT").
     response_schemas: dict[str, dict[str, Any]] = Field(default_factory=dict)
+    # Every documented response code ("200", "404", "4XX", "DEFAULT"), with or without a JSON body.
+    response_codes: list[str] = Field(default_factory=list)
     scenarios: list[QaScenario] = Field(default_factory=list)
     links: list[OperationLink] = Field(default_factory=list)
 
@@ -187,6 +189,7 @@ def summarize_openapi(document: Any) -> ApiOverview:
                     request_body_required=_request_body_required(request_body, document),
                     request_body_fields=body_fields,
                     response_schemas=response_schemas(details.get("responses"), document),
+                    response_codes=_response_codes(details.get("responses")),
                     scenarios=_generate_scenarios(
                         method.upper(), path, details, global_security, document, body_content_type, body_fields,
                         [parameter for parameter in parameters if parameter.credential],
@@ -642,6 +645,12 @@ def _resolve_schema(
     if isinstance(items, Mapping):
         result["items"] = resolve_nested(items)
     return result
+
+
+def _response_codes(responses: Any) -> list[str]:
+    if not isinstance(responses, Mapping):
+        return []
+    return list(dict.fromkeys(str(code).upper() for code in responses))
 
 
 def _status_codes(responses: Any, first_digit: int) -> list[int]:

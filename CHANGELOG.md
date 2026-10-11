@@ -7,6 +7,31 @@ The version lives in the [`VERSION`](VERSION) file and follows [Semantic Version
 ### Added
 - **Flows (backend):** multi-step lifecycle checks that pass a created record's id to the next request. Imports suggest a flow for each collection whose POST creates records that an item path reads or deletes (create → read → update → delete → confirm it is gone), using OpenAPI `links` when the contract has them. `POST /api/v1/flows/execute` runs a flow step by step; cleanup steps still run after a failure. The API overview gains `flows`, and each operation its `links`. The Flows page in the web app follows in the next change.
 
+## 1.2.0 — 2026-10-11
+
+### Coverage gaps
+- Below each endpoint on **Coverage & Risk**, **coverage gaps** list what its checks do not cover yet, as sentences such as *No invalid-value check for path parameter id* or *HTTP 404 is documented, but no check expects it*.
+- For every input (parameters other than credentials, body fields other than files) the contract decides which checks apply: leaving out a required query, header, or body input; boundary values for documented limits; an invalid value for path parameters, numbers, booleans, and inputs with a `format`, `pattern`, or `enum`. Each is shown as passed, failing, not run, idea only, or no check.
+- Every documented response code is shown as received in a run, never received, or not expected by any check.
+- A **Has gaps** filter; the Markdown report has a Coverage gaps section and the JSON report lists gaps, inputs, and response codes per endpoint.
+- The API overview's operations include `response_codes`: every documented response code, with or without a JSON body. APIs imported before this version list only codes with a JSON body until they are imported again.
+
+## 1.1.0 — 2026-10-11
+
+### Explainable risk score
+- Every endpoint on **Coverage & Risk** has a risk score from 0 to 100 (high from 50, medium from 25), and the list is ordered by it, highest first.
+- The score is the sum of fixed rules, and each rule that added points is shown next to it, for example *+20 Deletes data*, *+10 Sensitive area: orders*, *+35 Failing in latest run*.
+- Impact rules come from the contract: deletes or changes data, requires authentication, a path that names accounts, users, orders, payments, or access control. Evidence rules come from Run history: failing, flaky, never tested, auth not checked, only happy path tested, checks not run yet, not run in 7+ days.
+- **How the risk score works** lists every rule with its points. No AI is involved, so the same history always gives the same score.
+- A **High-risk endpoints** card and a **High risk** filter; the Markdown and JSON reports include each score, its level, and its reasons.
+
+## 1.0.2 — 2026-10-11
+
+### Security
+- Credentials typed into a request body are no longer saved. Saved request details used to leave out only parameters the contract marks as credentials, so a body field such as `password` was kept in the workspace database and the browser copy. Fields whose name gives them away (`password`, `pwd`, `pin`, `otp`, `session`, `signature`, `private_key`, `token`, …) are now left out, and such keys are removed from JSON bodies too.
+- Request details saved by an earlier version are cleaned the next time the workspace loads.
+- Run evidence and the evidence sent to **Analyze with AI** also mask session ids, signatures, PINs, and one-time codes; **Fill with AI** never generates them.
+
 ## 1.0.1 — 2026-10-11
 
 Fixes from a review of every error path and negative scenario. No API, CLI option, or data format changes.

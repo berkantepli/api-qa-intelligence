@@ -259,3 +259,21 @@ def test_deeply_nested_refs_cannot_hang_an_import():
     started = time.perf_counter()
     summarize_openapi(document)
     assert time.perf_counter() - started < 2
+
+
+def test_lists_every_documented_response_code_with_or_without_a_body():
+    document = {
+        "openapi": "3.0.3",
+        "info": {"title": "Codes", "version": "1"},
+        "paths": {"/items/{id}": {"delete": {"responses": {
+            "204": {"description": "deleted"},
+            "404": {"description": "missing"},
+            "4xx": {"description": "client error", "content": {"application/json": {"schema": {"type": "object"}}}},
+            "default": {"description": "other"},
+        }}}},
+    }
+
+    operation = summarize_openapi(document).operations[0]
+
+    assert operation.response_codes == ["204", "404", "4XX", "DEFAULT"]
+    assert list(operation.response_schemas) == ["4XX"]

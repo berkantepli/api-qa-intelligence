@@ -47,3 +47,15 @@ def test_sanitize_url_removes_userinfo_and_masks_query_secrets():
 def test_redact_text_handles_json_and_plain_text():
     assert json.loads(redact_text('{"token": "abc", "ok": true}')) == {"token": "[REDACTED]", "ok": True}
     assert redact_text("password=hunter2 status=failed") == 'password="[REDACTED]" status=failed'
+
+
+def test_session_signature_and_short_secret_names_are_masked():
+    headers = {"X-Session": "s", "X-Signature": "s", "pwd": "p", "PIN": "1", "user_pin": "1", "otp_code": "1",
+               "Ping": "kept", "Shipping": "kept", "Pinned": "kept", "Spotprice": "kept"}
+
+    assert redact_headers(headers) == {
+        "X-Session": "[REDACTED]", "X-Signature": "[REDACTED]", "pwd": "[REDACTED]", "PIN": "[REDACTED]",
+        "user_pin": "[REDACTED]", "otp_code": "[REDACTED]",
+        "Ping": "kept", "Shipping": "kept", "Pinned": "kept", "Spotprice": "kept",
+    }
+    assert redact_text("session_id=abc pin=1234 ping=ok") == 'session_id="[REDACTED]" pin="[REDACTED]" ping=ok'

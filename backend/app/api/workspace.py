@@ -4,6 +4,7 @@ from typing import Any
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Response, status
 
+from app.domain.evidence import persistable_inputs
 from app.domain.store import WorkspaceStore, default_database_path
 
 router = APIRouter(prefix="/api/v1/workspace", tags=["Workspace"])
@@ -31,7 +32,21 @@ def _credential_keys(api: dict[str, Any] | None) -> set[str]:
 
 @router.get("", summary="Load the saved workspace")
 def load_workspace(store: WorkspaceStore = Depends(get_store)) -> dict[str, Any]:
-    return store.load()
+    workspace = store.load()
+    # Request details saved by older versions may still hold credentials; they are removed on first load.
+    for api_id, inputs in workspace["requestInputs"].items():
+        cleaned = _without_credentials(store, api_id, inputs)
+        if cleaned != inputs:
+            store.save_inputs(api_id, cleaned)
+            workspace["requestInputs"][api_id] = cleaned
+    workspace["requestInputs"] = {api_id: inputs for api_id, inputs in workspace["requestInputs"].items() if inputs}
+    return workspace
+
+
+def _without_credentials(store: WorkspaceStore, api_id: str, inputs: dict[str, dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    credentials = _credential_keys(store.get_api(api_id))
+    cleaned = {operation: persistable_inputs(values, credentials) for operation, values in inputs.items()}
+    return {operation: values for operation, values in cleaned.items() if values}
 
 
 @router.put("/apis/{api_id:path}", status_code=status.HTTP_204_NO_CONTENT, summary="Save a saved API")
@@ -69,13 +84,9 @@ def save_inputs(
     api_id: str, inputs: dict[str, dict[str, Any]] = Body(...), store: WorkspaceStore = Depends(get_store)
 ) -> Response:
     # Credentials are never stored, even if a client sends them.
-    credentials = _credential_keys(store.get_api(api_id))
-    cleaned = {
-        operation: {key: value for key, value in values.items() if key not in credentials}
-        for operation, values in inputs.items()
-    }
+    cleaned = _without_credentials(store, api_id, inputs)
     _check_size(cleaned)
-    store.save_inputs(api_id, {operation: values for operation, values in cleaned.items() if values})
+    store.save_inputs(api_id, cleaned)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 

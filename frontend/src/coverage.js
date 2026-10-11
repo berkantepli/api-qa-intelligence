@@ -1,5 +1,7 @@
 // Derives per-endpoint test coverage and risk signals from a saved API and its Run history.
 import { categoryLabels } from "./categories.js";
+import { computeGaps } from "./coverageGaps.js";
+import { RISK_LEVELS, scoreEndpoint } from "./riskScore.js";
 import { apiIdsByTitle, runApiKey, summarizeResults } from "./runDetail.js";
 
 const WRITE_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
@@ -84,6 +86,12 @@ export function computeCoverage(overview, apiRuns = [], now = Date.now()) {
     if (flakyChecks.length) risks.push({ id: "flaky", label: "Flaky results", detail: `Outcome keeps changing: ${flakyChecks.join(", ")}` });
     if (stale) risks.push({ id: "stale", label: `Not run in ${STALE_AFTER_DAYS}+ days` });
 
+    const coveredChecks = runnable.filter((scenario) => executedTitles.has(scenario.title)).length;
+    const risk = scoreEndpoint({
+      method: operation.method, path: operation.path, status, needsAuth,
+      riskIds: risks.map((item) => item.id), coveredChecks, runnableChecks: runnable.length,
+    });
+
     return {
       key,
       operationIndex,
@@ -94,17 +102,20 @@ export function computeCoverage(overview, apiRuns = [], now = Date.now()) {
       writes,
       runCount: runs.length,
       lastRunAt: latest?.createdAt,
-      coveredChecks: runnable.filter((scenario) => executedTitles.has(scenario.title)).length,
+      coveredChecks,
       runnableChecks: runnable.length,
       categories: categoryCoverage(runnable, outcomes),
       flakyChecks,
       stale,
       risks,
+      risk,
+      gaps: computeGaps(operation, runs),
     };
   });
 
-  endpoints.sort((a, b) => STATUS_RANK[a.status] - STATUS_RANK[b.status]
-    || b.risks.length - a.risks.length
+  // Highest risk score first; the status and data-changing methods break ties.
+  endpoints.sort((a, b) => b.risk.score - a.risk.score
+    || STATUS_RANK[a.status] - STATUS_RANK[b.status]
     || Number(b.writes) - Number(a.writes)
     || a.operationIndex - b.operationIndex);
 
@@ -119,6 +130,9 @@ export function computeCoverage(overview, apiRuns = [], now = Date.now()) {
       untestedWrites: endpoints.filter((endpoint) => endpoint.status === "untested" && endpoint.writes).length,
       flaky: endpoints.filter((endpoint) => endpoint.flakyChecks.length).length,
       stale: endpoints.filter((endpoint) => endpoint.stale).length,
+      highRisk: endpoints.filter((endpoint) => endpoint.risk.level === "high").length,
+      withGaps: endpoints.filter((endpoint) => endpoint.gaps.gaps.length).length,
+      gaps: endpoints.reduce((sum, endpoint) => sum + endpoint.gaps.gaps.length, 0),
       checksExecuted: apiRuns.reduce((sum, run) => sum + (run.results?.length ?? 0), 0),
     },
   };
@@ -149,6 +163,18 @@ export function coverageReportJson(overview, coverage, generatedAt = new Date())
       categories: Object.fromEntries(endpoint.categories.map((category) => [category.id, category.state])),
       flaky_checks: endpoint.flakyChecks,
       risks: endpoint.risks.map((risk) => risk.label),
+      risk_score: {
+        score: endpoint.risk.score,
+        level: endpoint.risk.level,
+        factors: endpoint.risk.factors.map(({ id, label, points }) => ({ id, label, points })),
+      },
+      gaps: endpoint.gaps.gaps.map((gap) => gap.text),
+      inputs: endpoint.gaps.inputs.map((input) => ({
+        name: input.name,
+        location: input.location,
+        checks: Object.fromEntries(input.checks.map((check) => [check.kind, check.state])),
+      })),
+      responses: Object.fromEntries(endpoint.gaps.responses.map((response) => [response.code, response.state])),
     })),
   };
 }
@@ -166,18 +192,31 @@ export function coverageReportMarkdown(overview, coverage, generatedAt = new Dat
     `- Untested write endpoints: ${totals.untestedWrites}`,
     `- Flaky endpoints: ${totals.flaky}`,
     `- Stale endpoints (not run in ${STALE_AFTER_DAYS}+ days): ${totals.stale}`,
+    `- High-risk endpoints (score ${RISK_LEVELS[0].min}+): ${totals.highRisk}`,
+    `- Coverage gaps: ${totals.gaps} across ${totals.withGaps} endpoints`,
     `- Checks executed: ${totals.checksExecuted}`,
     "",
-    `| Endpoint | Status | Checks | ${Object.values(categoryLabels).join(" | ")} | Risks |`,
-    `| --- | --- | --- | ${Object.keys(categoryLabels).map(() => "---").join(" | ")} | --- |`,
+    `Risk score: the sum of fixed rule points, capped at 100; high from ${RISK_LEVELS[0].min}, medium from ${RISK_LEVELS[1].min}.`,
+    "",
+    `| Endpoint | Risk | Status | Checks | ${Object.values(categoryLabels).join(" | ")} | Why |`,
+    `| --- | --- | --- | --- | ${Object.keys(categoryLabels).map(() => "---").join(" | ")} | --- |`,
     ...coverage.endpoints.map((endpoint) => [
       `\`${endpoint.method} ${cell(endpoint.path)}\``,
+      `${endpoint.risk.score} ${endpoint.risk.level}`,
       endpoint.status,
       `${endpoint.coveredChecks}/${endpoint.runnableChecks}`,
       ...endpoint.categories.map((category) => CATEGORY_MARKS[category.state]),
-      cell(endpoint.risks.map((risk) => risk.label).join(", ") || "–"),
+      cell(endpoint.risk.factors.map((factor) => `+${factor.points} ${factor.label}`).join(", ") || "–"),
     ].join(" | ")).map((row) => `| ${row} |`),
     "",
+    "## Coverage gaps",
+    "",
+    ...(totals.gaps ? coverage.endpoints.filter((endpoint) => endpoint.gaps.gaps.length).flatMap((endpoint) => [
+      `### \`${endpoint.method} ${endpoint.path}\``,
+      "",
+      ...endpoint.gaps.gaps.map((gap) => `- ${gap.text}`),
+      "",
+    ]) : ["No gaps: every input and documented response code is covered by a check that has run.", ""]),
   ];
   return lines.join("\n");
 }
