@@ -4,8 +4,13 @@ The version lives in the [`VERSION`](VERSION) file and follows [Semantic Version
 
 ## Unreleased
 
-### Added
-- **Flows (backend):** multi-step lifecycle checks that pass a created record's id to the next request. Imports suggest a flow for each collection whose POST creates records that an item path reads or deletes (create → read → update → delete → confirm it is gone), using OpenAPI `links` when the contract has them. `POST /api/v1/flows/execute` runs a flow step by step; cleanup steps still run after a failure. The API overview gains `flows`, and each operation its `links`. The Flows page in the web app follows in the next change.
+### Flows
+- A new **Flows** page, next to Coverage in the sidebar, suggests multi-step checks that follow one record through its lifecycle: create it, read it back, update it, delete it, and confirm it is gone. A created record's id is passed to the following requests.
+- Flows come from the contract: an OpenAPI `link` names the value to pass on; without one, the item path's parameter (`{petId}`) is matched to a field of the create response or the request body, and the flow says how it was found.
+- **Run flow** asks for confirmation and runs the steps in order against the active target, each judged like a single check (status, documented schema, time limit). After a failure the remaining steps are skipped, but the cleanup delete still runs when the record was created.
+- Path parameters a flow cannot derive and credentials are entered on the flow; credentials typed in the overview are reused and never stored. Values saved under sensitive names (such as a token) are redacted in the evidence.
+- Flow runs appear in Run history with each step's request and response, the values it saved, and why a step was skipped. **Run again** opens the API's flows. Endpoint coverage still counts single-endpoint runs only.
+- Backend: `POST /api/v1/flows/execute` runs a flow and `POST /api/v1/flows/suggest` suggests flows for a list of operations; the API overview gains `flows` and each operation its `links`. APIs saved before this version get their flows the first time the Flows page opens.
 
 ## 1.2.0 — 2026-10-11
 

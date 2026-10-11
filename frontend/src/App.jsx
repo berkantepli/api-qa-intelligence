@@ -8,6 +8,8 @@ import CoverageRing from "./CoverageRing.jsx";
 import { connectionLabel, targetUrlProblem } from "./targetConnection.js";
 import { postJson, requestJson } from "./apiClient.js";
 import ErrorAlert from "./ErrorAlert.jsx";
+import FlowsPage from "./FlowsPage.jsx";
+import { buildFlowRequest, flowRunEntry, isFlowRun } from "./flows.js";
 import Icon from "./Icon.jsx";
 import RunDetail, { SchemaDifferences } from "./RunDetail.jsx";
 import { outcomeSummary } from "./runDetail.js";
@@ -143,6 +145,11 @@ function App() {
   // Coverage bulk run progress: { status: "running" | "done" | "stopped" | "error", total, done, current, counts, message }.
   const [bulkRun, setBulkRun] = useState(null);
   const bulkStopRequested = useRef(false);
+  // Flows per saved API: run state { running, outcome, error, runId } and path values, by flow id.
+  const [flowStates, setFlowStates] = useState({});
+  const [flowPathValues, setFlowPathValues] = useState({});
+  // Suggesting flows for an API saved before imports included them: { [apiId]: { loading, error } }.
+  const [flowSuggestions, setFlowSuggestions] = useState({});
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
 
@@ -273,6 +280,12 @@ function App() {
     }).catch(() => setStorage((current) => ({ ...current, error: "Some changes could not be saved to the workspace database. They are kept in this browser; reload to try again." })));
   }, [savedApis, runHistory, storedInputs, storage.mode]);
   useEffect(() => { refreshAiStatus(); }, []);
+
+  // APIs saved before 1.3 have no flows in their overview; ask the backend once when Flows opens.
+  useEffect(() => {
+    if (page !== "flows" || !overview || overview.flows !== undefined || flowSuggestions[activeApiId]) return;
+    suggestFlows(activeApiId, overview);
+  }, [page, overview, activeApiId, flowSuggestions]);
 
   useEffect(() => {
     // Wait for missing request details: the checks are selected once they become runnable.
@@ -500,6 +513,14 @@ function App() {
     setSelectedScenarios(allSelected ? [] : availableScenarios.map((_, index) => index));
   }
 
+  // A flow run is run again from the Flows page of its API.
+  function openSavedFlows(run) {
+    const api = savedApis.find((item) => item.id === run.apiId) ?? savedApis.find((item) => item.title === run.api);
+    if (!api) return;
+    if (api.id !== activeApiId) openSavedApi(api);
+    openFlowsPage();
+  }
+
   // Opens a saved run's endpoint with the same checks selected, ready to run again.
   function rerunInOverview(run) {
     const api = savedApis.find((item) => item.id === run.apiId) ?? savedApis.find((item) => item.title === run.api);
@@ -688,6 +709,46 @@ function App() {
     setBulkRun((current) => ({ ...current, status, message, current: "" }));
   }
 
+  async function suggestFlows(apiId, apiOverview) {
+    setFlowSuggestions((current) => ({ ...current, [apiId]: { loading: true, error: "" } }));
+    try {
+      const { flows } = await postJson("/api/v1/flows/suggest", { operations: apiOverview.operations }, "Flows could not be suggested for this API.");
+      setSavedApis((current) => current.map((api) => api.id === apiId ? { ...api, overview: { ...api.overview, flows } } : api));
+      setFlowSuggestions((current) => ({ ...current, [apiId]: { loading: false, error: "" } }));
+    } catch (caught) {
+      setFlowSuggestions((current) => ({ ...current, [apiId]: { loading: false, error: caught.message || "Flows could not be suggested for this API." } }));
+    }
+  }
+
+  function updateFlowState(apiId, flowId, changes) {
+    setFlowStates((current) => ({ ...current, [apiId]: { ...current[apiId], [flowId]: { ...current[apiId]?.[flowId], ...changes } } }));
+  }
+
+  function updateFlowPathValue(flowId, name, value) {
+    setFlowPathValues((current) => ({ ...current, [activeApiId]: { ...current[activeApiId], [flowId]: { ...current[activeApiId]?.[flowId], [name]: value } } }));
+  }
+
+  // A credential typed on the Flows page also fills it in the overview for the same endpoints.
+  function updateFlowCredential(credential, value) {
+    for (const key of credential.operationKeys) mergeOperationInputs(activeApiId, key, { [credential.key]: value });
+  }
+
+  async function runFlow(flow) {
+    if (!overview || targetProblem) return;
+    const apiId = activeApiId;
+    updateFlowState(apiId, flow.id, { running: true, outcome: null, error: "", runId: null });
+    try {
+      const outcome = await postJson("/api/v1/flows/execute", buildFlowRequest(overview, flow, {
+        targetUrl, maxDurationMs, pathValues: flowPathValues[apiId]?.[flow.id], inputsByOperation: requestInputs[apiId],
+      }), "The flow could not be run.");
+      const entry = flowRunEntry(flow, outcome, { apiId, api: overview.title, target: targetUrl });
+      setRunHistory((current) => [entry, ...current]);
+      updateFlowState(apiId, flow.id, { running: false, outcome, runId: entry.id });
+    } catch (caught) {
+      updateFlowState(apiId, flow.id, { running: false, error: caught.message || "The flow could not be run." });
+    }
+  }
+
   function requestRun() {
     if (!operation || !inputsReady || selectedCount === 0 || running || targetProblem) return;
     if (isDataChangingMethod) {
@@ -811,6 +872,11 @@ function App() {
     window.scrollTo(0, 0);
   }
 
+  function openFlowsPage() {
+    setPage("flows");
+    window.scrollTo(0, 0);
+  }
+
   function openEndpointFromCoverage(operationIndex) {
     selectOperation(operationIndex);
     openOverviewPage();
@@ -869,6 +935,9 @@ function App() {
         </button>}
         {overview && <button className={`nav-link ${page === "coverage" ? "active" : ""}`} onClick={openCoveragePage}>
           <Icon name="shield" /><span>Coverage</span>
+        </button>}
+        {overview && <button className={`nav-link ${page === "flows" ? "active" : ""}`} onClick={openFlowsPage}>
+          <Icon name="run" /><span>Flows</span>{overview.flows?.length > 0 && <span className="nav-count">{overview.flows.length}</span>}
         </button>}
         <button className={`nav-link ${page === "history" ? "active" : ""}`} onClick={() => openRunHistory()}>
           <Icon name="clock" /><span>Run history</span>
@@ -931,8 +1000,24 @@ function App() {
             onStopBulkRun={() => { bulkStopRequested.current = true; }}
             onDismissBulkRun={() => setBulkRun(null)}
           />
+        ) : page === "flows" ? (
+          <FlowsPage
+            overview={overview}
+            suggestion={flowSuggestions[activeApiId]}
+            onRetrySuggestion={() => suggestFlows(activeApiId, overview)}
+            flowStates={flowStates[activeApiId] ?? {}}
+            pathValuesFor={(flowId) => flowPathValues[activeApiId]?.[flowId] ?? {}}
+            inputsByOperation={apiInputs}
+            targetUrl={targetUrl}
+            targetProblem={targetProblem}
+            onPathValueChange={updateFlowPathValue}
+            onCredentialChange={updateFlowCredential}
+            onRun={runFlow}
+            onOpenRun={openRunHistory}
+            onGoToSpecs={openSpecsPage}
+          />
         ) : page === "history" && selectedRun ? (
-          <RunDetail run={selectedRun} analysisState={analysisState} onAnalyze={analyzeFailure} onBack={() => openRunHistory()} onRerun={() => rerunInOverview(selectedRun)} canRerun={savedApis.some((api) => api.id === selectedRun.apiId || api.title === selectedRun.api)} />
+          <RunDetail run={selectedRun} analysisState={analysisState} onAnalyze={analyzeFailure} onBack={() => openRunHistory()} onRerun={() => (isFlowRun(selectedRun) ? openSavedFlows(selectedRun) : rerunInOverview(selectedRun))} canRerun={savedApis.some((api) => api.id === selectedRun.apiId || api.title === selectedRun.api)} />
         ) : page === "history" ? (
           <RunHistoryList
             runs={runHistory}

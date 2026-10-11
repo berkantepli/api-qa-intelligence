@@ -109,6 +109,14 @@ The **Coverage** page summarizes, for the active API, how many endpoints have be
 
 **Run checks** runs the checks of every endpoint in the current filter, one at a time, against the active target URL. It first shows a plan: endpoints that are ready, endpoints that still need request details (for example a path parameter; choose **Open** to fill them in), and data-changing endpoints (POST, PUT, PATCH, DELETE), which are left out unless you turn on **Include data-changing endpoints**. Included ones run after the read-only checks, creates before updates and deletes last, and only after a second confirmation that names how many data-changing checks will be sent to which target. Choose **All runnable checks** or **Valid request only**. Progress can be stopped at any time, and each endpoint's results are saved to Run history as a separate run. Request details you enter are saved per API so later runs can reuse them; credential values are never stored and only live in the open tab.
 
+### Flows
+
+The **Flows** page follows one record through its lifecycle across endpoints: create it, read it back, update it, delete it, and confirm it is gone. Flows are suggested from the contract when a collection's POST (`POST /pets`) creates records that an item path (`/pets/{petId}`) reads or deletes. The value passed from step to step comes from an OpenAPI `link` when the contract has one; otherwise the item path's parameter is matched to a field of the create response (`petId`, or `id` for an id-like parameter) or of the request body, and the flow says which.
+
+Each step shows its request, the status it expects, and the value it saves for later steps (for example `{{petId}}`). **Run flow** asks for confirmation, because a flow creates and deletes data, and then runs the steps one at a time against the active target URL with its response time limit. Every step is judged like a single check, including the documented response schema. When a step fails, the remaining steps are skipped, except cleanup: the delete step still runs when the record was created, so test data does not pile up. Path parameters the flow cannot derive (such as a parent resource's id) and credentials are entered on the flow; a credential typed in the overview for one of its endpoints is used too, and credentials stay only in the open tab. Each flow run is saved in Run history with per-step evidence; endpoint coverage counts single-endpoint runs only.
+
+APIs saved before 1.3 get their flows suggested the first time the Flows page opens.
+
 ### Settings and backups
 
 ### Where data is saved
