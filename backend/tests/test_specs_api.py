@@ -1,6 +1,7 @@
 import json
 
 import httpx
+import pytest
 
 from app.api.specs import MAX_SPEC_SIZE_BYTES
 
@@ -55,6 +56,7 @@ def test_url_import_does_not_follow_redirects(client, mock_http):
     response = client.post("/api/v1/specs/import-url", json={"url": SPEC_URL})
 
     assert response.status_code == 502
+    assert response.json()["detail"] == "The OpenAPI URL redirects to http://10.0.0.1/spec. Use that address instead."
     assert len(mock_http.requests) == 1
 
 
@@ -64,4 +66,35 @@ def test_url_import_rejects_credentials_and_private_hosts(client, mock_http):
 
     assert with_credentials.status_code == 422
     assert private_host.status_code == 422
+    assert private_host.json()["detail"].startswith("The OpenAPI URL must use a public host or localhost.")
+    assert "API_QA_ALLOW_PRIVATE_NETWORK=1" in private_host.json()["detail"]
     assert mock_http.requests == []
+
+
+@pytest.mark.parametrize(
+    ("respond", "message"),
+    [
+        (lambda request: httpx.Response(404), "returned 404 Not Found"),
+        (lambda request: httpx.Response(401), "needs authentication"),
+        (lambda request: httpx.Response(500), "returned HTTP 500"),
+        (lambda request: httpx.Response(200, text="<!doctype html><html></html>"), "HTML or XML page, not an OpenAPI document"),
+        (lambda request: httpx.Response(200, text="just some text"), "This is not an OpenAPI document"),
+    ],
+)
+def test_url_import_explains_what_came_back(client, mock_http, respond, message):
+    mock_http.respond_with(respond)
+
+    response = client.post("/api/v1/specs/import-url", json={"url": SPEC_URL.removesuffix(".json") + ".yaml"})
+
+    assert message in response.json()["detail"]
+
+
+def test_url_import_explains_a_closed_port(client, mock_http):
+    def refuse(request):
+        raise httpx.ConnectError("refused", request=request)
+
+    mock_http.respond_with(refuse)
+
+    response = client.post("/api/v1/specs/import-url", json={"url": SPEC_URL})
+
+    assert response.json()["detail"].startswith("Could not connect to the OpenAPI URL: the connection was refused")
