@@ -42,7 +42,11 @@ test("explains a body that breaks the contract", async ({ page }) => {
   await nav(page, "Overview");
   await endpoint(page, "GET", "/pets/{id}").click();
   await expect(page.getByText("Complete required request details first")).toBeVisible();
+  const idField = page.locator(".request-input").filter({ has: page.getByPlaceholder("Enter id") });
+  await expect(idField).toHaveClass(/request-input-missing/);
+  await expect(idField).toContainText("Required to run the checks.");
   await page.getByPlaceholder("Enter id").fill("7");
+  await expect(idField).not.toHaveClass(/request-input-missing/);
   await runAll(page);
 
   const valid = check(page, "Valid request");
@@ -131,6 +135,7 @@ test("deletes all saved data", async ({ page }) => {
   await nav(page, "Settings");
   await page.getByRole("button", { name: "Delete all" }).click();
   await page.getByRole("button", { name: "Delete everything" }).click();
+  await expect(page.getByText("All saved APIs, runs, and request details were deleted.")).toBeVisible();
   await page.reload();
 
   await expect(page.getByRole("heading", { name: "Start with an API contract" })).toBeVisible();

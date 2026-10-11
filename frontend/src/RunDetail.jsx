@@ -1,4 +1,5 @@
 import { categoryLabels } from "./categories.js";
+import ErrorAlert from "./ErrorAlert.jsx";
 import Icon from "./Icon.jsx";
 import {
   formatEvidenceBody,
@@ -97,7 +98,7 @@ function CheckDetail({ result, index, analysisStatus, onAnalyze }) {
         <button className="secondary-button" type="button" disabled={analysisStatus.loading} onClick={onAnalyze}><Icon name="spark" size={14} />{analysisStatus.loading ? "Analyzing with AI…" : "Analyze with AI"}</button>
         <span>Credential-like values are redacted. Clicking sends this check’s evidence to your configured Ollama model.</span>
       </div>}
-      {analysisStatus.error && <p className="history-error">{analysisStatus.error}</p>}
+      <ErrorAlert message={analysisStatus.error} />
       {result.analysis && <FailureAnalysis analysis={result.analysis} />}
     </div>
   </details>;

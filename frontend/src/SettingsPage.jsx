@@ -53,12 +53,16 @@ export default function SettingsPage({ aiStatus, onRefreshAiStatus, aiDiagnosis,
   const fileInput = useRef(null);
   const [importMessage, setImportMessage] = useState(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deleted, setDeleted] = useState(false);
+  // Each action replaces the outcome of the previous one, so no stale message is left on the page.
+  const clearMessages = () => { setImportMessage(null); setDeleted(false); };
   const status = aiStatusLabel(aiStatus);
 
   async function handleImport(event) {
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file) return;
+    clearMessages();
     try {
       const result = onImport(await file.text());
       setImportMessage({ tone: "success", text: `Imported ${result.addedApis} new and ${result.updatedApis} updated APIs, and ${result.addedRuns} runs.` });
@@ -98,7 +102,7 @@ export default function SettingsPage({ aiStatus, onRefreshAiStatus, aiDiagnosis,
           : <>are saved in the app’s workspace database (<code>data/workspace.db</code>, or <code>API_QA_DATA_DIR</code>) and survive clearing this browser. Export them to keep a backup or move them to another machine.</>}</p></div>
       </div>
       <div className="settings-actions">
-        <button className="primary-button" type="button" onClick={onExport}><Icon name="arrow" size={15} /> Export workspace</button>
+        <button className="primary-button" type="button" onClick={() => { clearMessages(); onExport(); }}><Icon name="arrow" size={15} /> Export workspace</button>
         <button className="secondary-button" type="button" onClick={() => fileInput.current?.click()}><Icon name="upload" size={15} /> Import workspace</button>
         <input ref={fileInput} type="file" accept="application/json,.json" hidden onChange={handleImport} />
       </div>
@@ -109,13 +113,14 @@ export default function SettingsPage({ aiStatus, onRefreshAiStatus, aiDiagnosis,
     <section className="settings-card settings-danger">
       <div className="settings-card-heading">
         <div><h2>Delete all saved data</h2><p>Removes every saved API, edited AI check, run, and saved request detail from the workspace database and this browser. Export first if you may need them again.</p></div>
-        {!confirmingDelete && <button className="danger-button" type="button" onClick={() => setConfirmingDelete(true)} disabled={!savedApiCount && !runCount}><Icon name="trash" size={15} /> Delete all</button>}
+        {!confirmingDelete && <button className="danger-button" type="button" onClick={() => { clearMessages(); setConfirmingDelete(true); }} disabled={!savedApiCount && !runCount}><Icon name="trash" size={15} /> Delete all</button>}
       </div>
       {confirmingDelete && <div className="history-confirm settings-confirm" role="group" aria-label="Confirm deleting all local data">
         <span>Delete {savedApiCount} {savedApiCount === 1 ? "API" : "APIs"} and {runCount} {runCount === 1 ? "run" : "runs"}? This cannot be undone.</span>
         <button className="secondary-button" type="button" onClick={() => setConfirmingDelete(false)}>Cancel</button>
-        <button className="danger-button" type="button" onClick={() => { onDeleteAll(); setConfirmingDelete(false); }}>Delete everything</button>
+        <button className="danger-button" type="button" onClick={() => { onDeleteAll(); setConfirmingDelete(false); setDeleted(true); }}>Delete everything</button>
       </div>}
+      {deleted && <div className="alert success-alert" role="status"><Icon name="check" size={16} />All saved APIs, runs, and request details were deleted.</div>}
     </section>
   </section>;
 }
