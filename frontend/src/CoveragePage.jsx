@@ -90,6 +90,7 @@ function download(content, fileName, type) {
 export default function CoveragePage({
   overview, apiRuns, onOpenEndpoint, onGoToSpecs,
   inputsByOperation, filesByOperation, targetUrl, targetProblem, bulkRun, onBulkRun, onStopBulkRun, onDismissBulkRun, onImportCliReport, contractChanges,
+  lifecycle = null, onOpenFlows,
 }) {
   const [filterId, setFilterId] = useState("all");
   const [importMessage, setImportMessage] = useState(null);
@@ -115,7 +116,8 @@ export default function CoveragePage({
     </section>;
   }
 
-  const { endpoints, totals } = computeCoverage(overview, apiRuns, Date.now(), contractChanges);
+  const { endpoints, totals } = computeCoverage(overview, apiRuns, Date.now(), contractChanges, lifecycle);
+  const flowTotals = lifecycle?.totals;
   const filter = filters.find((item) => item.id === filterId) ?? filters[0];
   const visible = endpoints.filter(filter.matches);
   const exportReport = (format) => {
@@ -145,6 +147,7 @@ export default function CoveragePage({
       <div className="stat-card"><span className="stat-label">Failing endpoints</span><strong className={totals.failing ? "history-fail" : undefined}>{totals.failing}</strong><span className="stat-note">in their latest run</span></div>
       <div className="stat-card"><span className="stat-label">Untested write endpoints</span><strong className={totals.untestedWrites ? "coverage-warning" : undefined}>{totals.untestedWrites}</strong><span className="stat-note">POST, PUT, PATCH, DELETE</span></div>
       <button className="stat-card stat-card-link" type="button" onClick={() => setFilterId("high")} title="Show high-risk endpoints"><span className="stat-label">High-risk endpoints</span><strong className={totals.highRisk ? "history-fail" : undefined}>{totals.highRisk}</strong><span className="stat-note">risk score {RISK_LEVELS[0].min} or more</span></button>
+      {flowTotals?.flows > 0 && <button className="stat-card stat-card-link" type="button" onClick={onOpenFlows} title="Open Flows"><span className="stat-label">Lifecycle flows passing</span><strong className={flowTotals.failing ? "history-fail" : undefined}>{flowTotals.passing} / {flowTotals.flows}</strong><span className="stat-note">{[flowTotals.failing && `${flowTotals.failing} failing`, flowTotals.untested && `${flowTotals.untested} never run`].filter(Boolean).join(" · ") || "all passing in their latest run"}</span></button>}
     </div>
 
     <ContractChanges changes={contractChanges} endpoints={endpoints} overview={overview} />
@@ -192,7 +195,7 @@ export default function CoveragePage({
           <span className="coverage-checks">{endpoint.coveredChecks}/{endpoint.runnableChecks} checks<small>{endpoint.lastRunAt ? `last run ${new Date(endpoint.lastRunAt).toLocaleString()}` : "never run"}</small></span>
           <span className="coverage-risks">
             <b className={`risk-score risk-score-${endpoint.risk.level}`} aria-label={`Risk score ${endpoint.risk.score} of 100, ${levelLabels[endpoint.risk.level]}`}>{endpoint.risk.score}<small>{levelLabels[endpoint.risk.level]}</small></b>
-            {endpoint.risk.factors.map((factor) => <i key={factor.id} className={factorClass(factor)} title={factor.id === "flaky" ? endpoint.risks.find((risk) => risk.id === "flaky")?.detail : undefined}>+{factor.points} {factor.label}</i>)}
+            {endpoint.risk.factors.map((factor) => <i key={factor.id} className={factorClass(factor)} title={endpoint.risks.find((risk) => risk.id === factor.id)?.detail}>+{factor.points} {factor.label}</i>)}
           </span>
           <Icon className="history-chevron" name="chevron" size={15} />
           <span className="coverage-categories" aria-label="Checks by category">{endpoint.categories.map((category) => <i key={category.id} className={`coverage-category coverage-category-${category.state}`} title={`${category.label}: ${categoryStates[category.state]}`}>{categoryShort[category.id]}</i>)}</span>

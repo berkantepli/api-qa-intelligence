@@ -20,6 +20,7 @@ export const RISK_RULES = [
   { id: "auth", kind: "evidence", points: 10, label: "Auth not checked", description: "It requires authentication, but no check has called it without credentials." },
   { id: "happy-only", kind: "evidence", points: 10, label: "Only happy path tested", description: "Negative or boundary checks exist but only the valid request ran." },
   { id: "partial", kind: "evidence", points: 5, label: "Checks not run yet", description: "Some of its runnable checks have never run." },
+  { id: "lifecycle", kind: "evidence", points: 10, label: "Lifecycle not tested", description: "It creates records and a flow covers it, but no flow through it has run." },
   { id: "stale", kind: "evidence", points: 5, label: "Not run in 7+ days", description: "Its latest run is more than a week old." },
 ];
 
@@ -61,6 +62,7 @@ export function scoreEndpoint(endpoint) {
   if (flags.has("happy-only")) add("happy-only");
   const notRun = endpoint.runnableChecks - endpoint.coveredChecks;
   if (endpoint.status !== "untested" && notRun > 0) add("partial", `${notRun} of ${endpoint.runnableChecks} checks not run yet`);
+  if (flags.has("lifecycle")) add("lifecycle");
   if (flags.has("stale")) add("stale");
 
   const score = Math.min(100, factors.reduce((sum, factor) => sum + factor.points, 0));

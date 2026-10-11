@@ -9,6 +9,8 @@ The version lives in the [`VERSION`](VERSION) file and follows [Semantic Version
 - Importing a CLI report on Coverage & Risk also brings its flows into Run history.
 - A nested collection such as `/owners/{ownerId}/pets` no longer needs `ownerId` typed in: its flow first creates an owner with the owner's flow and deletes it at the end.
 - When the create response is not documented and has no `id` field, the new record's id is taken from the last part of the `Location` header.
+- **Edit** a flow on the Flows page: rename, add, remove, and reorder steps, and change each step's method, path, expected status codes, query, JSON body, saved values, and whether it runs after a failure. **New flow** builds one from scratch. Edited and custom flows are saved with the API and kept when the contract is imported again; **Reset to suggested** discards the edits.
+- Coverage & Risk shows how many lifecycle flows pass, and flags a create endpoint whose flows never ran as *Lifecycle not tested* (+10 risk).
 
 ## 1.6.0 — 2026-10-11
 

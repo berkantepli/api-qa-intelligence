@@ -4,12 +4,15 @@
 - GET /pets/{id} returns a pet without its required name, so the schema check fails.
 - GET /orders documents an API key but never asks for one, so "Call without authentication" fails.
 - POST /pets creates a pet and validates its body.
+- DELETE /pets/{id} is served but not documented, so a flow test adds it with the flow editor;
+  a deleted pet is then not found until one is created again.
 """
 
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 
 app = FastAPI(openapi_url=None, docs_url=None, redoc_url=None)
+DELETED: set[str] = set()
 
 PET = {"type": "object", "required": ["id", "name"], "properties": {"id": {"type": "integer"}, "name": {"type": "string"}}}
 CONTRACT = {
@@ -67,14 +70,23 @@ async def create_pet(request: Request) -> JSONResponse:
     body = await request.json() if await request.body() else None
     if not isinstance(body, dict) or not isinstance(body.get("name"), str):
         return JSONResponse({"detail": "name is required"}, status_code=422)
+    DELETED.discard("2")
     return JSONResponse({"id": 2, "name": body["name"]}, status_code=201)
 
 
 @app.get("/pets/{pet_id}")
 def find_pet(pet_id: str) -> JSONResponse:
-    if not pet_id.isdigit():
+    if not pet_id.isdigit() or pet_id in DELETED:
         return JSONResponse({"detail": "not found"}, status_code=404)
     return JSONResponse({"id": int(pet_id)})
+
+
+@app.delete("/pets/{pet_id}")
+def delete_pet(pet_id: str) -> Response:
+    if not pet_id.isdigit() or pet_id in DELETED:
+        return JSONResponse({"detail": "not found"}, status_code=404)
+    DELETED.add(pet_id)
+    return Response(status_code=204)
 
 
 @app.get("/orders")

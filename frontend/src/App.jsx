@@ -5,12 +5,13 @@ import { reimportedApi, staleCheckReasons } from "./contractDiff.js";
 import CoveragePage from "./CoveragePage.jsx";
 import DuplicateNotice from "./DuplicateNotice.jsx";
 import { duplicatePairKey, filterNewIdeas, findDuplicateScenarios, findSameRequest } from "./duplicates.js";
-import { computeCoverage, runsForApi } from "./coverage.js";
+import { computeCoverage, flowCoverage, flowRunsForApi, runsForApi } from "./coverage.js";
 import CoverageRing from "./CoverageRing.jsx";
 import { connectionLabel, targetUrlProblem } from "./targetConnection.js";
 import { postJson, requestJson } from "./apiClient.js";
 import ErrorAlert from "./ErrorAlert.jsx";
 import FlowsPage from "./FlowsPage.jsx";
+import { draftToFlow, effectiveFlows, withoutFlowChanges, withSavedFlow } from "./flowEditor.js";
 import { buildFlowRequest, flowRunEntry, isFlowRun } from "./flows.js";
 import Icon from "./Icon.jsx";
 import RunDetail, { SchemaDifferences } from "./RunDetail.jsx";
@@ -112,9 +113,12 @@ function App() {
   const [savedApis, setSavedApis] = useState(() => readStoredJson(STORAGE_KEYS.savedApis, []));
   const [activeApiId, setActiveApiId] = useState(() => localStorage.getItem(STORAGE_KEYS.activeApi) || "");
   const activeApi = savedApis.find((api) => api.id === activeApiId);
+  // Suggested flows with the user's edits, plus flows the user built.
+  const apiFlows = useMemo(() => effectiveFlows(activeApi), [activeApi]);
   const overview = activeApi?.overview ?? null;
   const [page, setPage] = useState(() => savedApis.length ? "specs" : "import");
   const [runHistory, setRunHistory] = useState(() => readStoredJson(STORAGE_KEYS.runHistory, []));
+  const apiLifecycle = useMemo(() => flowCoverage(overview, apiFlows, flowRunsForApi(runHistory, activeApiId, savedApis)), [overview, apiFlows, runHistory, activeApiId, savedApis]);
   const [selectedRunId, setSelectedRunId] = useState(null);
   const [pendingDeleteApiId, setPendingDeleteApiId] = useState(null);
   const [aiStatus, setAiStatus] = useState({ loading: true });
@@ -219,7 +223,7 @@ function App() {
   // Checks need a usable target; a blocked one (for example a private address) would only fail on the server.
   const targetProblem = targetUrlProblem(targetUrl)
     || (connection.status === "blocked" && connection.url === targetUrl.trim() ? connection.message : "");
-  const apiCoverage = useMemo(() => computeCoverage(overview, runsForApi(runHistory, activeApiId, savedApis), Date.now(), activeApi?.contractChanges), [overview, runHistory, activeApiId, savedApis, activeApi]);
+  const apiCoverage = useMemo(() => computeCoverage(overview, runsForApi(runHistory, activeApiId, savedApis), Date.now(), activeApi?.contractChanges, apiLifecycle), [overview, runHistory, activeApiId, savedApis, activeApi, apiLifecycle]);
   const endpointStatus = useMemo(() => new Map(apiCoverage.endpoints.map((endpoint) => [endpoint.key, endpoint.status])), [apiCoverage]);
   const allSelected = availableScenarios.length > 0 && selectedScenarios.length === availableScenarios.length;
   // How many runnable checks can run with the request details entered so far.
@@ -741,6 +745,19 @@ function App() {
     }
   }
 
+  function saveFlow(draft, original) {
+    const flow = draftToFlow(draft, overview, original);
+    setSavedApis((current) => current.map((api) => api.id === activeApiId ? withSavedFlow(api, flow) : api));
+    // Results of the previous version no longer describe these steps.
+    updateFlowState(activeApiId, flow.id, { outcome: null, error: "", runId: null });
+  }
+
+  // Resets an edited suggestion, or deletes a flow the user built.
+  function removeFlowChanges(flowId) {
+    setSavedApis((current) => current.map((api) => api.id === activeApiId ? withoutFlowChanges(api, flowId) : api));
+    updateFlowState(activeApiId, flowId, { outcome: null, error: "", runId: null });
+  }
+
   function updateFlowState(apiId, flowId, changes) {
     setFlowStates((current) => ({ ...current, [apiId]: { ...current[apiId], [flowId]: { ...current[apiId]?.[flowId], ...changes } } }));
   }
@@ -987,7 +1004,7 @@ function App() {
           <Icon name="shield" /><span>Coverage</span>
         </button>}
         {overview && <button className={`nav-link ${page === "flows" ? "active" : ""}`} onClick={openFlowsPage}>
-          <Icon name="run" /><span>Flows</span>{overview.flows?.length > 0 && <span className="nav-count">{overview.flows.length}</span>}
+          <Icon name="run" /><span>Flows</span>{apiFlows.length > 0 && <span className="nav-count">{apiFlows.length}</span>}
         </button>}
         <button className={`nav-link ${page === "history" ? "active" : ""}`} onClick={() => openRunHistory()}>
           <Icon name="clock" /><span>Run history</span>
@@ -1051,10 +1068,16 @@ function App() {
             onDismissBulkRun={() => setBulkRun(null)}
             onImportCliReport={importCliReport}
             contractChanges={activeApi?.contractChanges}
+            lifecycle={apiLifecycle}
+            onOpenFlows={openFlowsPage}
           />
         ) : page === "flows" ? (
           <FlowsPage
             overview={overview}
+            flows={apiFlows}
+            onSaveFlow={saveFlow}
+            onResetFlow={removeFlowChanges}
+            onDeleteFlow={removeFlowChanges}
             suggestion={flowSuggestions[activeApiId]}
             onRetrySuggestion={() => suggestFlows(activeApiId, overview)}
             flowStates={flowStates[activeApiId] ?? {}}
