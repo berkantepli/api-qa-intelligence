@@ -1,5 +1,6 @@
 """Runs one QA check against a target API and records redacted evidence."""
 
+import asyncio
 import base64
 import binascii
 import json
@@ -20,6 +21,7 @@ REQUEST_TIMEOUT_SECONDS = 15
 MAX_RESPONSE_SIZE_BYTES = 250_000
 MAX_DISPLAY_BODY_CHARS = 10_000
 MAX_UPLOAD_SIZE_BYTES = 10_000_000
+MAX_PATH_LENGTH = 4_000
 BLOCKED_HEADERS = {"host", "content-length", "transfer-encoding"}
 
 
@@ -32,7 +34,7 @@ class ScenarioFileUpload(BaseModel):
 class ScenarioExecutionRequest(BaseModel):
     base_url: AnyHttpUrl
     method: str
-    path: str
+    path: str = Field(max_length=MAX_PATH_LENGTH)
     query_params: dict[str, str] = Field(default_factory=dict)
     form_body: bool = False
     headers: dict[str, str] = Field(default_factory=dict)
@@ -117,9 +119,12 @@ async def send_check(
     base = parse_target_base_url(str(payload.base_url), allow_private_network=allow_private_network)
 
     # OpenAPI servers often carry a base path (e.g. /api/v3); operation paths are relative to it.
-    target = base.copy_with(path=base.path.rstrip("/") + payload.path, query=None)
-    query = urlencode(payload.query_params)
-    request_url = sanitize_url(f"{target}?{query}" if query else str(target))
+    try:
+        target = base.copy_with(path=base.path.rstrip("/") + payload.path, query=None)
+        query = urlencode(payload.query_params)
+        request_url = sanitize_url(f"{target}?{query}" if query else str(target))
+    except httpx.InvalidURL as error:
+        raise HTTPException(status_code=422, detail=f"The request URL is not valid: {error}.") from error
     request_headers = _request_headers(payload)
     request_body_evidence = _request_evidence(payload)
     files = []
@@ -146,7 +151,10 @@ async def send_check(
 
     started = time.perf_counter()
     try:
-        async with httpx.AsyncClient(timeout=httpx.Timeout(REQUEST_TIMEOUT_SECONDS, connect=5), follow_redirects=False) as client:
+        # The read timeout applies per chunk; the overall deadline also stops a server that trickles bytes.
+        async with asyncio.timeout(REQUEST_TIMEOUT_SECONDS), httpx.AsyncClient(
+            timeout=httpx.Timeout(REQUEST_TIMEOUT_SECONDS, connect=5), follow_redirects=False
+        ) as client:
             async with client.stream(payload.method, target, **request_options) as response:
                 response_content = bytearray()
                 truncated = False
@@ -184,6 +192,8 @@ async def send_check(
                     max_duration_ms=payload.max_duration_ms,
                     too_slow=too_slow,
                 ), None if truncated else bytes(response_content)
+    except TimeoutError:
+        error = f"The target API did not finish responding within {REQUEST_TIMEOUT_SECONDS} seconds."
     except httpx.RequestError as request_error:
         error = request_error_reason(request_error, "the target API", REQUEST_TIMEOUT_SECONDS)
     return ScenarioExecutionResult(
@@ -228,6 +238,6 @@ def _display_response_body(contents: bytes, content_type: str) -> str:
     if "json" in content_type.lower():
         try:
             return json.dumps(json.loads(text), ensure_ascii=False, indent=2)
-        except json.JSONDecodeError:
+        except (json.JSONDecodeError, RecursionError):
             pass
     return text

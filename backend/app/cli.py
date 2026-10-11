@@ -11,6 +11,7 @@ import asyncio
 import fnmatch
 import json
 import sys
+import time
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote, urljoin
@@ -21,6 +22,7 @@ from fastapi import HTTPException
 from pydantic import ValidationError
 
 from app.domain.contract_diff import SEVERITY_ORDER, diff_contracts, diff_markdown
+from app.domain.documents import UNEXPECTED_SHAPE, DocumentTooComplexError, parse_document
 from app.domain.execution import ScenarioExecutionRequest, execute_scenario
 from app.domain.flows import UNFILLED_PATH_PARAMETER, ApiFlow, FlowExecutionRequest, execute_flow
 from app.domain.network import request_error_reason
@@ -35,6 +37,7 @@ from app.domain.request_builder import (
 from app.version import APP_VERSION
 
 MAX_SPEC_SIZE_BYTES = 2_000_000
+CONTRACT_FETCH_SECONDS = 15
 EXIT_OK, EXIT_FAILED, EXIT_USAGE = 0, 1, 2
 
 
@@ -92,10 +95,7 @@ def duration_ms(value: str) -> int:
 def load_contract(spec: str) -> ApiOverview:
     try:
         if spec.startswith(("http://", "https://")):
-            with httpx.Client(timeout=httpx.Timeout(15, connect=5), follow_redirects=True) as client:
-                response = client.get(spec)
-                response.raise_for_status()
-                contents = response.content
+            contents = fetch_contract(spec)
         else:
             contents = Path(spec).read_bytes()
     except OSError as error:
@@ -103,16 +103,38 @@ def load_contract(spec: str) -> ApiOverview:
     except httpx.HTTPStatusError as error:
         raise UsageError(f"The contract could not be read from {spec}: HTTP {error.response.status_code}.") from error
     except httpx.HTTPError as error:
-        raise UsageError(f"The contract could not be read: {request_error_reason(error, spec, 15)}") from error
+        raise UsageError(f"The contract could not be read: {request_error_reason(error, spec, CONTRACT_FETCH_SECONDS)}") from error
     if len(contents) > MAX_SPEC_SIZE_BYTES:
         raise UsageError("The contract must be smaller than 2 MB.")
     try:
         text = contents.decode("utf-8-sig")
-        document = json.loads(text) if text.lstrip().startswith("{") else yaml.safe_load(text)
-        return summarize_openapi(document)
+        document = parse_document(text, as_json=text.lstrip().startswith("{"))
+    except DocumentTooComplexError as error:
+        raise UsageError(str(error)) from error
     except (UnicodeDecodeError, ValueError, yaml.YAMLError) as error:
-        message = str(error) if isinstance(error, OpenApiDocumentError) else "The contract is not valid JSON or YAML."
-        raise UsageError(message) from error
+        raise UsageError("The contract is not valid JSON or YAML.") from error
+    try:
+        return summarize_openapi(document)
+    except OpenApiDocumentError as error:
+        raise UsageError(str(error)) from error
+    except (AttributeError, TypeError, KeyError, IndexError, ValueError, RecursionError) as error:
+        raise UsageError(UNEXPECTED_SHAPE) from error
+
+
+def fetch_contract(url: str) -> bytes:
+    """Downloads a contract with an overall deadline, so a server that trickles bytes cannot hang a CI job."""
+    deadline = time.monotonic() + CONTRACT_FETCH_SECONDS
+    contents = bytearray()
+    with httpx.Client(timeout=httpx.Timeout(CONTRACT_FETCH_SECONDS, connect=5), follow_redirects=True) as client:
+        with client.stream("GET", url) as response:
+            response.raise_for_status()
+            for chunk in response.iter_bytes():
+                contents.extend(chunk)
+                if len(contents) > MAX_SPEC_SIZE_BYTES:
+                    break
+                if time.monotonic() > deadline:
+                    raise httpx.ReadTimeout(f"No complete response within {CONTRACT_FETCH_SECONDS} seconds.")
+    return bytes(contents)
 
 
 def validate_target(target: str | None) -> None:

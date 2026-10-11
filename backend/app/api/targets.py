@@ -1,3 +1,4 @@
+import asyncio
 import time
 from typing import Literal
 
@@ -49,7 +50,7 @@ async def check_target(payload: TargetCheckRequest) -> TargetCheckResult:
     url = sanitize_url(str(base))
     method: Literal["HEAD", "GET"] = "HEAD"
     try:
-        async with httpx.AsyncClient(
+        async with asyncio.timeout(CHECK_TIMEOUT_SECONDS), httpx.AsyncClient(
             timeout=httpx.Timeout(CHECK_TIMEOUT_SECONDS, connect=3), follow_redirects=False
         ) as client:
             response = await client.head(base)
@@ -57,6 +58,8 @@ async def check_target(payload: TargetCheckRequest) -> TargetCheckResult:
                 method = "GET"
                 async with client.stream("GET", base) as streamed:
                     response = streamed
+    except TimeoutError:
+        error = f"The target API did not respond within {CHECK_TIMEOUT_SECONDS} seconds."
     except httpx.RequestError as request_error:
         error = request_error_reason(request_error, "the target API", CHECK_TIMEOUT_SECONDS)
     else:
