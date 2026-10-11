@@ -237,7 +237,8 @@ def _generate_scenarios(
     required_parameters = [
         parameter
         for parameter in parameters
-        if isinstance(parameter, Mapping) and parameter.get("required") is True
+        # A missing path parameter changes the URL itself, so only query and header parameters are omitted.
+        if isinstance(parameter, Mapping) and parameter.get("required") is True and parameter.get("in") != "path"
     ] if isinstance(parameters, list) else []
     if required_parameters:
         names = ", ".join(str(parameter.get("name", "parameter")) for parameter in required_parameters)

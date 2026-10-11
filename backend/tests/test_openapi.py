@@ -114,6 +114,25 @@ def test_omitted_required_parameter_scenario(sample_spec):
     assert 404 in omit.expected_status_codes
 
 
+def test_omitted_required_parameter_skips_path_parameters():
+    spec = {
+        "openapi": "3.0.3",
+        "info": {"title": "Pets", "version": "1"},
+        "paths": {
+            "/pets/{id}": {"get": {"parameters": [{"name": "id", "in": "path", "required": True, "schema": {"type": "integer"}}],
+                                   "responses": {"200": {"description": "ok"}}}},
+            "/pets/{id}/notes": {"get": {"parameters": [
+                {"name": "id", "in": "path", "required": True, "schema": {"type": "integer"}},
+                {"name": "lang", "in": "query", "required": True, "schema": {"type": "string"}},
+            ], "responses": {"200": {"description": "ok"}}}},
+        },
+    }
+    overview = summarize_openapi(spec)
+    assert not [s for s in operation(overview, "GET", "/pets/{id}").scenarios if s.title == "Omit a required parameter"]
+    omit = scenario(operation(overview, "GET", "/pets/{id}/notes"), "Omit a required parameter").request_example
+    assert omit.omitted_parameters == [{"name": "lang", "location": "query"}]
+
+
 def test_form_body_fields_and_example(sample_spec):
     upload = operation(summarize_openapi(sample_spec), "POST", "/upload")
 
