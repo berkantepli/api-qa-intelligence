@@ -40,6 +40,17 @@ The backend has no login and is meant to run on your own machine; it answers onl
 | POST | `/api/v1/runs/analyze-failure` | Ask the configured Ollama model to explain a failed check from its redacted evidence (advisory; it never changes the result). |
 | POST | `/api/v1/targets/check` | Probe whether a target base URL responds (read-only `HEAD`, retried as `GET`). |
 
+### Flows
+
+A flow is a multi-step check that follows one record through its lifecycle: create it, read it back, update it, delete it, and confirm it is gone. A step saves values from its response (or the body it sent) with `extract` rules — a variable name and a JSON Pointer such as `/id` — and later steps use them as `{{variable}}` in the path, query and header values, and JSON body strings (a body string that is only a placeholder keeps the value's type, so `"{{petId}}"` sends the number `7`).
+
+| Method | Path | Purpose |
+|---|---|---|
+| POST | `/api/v1/flows/suggest` | Suggest flows for a list of operations from an API overview. Imports already return them as the overview's `flows`; this route serves APIs saved before 1.1. |
+| POST | `/api/v1/flows/execute` | Run up to 10 steps in order against `base_url`, with shared `headers` and an optional `max_duration_ms`. Each step is judged like a single check. After a step fails, later steps are `SKIPPED`, except cleanup steps (`always_run`) whose values were saved. Returns PASS / FAIL / ERROR with per-step evidence. |
+
+Suggestions come from the contract: an OpenAPI `link` from a collection's POST response to the item path's GET or DELETE names the value to pass on; without one, the item path's parameter (`{petId}`) is matched to a field of the create response (`petId`, or `id` for an id-like parameter) or of the request body. Values saved under sensitive names (such as `token`) are redacted in `saved_values` and wherever they appear in later steps' evidence.
+
 ### AI model
 
 | Method | Path | Purpose |
