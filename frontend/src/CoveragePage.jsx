@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { computeCoverage, coverageReportFileName, coverageReportJson, coverageReportMarkdown } from "./coverage.js";
 import BulkRunPanel from "./BulkRunPanel.jsx";
 import { GAP_KINDS } from "./coverageGaps.js";
+import ErrorAlert from "./ErrorAlert.jsx";
 import Icon from "./Icon.jsx";
 import { RISK_LEVELS, RISK_RULES } from "./riskScore.js";
 
@@ -62,9 +63,23 @@ function download(content, fileName, type) {
 
 export default function CoveragePage({
   overview, apiRuns, onOpenEndpoint, onGoToSpecs,
-  inputsByOperation, filesByOperation, targetUrl, targetProblem, bulkRun, onBulkRun, onStopBulkRun, onDismissBulkRun,
+  inputsByOperation, filesByOperation, targetUrl, targetProblem, bulkRun, onBulkRun, onStopBulkRun, onDismissBulkRun, onImportCliReport,
 }) {
   const [filterId, setFilterId] = useState("all");
+  const [importMessage, setImportMessage] = useState(null);
+  const reportInput = useRef(null);
+  async function importCliReport(event) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    try {
+      const result = onImportCliReport(await file.text());
+      const text = result.otherApi ? `${result.message} Open ${result.otherApi} to see its coverage.` : result.message;
+      setImportMessage({ tone: "success", text });
+    } catch (caught) {
+      setImportMessage({ tone: "error", text: caught.message || "The report could not be imported." });
+    }
+  }
   const [planning, setPlanning] = useState(false);
   if (!overview) {
     return <section className="history-page coverage-page">
@@ -89,10 +104,15 @@ export default function CoveragePage({
     <div className="coverage-heading">
       <p className="page-lede">{overview.title} · based on {totals.checksExecuted} {totals.checksExecuted === 1 ? "check" : "checks"} in Run history.</p>
       <div className="coverage-export">
+        <button className="secondary-button" type="button" onClick={() => reportInput.current?.click()} title="Add the checks from an api-qa run --json report"><Icon name="upload" size={14} /> Import CI report</button>
+        <input ref={reportInput} type="file" accept="application/json,.json" hidden onChange={importCliReport} />
         <button className="secondary-button" type="button" onClick={() => exportReport("md")}><Icon name="arrow" size={14} /> Export Markdown</button>
         <button className="secondary-button" type="button" onClick={() => exportReport("json")}><Icon name="arrow" size={14} /> Export JSON</button>
       </div>
     </div>
+
+    {importMessage?.tone === "error" && <ErrorAlert message={importMessage.text} />}
+    {importMessage?.tone === "success" && <div className="alert success-alert" role="status"><Icon name="check" size={16} /><span>{importMessage.text}</span></div>}
 
     <div className="stats-row coverage-stats">
       <div className="stat-card"><span className="stat-label">Endpoints tested</span><strong>{totals.tested} / {totals.endpoints}</strong><span className="stat-note">{totals.coveragePercent}% coverage</span><span className="coverage-meter" aria-hidden="true"><span style={{ width: `${totals.coveragePercent}%` }} /></span></div>

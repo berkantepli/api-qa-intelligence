@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { categoryLabels, inputHelp, parameterLabel } from "./categories.js";
+import { cliImportMessage, cliReportRuns, matchReportApi, parseCliReport } from "./cliReport.js";
 import CoveragePage from "./CoveragePage.jsx";
 import DuplicateNotice from "./DuplicateNotice.jsx";
 import { duplicatePairKey, filterNewIdeas, findDuplicateScenarios, findSameRequest } from "./duplicates.js";
@@ -804,6 +805,18 @@ function App() {
     URL.revokeObjectURL(url);
   }
 
+  // Adds the checks from an `api-qa run --json` report to Run history, so CI runs count on Coverage.
+  function importCliReport(text) {
+    const report = parseCliReport(text);
+    const api = matchReportApi(report, savedApis, activeApiId);
+    if (!api) throw new Error(`This report is for “${report.api}”${report.api_version ? ` ${report.api_version}` : ""}, which is not a saved API. Import its contract under API specs first.`);
+    const outcome = cliReportRuns(report, api, runHistory);
+    if (outcome.runs.length) {
+      setRunHistory((current) => [...outcome.runs, ...current].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)));
+    }
+    return { message: cliImportMessage(report, api, outcome), otherApi: api.id !== activeApiId ? api.title : null };
+  }
+
   function importWorkspace(text) {
     const merged = mergeWorkspace({ savedApis, runHistory }, parseWorkspaceImport(text));
     setSavedApis(merged.savedApis);
@@ -999,6 +1012,7 @@ function App() {
             onBulkRun={runBulk}
             onStopBulkRun={() => { bulkStopRequested.current = true; }}
             onDismissBulkRun={() => setBulkRun(null)}
+            onImportCliReport={importCliReport}
           />
         ) : page === "flows" ? (
           <FlowsPage

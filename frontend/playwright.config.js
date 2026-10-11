@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { defineConfig, devices } from "@playwright/test";
 
-const python = process.env.E2E_PYTHON ?? (existsSync("../.venv/bin/python") ? "../.venv/bin/python" : "python");
+export const python = process.env.E2E_PYTHON ?? (existsSync("../.venv/bin/python") ? "../.venv/bin/python" : "python");
 const dataDir = process.env.E2E_DATA_DIR ?? mkdtempSync(join(tmpdir(), "api-qa-e2e-"));
 export const APP_URL = "http://127.0.0.1:8021";
 export const TARGET_URL = "http://127.0.0.1:8022";
