@@ -2,6 +2,12 @@
 
 The version lives in the [`VERSION`](VERSION) file and follows [Semantic Versioning](https://semver.org/). Before 1.0.0, a new feature raises the minor number (0.**x**.0) and a fix or visual change raises the patch number (0.x.**y**).
 
+## 1.16.1 — 2026-10-12
+
+- Summary cards stay on one line above phone width, whatever their number: Overview, Coverage & Risk (the Lifecycle flows card used to wrap onto a row of its own), the Postman and HAR panel, run details (a flow run's Skipped used to wrap), and the Settings facts. On phones they use two columns, and an odd last card takes the whole row.
+- Trend charts sit side by side on wide screens and one per row below 1020 px, never two plus one.
+- The Coverage & Risk cards are more compact, their numbers stay in line when labels wrap, and the quality grade stays next to its score.
+
 ## 1.16.0 — 2026-10-12
 
 - **Endpoints tested** over time on **Trends**: the share of the contract's endpoints that had run at least once by each day, with the change over the range.
