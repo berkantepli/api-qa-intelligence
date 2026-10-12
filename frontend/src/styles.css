@@ -303,7 +303,14 @@ h1, h2, h3, p { margin-top: 0; }
 .stat-card-link:hover { border-color: var(--accent); }
 .run-detail-heading { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px; }
 .run-detail-heading .secondary-button { min-height: 34px; font-size: 12px; }
-.sample-hint { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 10px 0 0; color: var(--muted); font-size: 12px; }
+.sample-apis { display: grid; gap: 8px; margin-top: 14px; }
+.sample-apis-label { color: var(--muted); font-size: 12px; }
+.sample-api-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.sample-api { display: grid; align-content: start; gap: 3px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface); color: var(--text); text-align: left; cursor: pointer; }
+.sample-api strong { font-size: 13px; }
+.sample-api small { color: var(--muted); font-size: 12px; line-height: 1.4; }
+.sample-api:hover:not(:disabled) { border-color: var(--accent); }
+.sample-api:disabled { cursor: default; opacity: .6; }
 .storage-alert { margin: 12px 32px 0; }
 .coverage-empty { margin: 0; padding: 24px 18px; border-top: 1px solid var(--line); color: var(--muted); font-size: 13px; text-align: center; }
 .history-confirm span { flex: 1; min-width: 200px; color: var(--text); font-size: 13px; }
@@ -767,6 +774,7 @@ h1, h2, h3, p { margin-top: 0; }
   .topbar-right { gap: 8px; }
   .setup-page h1, .overview-heading h1, .specs-heading h1, .history-page h1 { font-size: 25px; }
   .import-card { padding: 18px 16px 15px; }
+  .sample-api-grid { grid-template-columns: 1fr; }
   .card-heading p { max-width: 220px; line-height: 1.4; }
   .card-footer { align-items: stretch; flex-direction: column; }
   .card-footer .primary-button { width: 100%; }
