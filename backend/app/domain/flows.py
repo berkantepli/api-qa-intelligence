@@ -528,7 +528,7 @@ def _value_from_body(rule: FlowExtract, request: ScenarioExecutionRequest, raw_b
             return None, f"Could not save {{{{{rule.variable}}}}}: {where} is not JSON."
         except RecursionError:
             return None, f"Could not save {{{{{rule.variable}}}}}: {where} is nested too deeply to read."
-    value = _resolve_pointer(document, rule.pointer)
+    value = resolve_json_pointer(document, rule.pointer)
     if value is None or isinstance(value, (Mapping, list)):
         found = "has no value" if value is None else "is not a single value"
         return None, f"Could not save {{{{{rule.variable}}}}}: {rule.pointer} in {where} {found}."
@@ -542,7 +542,7 @@ def _location_id(headers: Mapping[str, str]) -> str | None:
     return unquote(segment) or None
 
 
-def _resolve_pointer(document: Any, pointer: str) -> Any:
+def resolve_json_pointer(document: Any, pointer: str) -> Any:
     for raw in pointer.split("/")[1:]:
         key = _unescape(raw)
         if isinstance(document, Mapping):

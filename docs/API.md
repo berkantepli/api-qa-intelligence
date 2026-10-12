@@ -43,6 +43,7 @@ The backend has no login and is meant to run on your own machine; it answers onl
 | POST | `/api/v1/runs/execute-batch` | The same for up to 20 checks, with totals. |
 | POST | `/api/v1/runs/analyze-failure` | Ask the configured Ollama model to explain a failed check from its redacted evidence (advisory; it never changes the result). |
 | POST | `/api/v1/targets/check` | Probe whether a target base URL responds (read-only `HEAD`, retried as `GET`). |
+| POST | `/api/v1/auth/sign-in` | Send a sign-in request (the same fields as a check, `POST` and expecting 200 or 201 by default) and return the token from its JSON response: at `token_pointer` (a JSON Pointer such as `/data/jwt`), or else at the first of the usual places (`/access_token`, `/accessToken`, `/token`, `/id_token`, `/jwt`, and the same under `/data`) that holds one. The token goes back to the caller only; it is never saved or logged. |
 
 ### Flows
 
