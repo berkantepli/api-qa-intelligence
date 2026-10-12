@@ -242,6 +242,18 @@ test("runs a flow that passes the created id to the next request", async ({ page
   const row = (method, path) => page.locator(".coverage-row").filter({ has: page.locator(`.method-${method}`) }).filter({ has: page.getByText(path, { exact: true }) });
   await expect(row("post", "/pets").locator(".coverage-status")).toHaveText("Passingvia flow");
   await expect(row("get", "/pets/{id}").locator(".coverage-status")).toHaveText("Failingvia flow");
+
+  // Trends count every check and flow step of the day, with a tooltip and a table view.
+  const trends = page.locator(".trends-panel");
+  await expect(trends.locator(".trend-card").first()).toContainText("Pass rate");
+  await expect(trends.locator(".trend-card").first().locator("strong")).toHaveText(/^\d+%$/);
+  await trends.getByRole("combobox", { name: "Endpoint" }).selectOption("GET /pets/{id}");
+  await trends.getByText("Show as table").click();
+  await expect(trends.locator(".trends-table tbody tr")).toHaveCount(1);
+  const chart = trends.locator(".trend-chart svg").first();
+  const box = await chart.boundingBox();
+  await page.mouse.move(box.x + box.width - 16, box.y + 40);
+  await expect(trends.locator(".trend-tooltip").first()).toContainText("checks");
 });
 
 test("edits a flow to clean up after itself, and shows untested lifecycles on Coverage", async ({ page }) => {
