@@ -175,14 +175,18 @@ h1, h2, h3, p { margin-top: 0; }
 .history-run-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; color: var(--muted); font-size: 13px; }
 .history-run-time { color: var(--muted); font-size: 13px; white-space: nowrap; }
 .history-confirm { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; padding: 12px 16px 12px 54px; border-top: 1px solid var(--line); background: var(--surface-soft); }
-/* Four or five cards (Lifecycle flows appears when the API has flows) share one row. */
-.stats-row.coverage-stats { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 11px; margin-top: 22px; }
+.stats-row.coverage-stats { gap: 11px; margin-top: 22px; }
 .coverage-stats .stat-card { min-height: 88px; padding: 12px 15px; }
 .coverage-stats .stat-card strong { margin-top: 3px; font-size: 22px; }
 /* Between laptop and tablet widths some labels wrap; two label lines keep the numbers in line. */
 @media (min-width: 561px) and (max-width: 1279px) {
   .coverage-stats .stat-label { min-height: 2.6em; line-height: 1.3; }
 }
+@media (min-width: 561px) and (max-width: 900px) {
+  .coverage-stats .stat-label { min-height: 3.9em; }
+}
+/* The quality grade stays next to its score in a narrow card. */
+.stat-card strong:has(.quality-grade) { white-space: nowrap; }
 .coverage-meter { display: block; width: 100%; height: 4px; margin-top: 10px; overflow: hidden; border-radius: 999px; background: var(--line); }
 .coverage-meter span { display: block; height: 100%; border-radius: inherit; background: var(--green); }
 .coverage-warning { color: #b7791f; }
@@ -775,9 +779,6 @@ h1, h2, h3, p { margin-top: 0; }
   .setup-page, .overview-page, .specs-page, .history-page { width: calc(100% - 30px); }
 }
 @media (max-width: 560px) {
-  .stats-row.coverage-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  /* An odd card out takes the whole last row instead of leaving half of it empty. */
-  .coverage-stats .stat-card:last-child:nth-child(odd) { grid-column: 1 / -1; }
   .topbar { height: 54px; padding: 0 14px; }
   .breadcrumbs { gap: 5px; font-size: 12px; }
   .api-context { gap: 8px; }
@@ -1046,4 +1047,26 @@ h1, h2, h3, p { margin-top: 0; }
   .trends-grid { grid-template-columns: minmax(0, 1fr); }
   .trend-slowdowns li { grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px; }
   .trend-slowdowns li .text-button { grid-column: 1 / -1; white-space: normal; overflow-wrap: anywhere; }
+}
+
+/* Card rows: above phone width every summary row stays on one line, whatever the number of cards
+   (the coverage summary has four or five, a flow run's summary adds Skipped). On phones they use two
+   columns, and an odd last card takes the whole row instead of leaving half of it empty. Kept last so
+   it wins over the per-page column counts above. */
+.stats-row, .stats-row.stats-row-4, .stats-row.coverage-stats, .settings-facts {
+  grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr);
+}
+.run-summary { grid-template-columns: minmax(0, 2.2fr); grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); }
+/* Trend charts need room: one row on wide screens, one per row below that, never two plus one. */
+.trends-grid { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); }
+@media (max-width: 1020px) {
+  .trends-grid { grid-auto-flow: row; grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 560px) {
+  .stats-row, .stats-row.stats-row-4, .stats-row.coverage-stats, .settings-facts, .run-summary {
+    grid-auto-flow: row; grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .stats-row > :last-child:nth-child(odd), .settings-facts > :last-child:nth-child(odd) { grid-column: 1 / -1; }
+  /* The run summary's first item (the target) already spans the row, so the odd one out is even. */
+  .run-summary > :last-child:nth-child(even) { grid-column: 1 / -1; }
 }
