@@ -10,8 +10,8 @@ dist/
 .ruff_cache/
 .coverage
 htmlcov/
-node_modules/
-frontend/node_modules/
+# No trailing slash, so a symlinked node_modules (as in a git worktree) is ignored too.
+node_modules
 frontend/dist/
 frontend/test-results/
 frontend/playwright-report/
