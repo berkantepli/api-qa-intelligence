@@ -85,7 +85,8 @@ function categoryCoverage(runnable, outcomes) {
 
 // `contractChanges` is the saved API's comparison with its previous import, if any; `lifecycle` is
 // flowCoverage() for the API's flows, which flags create endpoints whose flows never ran.
-export function computeCoverage(overview, apiRuns = [], now = Date.now(), contractChanges = null, lifecycle = null) {
+// `criticality` is the saved API's own marks per endpoint key: "critical" or "normal".
+export function computeCoverage(overview, apiRuns = [], now = Date.now(), contractChanges = null, lifecycle = null, criticality = {}) {
   const endpoints = (overview?.operations ?? []).map((operation, operationIndex) => {
     const key = endpointKey(operation);
     const runs = apiRuns.filter((run) => run.endpoint === key).sort(byNewest);
@@ -121,8 +122,10 @@ export function computeCoverage(overview, apiRuns = [], now = Date.now(), contra
     const importedTests = new Set(executed.filter((result) => result.imported).map((result) => result.title)).size;
     const contractChange = pendingChange(contractChanges, key, latest?.createdAt);
     const risk = scoreEndpoint({
-      method: operation.method, path: operation.path, status, needsAuth,
-      riskIds: risks.map((item) => item.id), coveredChecks, runnableChecks: runnable.length, contractChange,
+      method: operation.method, path: operation.path, summary: operation.summary, operationId: operation.operation_id, tags: operation.tags,
+      fieldNames: [...(operation.parameters ?? []).filter((parameter) => !parameter.credential).map((parameter) => parameter.name), ...(operation.request_body_fields ?? []).map((field) => field.name)],
+      status, needsAuth, riskIds: risks.map((item) => item.id), coveredChecks, runnableChecks: runnable.length, contractChange,
+      criticality: criticality?.[key],
     });
 
     return {
@@ -135,6 +138,7 @@ export function computeCoverage(overview, apiRuns = [], now = Date.now(), contra
       writes,
       runCount: runs.length,
       importedTests,
+      criticality: criticality?.[key] ?? null,
       lastRunAt: latest?.createdAt,
       coveredChecks,
       runnableChecks: runnable.length,

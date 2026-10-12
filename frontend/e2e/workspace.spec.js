@@ -281,6 +281,25 @@ test("imports Newman and JUnit results so other test suites count on Coverage", 
   await expect(page.locator(".run-outcome").first()).toContainText("Status code is 200: expected 401 to equal 200");
 });
 
+test("marks an endpoint critical or not critical, and keeps the mark", async ({ page }) => {
+  await page.goto("/");
+  await nav(page, "Coverage");
+  const item = page.locator(".history-runs > li").filter({ has: page.locator(".coverage-row", { hasText: "List orders" }) });
+  await expect(item.locator(".coverage-row")).toContainText("+10 Sensitive area: orders");
+
+  await item.getByLabel("Criticality").selectOption("critical");
+  await expect(item.locator(".coverage-row")).toContainText("+20 Marked critical");
+  await expect(item.locator(".coverage-row")).not.toContainText("Sensitive area");
+
+  await page.reload();
+  await nav(page, "Coverage");
+  const again = page.locator(".history-runs > li").filter({ has: page.locator(".coverage-row", { hasText: "List orders" }) });
+  await expect(again.getByLabel("Criticality")).toHaveValue("critical");
+  await again.getByLabel("Criticality").selectOption("normal");
+  await expect(again.locator(".coverage-row")).not.toContainText("Marked critical");
+  await expect(again.locator(".coverage-row")).not.toContainText("Sensitive area");
+});
+
 test("shows what changed when a contract is imported again", async ({ page }) => {
   const contract = await (await fetch(`${TARGET_URL}/openapi.json`)).json();
   const upload = (document) => ({ name: "pets-contract.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(document)) });

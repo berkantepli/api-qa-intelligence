@@ -55,3 +55,24 @@ describe("sensitivePathWord", () => {
     expect(sensitivePathWord("/payloads/rolebook")).toBeNull();
   });
 });
+
+describe("sensitive areas and the user's mark", () => {
+  const area = (overrides) => scoreEndpoint(endpoint({ path: "/things/{id}", ...overrides })).factors.map((factor) => factor.label);
+
+  it("reads the description and the input names, not only the path", () => {
+    expect(area({ summary: "Refund a purchase" })).toEqual(["Sensitive area: refund (in its description)"]);
+    expect(area({ operationId: "updateUserProfile" })).toEqual(["Sensitive area: user (in its description)"]);
+    expect(area({ tags: ["Billing"] })).toEqual(["Sensitive area: billing (in its description)"]);
+    expect(area({ fieldNames: ["note", "cardNumber"] })).toEqual(["Sensitive data: cardNumber"]);
+    expect(area({ fieldNames: ["note", "card_holder"] })).toEqual(["Sensitive data: card_holder"]);
+    expect(area({ summary: "List things", fieldNames: ["pinned", "amountOfLegs"] })).toEqual(["Sensitive data: amountOfLegs"]);
+    expect(area({ summary: "List things", fieldNames: ["pinned", "spinner"] })).toEqual([]);
+  });
+
+  it("lets the user mark an endpoint critical or not critical", () => {
+    expect(area({ path: "/orders", criticality: "critical" })).toEqual(["Marked critical"]);
+    expect(scoreEndpoint(endpoint({ criticality: "critical" })).score).toBe(20);
+    expect(area({ path: "/orders", criticality: "normal" })).toEqual([]);
+    expect(area({ path: "/orders" })).toEqual(["Sensitive area: orders"]);
+  });
+});

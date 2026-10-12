@@ -121,7 +121,7 @@ function download(content, fileName, type) {
 export default function CoveragePage({
   overview, apiRuns, onOpenEndpoint, onGoToSpecs,
   inputsByOperation, filesByOperation, targetUrl, targetProblem, bulkRun, onBulkRun, onStopBulkRun, onDismissBulkRun, onImportTestResults, contractChanges,
-  lifecycle = null, onOpenFlows,
+  lifecycle = null, onOpenFlows, criticality = {}, onSetCriticality,
 }) {
   const [filterId, setFilterId] = useState("all");
   const [importMessage, setImportMessage] = useState(null);
@@ -147,7 +147,7 @@ export default function CoveragePage({
     </section>;
   }
 
-  const { endpoints, totals } = computeCoverage(overview, apiRuns, Date.now(), contractChanges, lifecycle);
+  const { endpoints, totals } = computeCoverage(overview, apiRuns, Date.now(), contractChanges, lifecycle, criticality);
   const flowTotals = lifecycle?.totals;
   const filter = filters.find((item) => item.id === filterId) ?? filters[0];
   const visible = endpoints.filter(filter.matches);
@@ -231,7 +231,17 @@ export default function CoveragePage({
           <Icon className="history-chevron" name="chevron" size={15} />
           <span className="coverage-categories" aria-label="Checks by category">{endpoint.categories.map((category) => <i key={category.id} className={`coverage-category coverage-category-${category.state}`} title={`${category.label}: ${categoryStates[category.state]}`}>{categoryShort[category.id]}</i>)}</span>
         </button>
-        <GapDetails endpoint={endpoint} />
+        <div className="coverage-extras">
+          <GapDetails endpoint={endpoint} />
+          <label className="coverage-criticality" title="Auto guesses from the path, description, and inputs. Critical adds +20 to the risk score; Not critical drops Sensitive area.">
+            Criticality
+            <select value={endpoint.criticality ?? "auto"} onChange={(event) => onSetCriticality(endpoint.key, event.target.value === "auto" ? null : event.target.value)}>
+              <option value="auto">Auto</option>
+              <option value="critical">Critical</option>
+              <option value="normal">Not critical</option>
+            </select>
+          </label>
+        </div>
       </li>)}</ul> : <p className="coverage-empty">No endpoints match this filter.</p>}
     </section>
   </section>;
