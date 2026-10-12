@@ -175,7 +175,14 @@ h1, h2, h3, p { margin-top: 0; }
 .history-run-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; color: var(--muted); font-size: 13px; }
 .history-run-time { color: var(--muted); font-size: 13px; white-space: nowrap; }
 .history-confirm { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; padding: 12px 16px 12px 54px; border-top: 1px solid var(--line); background: var(--surface-soft); }
-.stats-row.coverage-stats { grid-template-columns: repeat(4, minmax(0, 1fr)); margin-top: 26px; }
+/* Four or five cards (Lifecycle flows appears when the API has flows) share one row. */
+.stats-row.coverage-stats { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 11px; margin-top: 22px; }
+.coverage-stats .stat-card { min-height: 88px; padding: 12px 15px; }
+.coverage-stats .stat-card strong { margin-top: 3px; font-size: 22px; }
+/* Between laptop and tablet widths some labels wrap; two label lines keep the numbers in line. */
+@media (min-width: 561px) and (max-width: 1279px) {
+  .coverage-stats .stat-label { min-height: 2.6em; line-height: 1.3; }
+}
 .coverage-meter { display: block; width: 100%; height: 4px; margin-top: 10px; overflow: hidden; border-radius: 999px; background: var(--line); }
 .coverage-meter span { display: block; height: 100%; border-radius: inherit; background: var(--green); }
 .coverage-warning { color: #b7791f; }
@@ -747,7 +754,6 @@ h1, h2, h3, p { margin-top: 0; }
   .evidence-grid { grid-template-columns: 1fr; }
   .workspace-grid { grid-template-columns: minmax(250px, .8fr) minmax(360px, 1.2fr); }
   .setup-page, .overview-page, .specs-page, .history-page { width: calc(100% - 38px); }
-  .stats-row.coverage-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .settings-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .coverage-row { grid-template-columns: 62px minmax(0, 1fr) 104px 15px; }
   .coverage-checks, .coverage-risks { grid-column: 2 / 4; }
@@ -769,6 +775,9 @@ h1, h2, h3, p { margin-top: 0; }
   .setup-page, .overview-page, .specs-page, .history-page { width: calc(100% - 30px); }
 }
 @media (max-width: 560px) {
+  .stats-row.coverage-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  /* An odd card out takes the whole last row instead of leaving half of it empty. */
+  .coverage-stats .stat-card:last-child:nth-child(odd) { grid-column: 1 / -1; }
   .topbar { height: 54px; padding: 0 14px; }
   .breadcrumbs { gap: 5px; font-size: 12px; }
   .api-context { gap: 8px; }
