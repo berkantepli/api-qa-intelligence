@@ -117,6 +117,8 @@ export function computeCoverage(overview, apiRuns = [], now = Date.now(), contra
     }
 
     const coveredChecks = runnable.filter((scenario) => executedTitles.has(scenario.title)).length;
+    // Tests imported from Newman or JUnit are not the app's checks; they are counted on their own.
+    const importedTests = new Set(executed.filter((result) => result.imported).map((result) => result.title)).size;
     const contractChange = pendingChange(contractChanges, key, latest?.createdAt);
     const risk = scoreEndpoint({
       method: operation.method, path: operation.path, status, needsAuth,
@@ -132,6 +134,7 @@ export function computeCoverage(overview, apiRuns = [], now = Date.now(), contra
       status,
       writes,
       runCount: runs.length,
+      importedTests,
       lastRunAt: latest?.createdAt,
       coveredChecks,
       runnableChecks: runnable.length,

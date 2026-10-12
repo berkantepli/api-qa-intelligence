@@ -223,7 +223,7 @@ export default function CoveragePage({
           <span className={`method-tag method-${endpoint.method.toLowerCase()}`}>{endpoint.method}</span>
           <span className="coverage-endpoint"><strong>{endpoint.path}</strong><small>{endpoint.summary || "API endpoint"}</small></span>
           <span className={`coverage-status coverage-status-${endpoint.status}`}>{statusLabels[endpoint.status]}</span>
-          <span className="coverage-checks">{endpoint.coveredChecks}/{endpoint.runnableChecks} checks<small>{endpoint.lastRunAt ? `last run ${new Date(endpoint.lastRunAt).toLocaleString()}` : "never run"}</small></span>
+          <span className="coverage-checks">{endpoint.coveredChecks}/{endpoint.runnableChecks} checks{endpoint.importedTests > 0 && <small>+ {endpoint.importedTests} imported {endpoint.importedTests === 1 ? "test" : "tests"}</small>}<small>{endpoint.lastRunAt ? `last run ${new Date(endpoint.lastRunAt).toLocaleString()}` : "never run"}</small></span>
           <span className="coverage-risks">
             <b className={`risk-score risk-score-${endpoint.risk.level}`} aria-label={`Risk score ${endpoint.risk.score} of 100, ${levelLabels[endpoint.risk.level]}`}>{endpoint.risk.score}<small>{levelLabels[endpoint.risk.level]}</small></b>
             {endpoint.risk.factors.map((factor) => <i key={factor.id} className={factorClass(factor)} title={endpoint.risks.find((risk) => risk.id === factor.id)?.detail}>+{factor.points} {factor.label}</i>)}
