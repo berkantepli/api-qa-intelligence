@@ -5,6 +5,7 @@ from pydantic import AnyHttpUrl, BaseModel, Field
 
 from app.domain.flows import ApiFlow, infer_flows
 from app.domain.schema_check import response_schemas
+from app.domain.spec_quality import QualityReport, assess_quality
 from app.domain.swagger2 import convert_swagger2, is_swagger2
 
 STRING_FORMAT_SAMPLES = {
@@ -106,6 +107,8 @@ class ApiOverview(BaseModel):
     operations: list[ApiOperation]
     # Multi-step checks (create, read, update, delete) that pass values from one request to the next.
     flows: list[ApiFlow] = Field(default_factory=list)
+    # How testable the contract is; None for overviews saved before 1.11.
+    quality: QualityReport | None = None
 
 
 class SpecUrlRequest(BaseModel):
@@ -206,6 +209,7 @@ def summarize_openapi(document: Any) -> ApiOverview:
         operation_count=len(operations),
         operations=operations,
         flows=infer_flows(operations),
+        quality=assess_quality(operations, server_urls),
     )
 
 
