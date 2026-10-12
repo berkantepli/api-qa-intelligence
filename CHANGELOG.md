@@ -2,6 +2,12 @@
 
 The version lives in the [`VERSION`](VERSION) file and follows [Semantic Versioning](https://semver.org/). Before 1.0.0, a new feature raises the minor number (0.**x**.0) and a fix or visual change raises the patch number (0.x.**y**).
 
+## 1.10.0 — 2026-10-12
+
+- Flow steps now count toward endpoint coverage: an endpoint a flow step called counts as tested, and fails when that step failed. Skipped steps do not count. Whichever is newer, the endpoint's own checks or a flow step, sets its status, marked *via flow* on **Coverage & Risk**. Check counts, categories, and coverage gaps still come from the endpoint's own checks.
+- The overview, API specs, and both coverage reports use the same numbers; the JSON report adds `status_source` (`check` or `flow`) per endpoint.
+- Flow runs saved before this version count only for steps without a path parameter (such as `POST /pets`); run a flow again to count its other steps.
+
 ## 1.9.2 — 2026-10-12
 
 - Opening an endpoint from **Coverage & Risk** (or **Run again** in Run history) scrolls the overview's endpoint list to it, so it is in sight in a long API.

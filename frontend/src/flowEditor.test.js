@@ -122,4 +122,41 @@ describe("lifecycle coverage", () => {
     const post = computeCoverage(overview, [], Date.now(), null, lifecycle).endpoints.find((endpoint) => endpoint.key === "POST /pets");
     expect(post.risks.map((risk) => risk.id)).not.toContain("lifecycle");
   });
+
+  const step = (method, path, result) => ({ method, path: path.replace(/\{\{\w+\}\}/g, "7"), step_path: path, result });
+  const byKey = (coverage) => Object.fromEntries(coverage.endpoints.map((endpoint) => [endpoint.key, endpoint]));
+
+  it("counts endpoints called by flow steps as tested; skipped steps do not count", () => {
+    const runs = [flowRun([step("POST", "/pets", "PASS"), step("GET", "/pets/{{petId}}", "FAIL"), step("DELETE", "/pets/{{petId}}", "SKIPPED")])];
+    const coverage = computeCoverage(overview, [], Date.parse("2026-10-12T01:00:00Z"), null, flowCoverage(overview, [suggested], runs));
+    const endpoints = byKey(coverage);
+
+    expect(endpoints["POST /pets"]).toMatchObject({ status: "passing", statusSource: "flow", lastRunAt: "2026-10-12T00:00:00Z", coveredChecks: 0 });
+    expect(endpoints["GET /pets/{petId}"]).toMatchObject({ status: "failing", statusSource: "flow" });
+    expect(endpoints["GET /pets/{petId}"].risks.find((risk) => risk.id === "failing").detail).toContain("Pet lifecycle");
+    expect(endpoints["DELETE /pets/{petId}"]).toMatchObject({ status: "untested", statusSource: null });
+    expect(coverage.totals).toMatchObject({ tested: 2, coveragePercent: 67, failing: 1 });
+  });
+
+  it("uses whichever is newer: the endpoint's own checks or a flow step", () => {
+    const flowRuns = [flowRun([step("POST", "/pets", "FAIL")], "2026-10-11T00:00:00Z")];
+    const check = (createdAt, result) => ({ id: createdAt, apiId: "pets", api: "Pets", endpoint: "POST /pets", createdAt, results: [{ title: "Valid request", category: "happy_path", result }] });
+    const lifecycle = flowCoverage(overview, [suggested], flowRuns);
+
+    const checkNewer = byKey(computeCoverage(overview, [check("2026-10-12T00:00:00Z", "PASS")], Date.parse("2026-10-12T01:00:00Z"), null, lifecycle))["POST /pets"];
+    const flowNewer = byKey(computeCoverage(overview, [check("2026-10-10T00:00:00Z", "PASS")], Date.parse("2026-10-12T01:00:00Z"), null, lifecycle))["POST /pets"];
+
+    expect(checkNewer).toMatchObject({ status: "passing", statusSource: "check" });
+    expect(flowNewer).toMatchObject({ status: "failing", statusSource: "flow", lastRunAt: "2026-10-11T00:00:00Z" });
+  });
+
+  it("marks an endpoint failing when any of its steps in the latest flow run failed", () => {
+    const runs = [
+      flowRun([step("GET", "/pets/{{petId}}", "PASS"), step("GET", "/pets/{{petId}}", "FAIL")], "2026-10-12T00:00:00Z"),
+      flowRun([step("GET", "/pets/{{petId}}", "PASS")], "2026-10-10T00:00:00Z"),
+    ];
+    const lifecycle = flowCoverage(overview, [suggested], runs);
+
+    expect(lifecycle.endpoints["GET /pets/{petId}"]).toEqual({ status: "failing", createdAt: "2026-10-12T00:00:00Z", flowTitle: "Pet lifecycle" });
+  });
 });

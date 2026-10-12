@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { runsForApi } from "./coverage.js";
+import { flowCoverage, runsForApi } from "./coverage.js";
 import { buildFlowRequest, credentialValue, dataChangingSteps, flowCredentials, flowRunEntry, missingFlowInputs, stepOperation } from "./flows.js";
 import { outcomeSummary, summarizeResults } from "./runDetail.js";
 
@@ -102,8 +102,16 @@ describe("flow runs in Run history", () => {
     expect(outcomeSummary(entry.results[2])).toBe("Skipped because an earlier step did not pass.");
   });
 
-  it("keeps flow runs out of endpoint coverage", () => {
+  it("keeps flow runs out of the endpoint's own runs", () => {
     const endpointRun = { id: 2, apiId: "pets", api: "Pets", endpoint: "GET /pets", results: [] };
     expect(runsForApi([entry, endpointRun], "pets", [{ id: "pets", title: "Pets" }])).toEqual([endpointRun]);
+  });
+
+  it("finds each step's endpoint by its template, not the filled path it sent", () => {
+    expect(entry.results[1]).toMatchObject({ path: "/owners/4/pets/7", step_path: "/owners/{ownerId}/pets/{{petId}}" });
+    expect(flowCoverage(overview, [flow], [entry]).endpoints).toEqual({
+      "POST /owners/{ownerId}/pets": { status: "passing", createdAt: "2026-10-11T00:00:00Z", flowTitle: "Pet lifecycle" },
+      "GET /owners/{ownerId}/pets/{petId}": { status: "failing", createdAt: "2026-10-11T00:00:00Z", flowTitle: "Pet lifecycle" },
+    });
   });
 });
