@@ -17,9 +17,9 @@ const operation = {
   ],
   response_codes: ["200", "404", "422", "DEFAULT"],
   scenarios: [
-    { category: "happy_path", title: "Valid request", rationale: "", request_example: { expected_status_codes: [200] } },
+    { category: "happy_path", title: "Valid request", rationale: "", request_example: { json_body: { email: "qa@example.com", age: 30 }, expected_status_codes: [200] } },
     { category: "negative", title: "Omit a required parameter", rationale: "Send it without dry-run.", request_example: { omitted_parameters: [{ name: "dry-run", location: "query" }], expected_status_codes: [400, 422, 404] } },
-    { category: "boundary", title: "Check boundary values for age", rationale: "", request_example: { expected_status_codes: [200] } },
+    { category: "boundary", title: "Check boundary values for age", rationale: "", request_example: { json_body: { email: "qa@example.com", age: 150 }, expected_status_codes: [200] } },
     { category: "invalid_value", title: "Send invalid email", rationale: "", request_example: null, source: "ai" },
   ],
 };
@@ -71,5 +71,54 @@ describe("computeGaps", () => {
 
   it("has no gaps for an endpoint without inputs or codes", () => {
     expect(computeGaps({ method: "GET", path: "/health", scenarios: [] }).gaps).toEqual([]);
+  });
+});
+
+describe("matching checks to inputs", () => {
+  const base = { category: "happy_path", title: "Valid request", rationale: "", request_example: { json_body: { name: "Rex", tag: "dog" }, expected_status_codes: [201] } };
+  const operation = (scenarios) => ({
+    method: "POST", path: "/pets/{id}",
+    parameters: [{ name: "id", location: "path", required: true, value_schema: { type: "integer" } }],
+    request_body_fields: [
+      { name: "name", required: true, value_schema: { type: "string", maxLength: 20 } },
+      { name: "tag", required: false, value_schema: { type: "string", enum: ["dog", "cat"] } },
+    ],
+    response_codes: ["201"],
+    scenarios: [base, ...scenarios],
+  });
+  const states = (gaps) => Object.fromEntries(gaps.inputs.map((input) => [input.name, Object.fromEntries(input.checks.map((check) => [check.kind, check.state]))]));
+
+  it("uses what a runnable check sends, not what its title says", () => {
+    const gaps = computeGaps(operation([
+      // The title names tag, but the request changes name.
+      { category: "boundary", title: "Long tag", rationale: "", request_example: { json_body: { name: "x".repeat(21), tag: "dog" } } },
+      { category: "negative", title: "No name", rationale: "", request_example: { json_body: { tag: "dog" } } },
+      { category: "invalid_value", title: "Odd id", rationale: "", request_example: { json_body: base.request_example.json_body, parameter_values: { "path:id": "abc" } } },
+    ]));
+
+    expect(states(gaps)).toEqual({
+      id: { invalid: "not_run" },
+      name: { missing: "not_run", boundary: "not_run" },
+      tag: { invalid: "no_check" },
+    });
+  });
+
+  it("matches short, common names in words only in a clear form", () => {
+    const idea = (title) => ({ category: "invalid_value", title, rationale: "", source: "ai" });
+    expect(states(computeGaps(operation([idea("Send a valid pet")]))).id.invalid).toBe("no_check");
+    expect(states(computeGaps(operation([idea("Pet ids are validated")]))).id.invalid).toBe("no_check");
+    expect(states(computeGaps(operation([idea("Send an invalid id")]))).id.invalid).toBe("not_runnable");
+    expect(states(computeGaps(operation([idea("Send letters in {id}")]))).id.invalid).toBe("not_runnable");
+    expect(states(computeGaps(operation([idea("Undocumented tag value")]))).tag.invalid).toBe("not_runnable");
+  });
+
+  it("counts imported tests by their words and latest outcome", () => {
+    const runs = [{ results: [
+      { title: "Get pet with invalid id", category: "invalid_value", imported: "newman", result: "PASS", response_status: 404 },
+      { title: "Create pet without name", category: "negative", imported: "junit", result: "FAIL" },
+    ] }];
+    const gaps = computeGaps(operation([]), runs);
+
+    expect(states(gaps)).toMatchObject({ id: { invalid: "passing" }, name: { missing: "failing" } });
   });
 });

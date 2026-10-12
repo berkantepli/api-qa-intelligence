@@ -241,7 +241,7 @@ function App() {
   // Checks need a usable target; a blocked one (for example a private address) would only fail on the server.
   const targetProblem = targetUrlProblem(targetUrl)
     || (connection.status === "blocked" && connection.url === targetUrl.trim() ? connection.message : "");
-  const apiCoverage = useMemo(() => computeCoverage(overview, runsForApi(runHistory, activeApiId, savedApis), Date.now(), activeApi?.contractChanges, apiLifecycle), [overview, runHistory, activeApiId, savedApis, activeApi, apiLifecycle]);
+  const apiCoverage = useMemo(() => computeCoverage(overview, runsForApi(runHistory, activeApiId, savedApis), Date.now(), activeApi?.contractChanges, apiLifecycle, activeApi?.criticality), [overview, runHistory, activeApiId, savedApis, activeApi, apiLifecycle]);
   const endpointStatus = useMemo(() => new Map(apiCoverage.endpoints.map((endpoint) => [endpoint.key, endpoint.status])), [apiCoverage]);
   const allSelected = availableScenarios.length > 0 && selectedScenarios.length === availableScenarios.length;
   // How many runnable checks can run with the request details entered so far.
@@ -416,6 +416,14 @@ function App() {
       url,
       result: { url: check.request_url, reachable: true, method: check.method, status_code: check.response_status, duration_ms: check.duration_ms, fromCheck: true },
     });
+  }
+
+  // The user's own mark for an endpoint on Coverage: "critical", "normal", or null for the automatic guess.
+  function setEndpointCriticality(key, value) {
+    const marks = { ...(activeApi?.criticality ?? {}) };
+    if (value) marks[key] = value;
+    else delete marks[key];
+    updateSavedApi(activeApiId, { criticality: marks });
   }
 
   function updateSavedApi(id, changes) {
@@ -1156,6 +1164,8 @@ function App() {
             onImportTestResults={importTestResults}
             contractChanges={activeApi?.contractChanges}
             lifecycle={apiLifecycle}
+            criticality={activeApi?.criticality ?? {}}
+            onSetCriticality={setEndpointCriticality}
             onOpenFlows={openFlowsPage}
           />
         ) : page === "flows" ? (
@@ -1193,7 +1203,7 @@ function App() {
         ) : page === "specs" ? (
           <section className="specs-page">
             <div className="specs-heading"><div><div className="page-eyebrow">YOUR API QA WORKSPACE</div><h1>API specs</h1><p className="page-lede">Your imported APIs stay here so you can return to them anytime.</p></div><button className="primary-button" onClick={openImportPage}><Icon name="upload" size={15} /> Import API</button></div>
-            {savedApis.length ? <div className="specs-list">{savedApis.map((api) => ({ api, coverage: computeCoverage(api.overview, runsForApi(runHistory, api.id, savedApis), Date.now(), api.contractChanges, flowCoverage(api.overview, effectiveFlows(api), flowRunsForApi(runHistory, api.id, savedApis))).totals })).map(({ api, coverage }) => <article className="spec-card" key={api.id}>
+            {savedApis.length ? <div className="specs-list">{savedApis.map((api) => ({ api, coverage: computeCoverage(api.overview, runsForApi(runHistory, api.id, savedApis), Date.now(), api.contractChanges, flowCoverage(api.overview, effectiveFlows(api), flowRunsForApi(runHistory, api.id, savedApis)), api.criticality).totals })).map(({ api, coverage }) => <article className="spec-card" key={api.id}>
               <button className="spec-card-open" type="button" onClick={() => openSavedApi(api)}><CoverageRing totals={coverage} /><span className="spec-card-copy"><strong>{api.title}</strong><small>Version {api.overview.version} · OpenAPI {api.overview.openapi_version}</small><small>{coverage.tested} of {api.overview.operation_count} endpoints tested{coverage.failing ? <> · <span className="history-fail">{coverage.failing} failing</span></> : null} · Imported {new Date(api.importedAt).toLocaleDateString()}</small></span><Icon name="chevron" size={18} /></button>
               {pendingDeleteApiId === api.id
                 ? <div className="spec-card-confirm" role="group" aria-label={`Delete ${api.title}`}>

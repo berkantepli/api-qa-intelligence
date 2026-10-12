@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { outcomeSummary } from "./runDetail.js";
-import { matchOperation, testResultRuns, testResultsMessage } from "./testResults.js";
+import { inferCategory, matchOperation, testResultRuns, testResultsMessage } from "./testResults.js";
 
 const operations = [
   { method: "GET", path: "/pets" },
@@ -46,7 +46,7 @@ describe("testResultRuns", () => {
       ["GET /pets", "newman", "newman:abc", "2026-10-12T09:00:00.000Z", ["PASS"]],
       ["GET /pets/{id}", "newman", "newman:abc", "2026-10-12T09:00:00.000Z", ["FAIL"]],
     ]);
-    expect(outcome.runs[1].results[0]).toMatchObject({ category: "imported", imported: "newman", response_status: 500, reason: "Status code is 404: expected 500 to equal 404" });
+    expect(outcome.runs[1].results[0]).toMatchObject({ category: "negative", imported: "newman", response_status: 500, reason: "Status code is 404: expected 500 to equal 404" });
     expect([outcome.cases, outcome.unmatched, outcome.skipped]).toEqual([2, ["GET /stores"], 1]);
     expect(testResultsMessage(parsed, api, outcome)).toBe(
       "Imported 2 Newman tests on 2 endpoints of Pets from “Pets collection”. Left out 1 that matched no endpoint: GET /stores. 1 skipped test was left out.",
@@ -70,5 +70,20 @@ describe("testResultRuns", () => {
     const [passed, failed] = testResultRuns(parsed, api, [], now).runs.map((run) => run.results[0]);
     expect(outcomeSummary(passed)).toBe("Passed in Newman with HTTP 200.");
     expect(outcomeSummary(failed)).toBe("Status code is 404: expected 500 to equal 404");
+  });
+});
+
+describe("inferCategory", () => {
+  it("reads the kind of test from its name, then from the status it got", () => {
+    expect(inferCategory("Get pet without token", 401)).toBe("security_minded");
+    expect(inferCategory("Create pet with too long name", 400)).toBe("boundary");
+    expect(inferCategory("Create pet with missing name", 400)).toBe("negative");
+    expect(inferCategory("Get a nonexistent pet", 404)).toBe("invalid_value");
+    expect(inferCategory("List pets", 200)).toBe("happy_path");
+    expect(inferCategory("Delete pet", 403)).toBe("security_minded");
+    expect(inferCategory("Update pet", 409)).toBe("negative");
+    expect(inferCategory("Some JUnit test", null)).toBe("imported");
+    expect(inferCategory("List orders", 401, "FAIL")).toBe("imported");
+    expect(inferCategory("List orders without token", 200, "FAIL")).toBe("security_minded");
   });
 });

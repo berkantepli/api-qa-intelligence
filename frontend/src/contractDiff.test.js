@@ -91,6 +91,7 @@ describe("reimportedApi", () => {
 
     expect(api.overview.operations[0].scenarios.map((scenario) => scenario.title)).toEqual(["Valid request", "Unknown id returns 404"]);
     expect([api.targetUrl, api.maxDurationMs]).toEqual(["https://staging.example.com", 800]);
+    expect(reimportedApi({ ...existing, criticality: { "GET /pets/{id}": "critical", "DELETE /pets/{id}": "normal" } }, imported).criticality).toEqual({ "GET /pets/{id}": "critical" });
     expect(api.contractChanges).toMatchObject({ added: ["GET /pets"], removed: ["DELETE /pets/{id}"], droppedChecks: 1 });
   });
 

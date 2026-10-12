@@ -110,7 +110,8 @@ function categoryCoverage(runnable, outcomes) {
 // flowCoverage() for the API's flows, which flags create endpoints whose flows never ran. A flow step
 // counts as a run of its endpoint: whichever is newer, the endpoint's own checks or a flow step, sets
 // its status. Categories, check counts, and gaps come from the endpoint's own checks only.
-export function computeCoverage(overview, apiRuns = [], now = Date.now(), contractChanges = null, lifecycle = null) {
+// `criticality` is the saved API's own marks per endpoint key: "critical" or "normal".
+export function computeCoverage(overview, apiRuns = [], now = Date.now(), contractChanges = null, lifecycle = null, criticality = {}) {
   const endpoints = (overview?.operations ?? []).map((operation, operationIndex) => {
     const key = endpointKey(operation);
     const runs = apiRuns.filter((run) => run.endpoint === key).sort(byNewest);
@@ -145,10 +146,14 @@ export function computeCoverage(overview, apiRuns = [], now = Date.now(), contra
     }
 
     const coveredChecks = runnable.filter((scenario) => executedTitles.has(scenario.title)).length;
+    // Tests imported from Newman or JUnit are not the app's checks; they are counted on their own.
+    const importedTests = new Set(executed.filter((result) => result.imported).map((result) => result.title)).size;
     const contractChange = pendingChange(contractChanges, key, lastRunAt);
     const risk = scoreEndpoint({
-      method: operation.method, path: operation.path, status, needsAuth,
-      riskIds: risks.map((item) => item.id), coveredChecks, runnableChecks: runnable.length, contractChange,
+      method: operation.method, path: operation.path, summary: operation.summary, operationId: operation.operation_id, tags: operation.tags,
+      fieldNames: [...(operation.parameters ?? []).filter((parameter) => !parameter.credential).map((parameter) => parameter.name), ...(operation.request_body_fields ?? []).map((field) => field.name)],
+      status, needsAuth, riskIds: risks.map((item) => item.id), coveredChecks, runnableChecks: runnable.length, contractChange,
+      criticality: criticality?.[key],
     });
 
     return {
@@ -163,6 +168,8 @@ export function computeCoverage(overview, apiRuns = [], now = Date.now(), contra
       flowTitle: byFlow ? flowStep.flowTitle : null,
       writes,
       runCount: runs.length,
+      importedTests,
+      criticality: criticality?.[key] ?? null,
       lastRunAt,
       coveredChecks,
       runnableChecks: runnable.length,

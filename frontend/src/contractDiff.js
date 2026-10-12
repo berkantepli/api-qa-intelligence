@@ -117,6 +117,8 @@ export function reimportedApi(existing, imported) {
     // Flow edits and flows the user built belong to the API, not to one version of its contract.
     ...(existing.flowEdits ? { flowEdits: existing.flowEdits } : {}),
     ...(existing.customFlows ? { customFlows: existing.customFlows } : {}),
+    // The user's critical / not critical marks; marks on endpoints the new contract removed are dropped.
+    ...(existing.criticality ? { criticality: Object.fromEntries(Object.entries(existing.criticality).filter(([key]) => operations.some((operation) => keyOf(operation) === key))) } : {}),
     // A re-import without changes keeps the previous comparison, so its pending changes stay visible.
     contractChanges: changes ? { ...changes, droppedChecks } : existing.contractChanges ?? null,
   };

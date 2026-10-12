@@ -1,28 +1,89 @@
 // Finds what an endpoint's checks do not cover yet: for each input, the checks its contract calls for
 // (leave it out, boundary values, invalid values), and for each documented response code, whether a run
 // has ever received it. Matching is by rule, so every gap can be explained:
-//   - a check covers an input when it names it (title, rationale, or omitted parameters) and its
-//     category fits the kind of check (see GAP_KINDS);
+//   - a runnable check covers an input by what its request does: it leaves the input out, or sends a
+//     value different from the valid request's (see requestTargets); its category decides the kind;
+//   - an AI idea or a test imported from another tool has no request here, so it covers an input
+//     when its title or rationale names it (strictly for short, common names such as id; see names);
 //   - a response code is covered when any run of the endpoint received it.
 
 const BOUNDARY_KEYS = ["minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum", "minLength", "maxLength", "minItems", "maxItems"];
 const TYPED = new Set(["integer", "number", "boolean"]);
 
 const OMITS = /\b(omit\w*|missing|without|leave\w* out|absent)\b/i;
-const omits = (scenario, input) => (scenario.request_example?.omitted_parameters ?? []).some((item) => item.name === input.name)
-  || OMITS.test(`${scenario.title} ${scenario.rationale}`);
 
-// A negative check counts as leaving an input out when it says so, and as an invalid value otherwise.
+// How a check touches an input: "omitted" (left out) or "changed" (sent with another value). A runnable
+// check says so through its request; an idea or imported test only through its words.
 export const GAP_KINDS = {
-  missing: { label: "Leave it out", fits: (scenario, input) => scenario.category === "negative" && omits(scenario, input) },
-  boundary: { label: "Boundary values", fits: (scenario) => scenario.category === "boundary" },
+  missing: { label: "Leave it out", fits: (scenario, touch) => touch === "omitted" && scenario.category !== "happy_path" },
+  boundary: { label: "Boundary values", fits: (scenario, touch) => touch === "changed" && scenario.category === "boundary" },
   invalid: {
     label: "Invalid value",
-    fits: (scenario, input) => scenario.category === "invalid_value" || (scenario.category === "negative" && !omits(scenario, input)),
+    fits: (scenario, touch) => touch === "changed" && ["invalid_value", "negative"].includes(scenario.category),
   },
 };
 
 const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const isObject = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
+
+// Short or common names are matched in words only in a clear form, so "id" in "valid" or in an unrelated
+// sentence does not count: {id}, `id`, "id", id parameter/field, or an adjective such as "invalid id".
+const COMMON_NAMES = new Set(["id", "name", "type", "key", "value", "data", "code", "status", "query", "page", "limit", "sort", "filter", "q", "size", "date"]);
+const ADJECTIVES = "without|no|invalid|missing|empty|negative|unknown|nonexistent|non-existent|wrong|bad|malformed|long|short|large|small|zero|null|blank|duplicate|max|min|maximum|minimum|too long|too short|out of range";
+
+function names(text, name) {
+  const plain = escapeRegExp(name);
+  if (!COMMON_NAMES.has(name.toLowerCase()) && name.length > 2) {
+    return new RegExp(`(?:^|[^a-z0-9_])${plain}(?:$|[^a-z0-9_])`, "i").test(text);
+  }
+  return new RegExp([
+    `[{\`"']${plain}[}\`"']`,
+    `\\b${plain}\\s+(?:parameter|param|field|property|value)\\b`,
+    `\\b(?:parameter|param|field|property)\\s+${plain}\\b`,
+    `\\b(?:${ADJECTIVES})\\s+${plain}\\b`,
+  ].join("|"), "i").test(text);
+}
+
+// The inputs a runnable check's request touches compared with the valid request: { [inputKey]: "omitted" | "changed" }.
+export function requestTargets(example, baseline) {
+  const targets = {};
+  for (const item of example.omitted_parameters ?? []) targets[`parameter:${item.location}:${item.name}`] = "omitted";
+  for (const key of Object.keys(example.parameter_values ?? {})) targets[`parameter:${key}`] = "changed";
+  for (const [name, value] of Object.entries(example.query_params ?? {})) {
+    if (baseline?.query_params?.[name] !== value) targets[`parameter:query:${name}`] = "changed";
+  }
+  const body = example.form_body ? example.form_fields : example.json_body;
+  const base = baseline?.form_body ? baseline.form_fields : baseline?.json_body;
+  if (isObject(body) && isObject(base)) {
+    for (const name of Object.keys(base)) if (!(name in body)) targets[`body:${name}`] = "omitted";
+    for (const [name, value] of Object.entries(body)) {
+      if (JSON.stringify(value) !== JSON.stringify(base[name])) targets[`body:${name}`] = "changed";
+    }
+  }
+  return targets;
+}
+
+// How a check touches an input, or null: by its request when it has one, otherwise by its words.
+function touches(scenario, input, baseline) {
+  const example = scenario.request_example;
+  if (example) return requestTargets(example, baseline)[input.key] ?? null;
+  const text = `${scenario.title} ${scenario.rationale ?? ""}`;
+  if (!names(text, input.name)) return null;
+  return OMITS.test(text) ? "omitted" : "changed";
+}
+
+// Tests imported from other tools, as checks without a request: one per title, with its category.
+function importedChecks(runs) {
+  const checks = new Map();
+  for (const run of runs) {
+    for (const result of run.results ?? []) {
+      if (result.imported && result.title && !checks.has(result.title)) {
+        checks.set(result.title, { title: result.title, rationale: "", category: result.category, imported: true });
+      }
+    }
+  }
+  return [...checks.values()];
+}
 
 // The checks the contract calls for on one input.
 function expectedKinds(input) {
@@ -43,12 +104,6 @@ function inputsOf(operation) {
     .filter((field) => !field.is_file)
     .map((field) => ({ ...field, location: "body", key: `body:${field.name}` }));
   return [...parameters, ...fields];
-}
-
-function mentions(scenario, input) {
-  const omitted = scenario.request_example?.omitted_parameters ?? [];
-  if (omitted.some((item) => item.name === input.name && (item.location ?? input.location) === input.location)) return true;
-  return new RegExp(`(?:^|[^a-z0-9_])${escapeRegExp(input.name)}(?:$|[^a-z0-9_])`, "i").test(`${scenario.title} ${scenario.rationale}`);
 }
 
 // "passing", "failing", or "not_run" from the newest outcome of the given check titles.
@@ -76,13 +131,19 @@ export function computeGaps(operation, runs = []) {
     }
   }
 
+  const baseline = scenarios.find((scenario) => scenario.category === "happy_path" && scenario.request_example)?.request_example;
+  const candidates = [...scenarios, ...importedChecks(runs)];
   const inputs = inputsOf(operation ?? {}).map((input) => ({
     key: input.key,
     name: input.name,
     location: input.location,
     checks: expectedKinds(input).map((kind) => {
-      const checks = scenarios.filter((scenario) => mentions(scenario, input) && GAP_KINDS[kind].fits(scenario, input));
-      const state = !checks.length ? "no_check" : !checks.some((check) => check.request_example) ? "not_runnable" : stateOf(checks, latestByTitle);
+      const checks = candidates.filter((scenario) => {
+        const touch = touches(scenario, input, baseline);
+        return touch && GAP_KINDS[kind].fits(scenario, touch);
+      });
+      const usable = checks.filter((check) => check.request_example || check.imported);
+      const state = !checks.length ? "no_check" : !usable.length ? "not_runnable" : stateOf(usable, latestByTitle);
       return { kind, label: GAP_KINDS[kind].label, state, titles: checks.map((check) => check.title) };
     }),
   })).filter((input) => input.checks.length);
