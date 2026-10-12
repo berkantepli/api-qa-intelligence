@@ -960,3 +960,18 @@ h1, h2, h3, p { margin-top: 0; }
   .quality-rules li { grid-template-columns: minmax(0, 1fr) 44px; }
   .quality-rules .coverage-meter { display: none; }
 }
+
+/* Imported Postman / HAR requests */
+.overview-heading { gap: 12px; }
+.request-import-panel { display: grid; gap: 16px; margin-top: 16px; padding: 20px 22px; }
+.request-import-panel h2 { margin: 0 0 4px; font-size: 18px; }
+.request-import-panel h3 { margin: 0 0 4px; font-size: 13px; }
+.request-import-stats { margin-top: 0; }
+.request-import-apply { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-soft); }
+.request-import-apply p { margin: 0 0 8px; color: var(--muted); font-size: 12px; line-height: 1.55; }
+.request-import-list { display: grid; gap: 6px; margin: 8px 0 4px; padding: 0; list-style: none; }
+.request-import-list li { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 12px; }
+.request-import-list code { overflow-wrap: anywhere; }
+.request-import-list small { color: var(--muted); }
+.request-import-list .text-button { margin-left: auto; }
+.request-import-panel .quality-heading { flex-wrap: nowrap; }
