@@ -21,6 +21,14 @@ STRING_FORMAT_SAMPLES = {
 }
 HTTP_METHODS = {"get", "post", "put", "patch", "delete", "head", "options", "trace"}
 FORM_MEDIA_TYPES = ("multipart/form-data", "application/x-www-form-urlencoded")
+# A value of another type for each typed schema; plain text is the commonest client mistake.
+WRONG_TYPE_VALUES = {
+    "integer": "not-a-number",
+    "number": "not-a-number",
+    "boolean": "not-a-boolean",
+    "array": "not-an-array",
+    "object": "not-an-object",
+}
 BOUNDARY_KEYS = ("minimum", "maximum", "minLength", "maxLength", "minItems", "maxItems")
 
 
@@ -31,6 +39,8 @@ class ScenarioRequestExample(BaseModel):
     form_body: bool = False
     form_fields: dict[str, str] = Field(default_factory=dict)
     omitted_parameters: list[dict[str, str]] = Field(default_factory=list)
+    # Deliberate parameter values keyed "location:name"; they replace what the user entered.
+    parameter_values: dict[str, str] = Field(default_factory=dict)
     json_body: Any = None
     expected_status_codes: list[int] = Field(default_factory=lambda: [200])
 
@@ -404,6 +414,8 @@ def _generate_scenarios(
                         )
                     )
 
+    scenarios.extend(_type_scenarios(method, path, parameters, body_schema, valid_body, document, error_codes, json_body_example))
+
     security = operation.get("security", global_security)
     if isinstance(security, list) and security:
         # An empty requirement ({}) makes authentication optional, so an anonymous call may succeed.
@@ -432,6 +444,81 @@ def _generate_scenarios(
         return [*scenarios[:11], unauthenticated]
 
     return scenarios[:12]
+
+
+def _type_scenarios(
+    method: str,
+    path: str,
+    parameters: Any,
+    body_schema: Mapping[str, Any] | None,
+    valid_body: Any,
+    document: Mapping[str, Any],
+    error_codes: list[int],
+    json_body_example: Any,
+) -> list[QaScenario]:
+    """Checks that a value of the wrong type, or a field the contract forbids, is rejected."""
+    scenarios: list[QaScenario] = []
+    # A string parameter accepts any text, so only typed path and query parameters can be sent the wrong type.
+    for raw_parameter in parameters if isinstance(parameters, list) else []:
+        parameter = _resolve_schema(raw_parameter, document) if isinstance(raw_parameter, Mapping) else None
+        if not isinstance(parameter, Mapping) or parameter.get("in") not in {"path", "query"} or not isinstance(parameter.get("name"), str):
+            continue
+        schema = _resolve_schema(parameter.get("schema"), document) if isinstance(parameter.get("schema"), Mapping) else None
+        if not isinstance(schema, Mapping) or schema.get("type") not in WRONG_TYPE_VALUES:
+            continue
+        name, location = parameter["name"], parameter["in"]
+        scenarios.append(QaScenario(
+            category="invalid_value",
+            title=f"Send the wrong type for {name}",
+            rationale=f"Send text where the {location} parameter {name} must be {_with_article(schema['type'])}, and check that the API rejects it instead of failing or ignoring it.",
+            review_required=True,
+            request_example=ScenarioRequestExample(
+                method=method,
+                path=path,
+                parameter_values={f"{location}:{name}": WRONG_TYPE_VALUES[schema["type"]]},
+                expected_status_codes=list(dict.fromkeys([*error_codes, 404])) if location == "path" else error_codes,
+            ),
+        ))
+        break
+
+    properties = body_schema.get("properties") if isinstance(body_schema, Mapping) else None
+    if not isinstance(valid_body, Mapping) or not isinstance(properties, Mapping):
+        return scenarios
+    for name, raw_schema in properties.items():
+        schema = _resolve_schema(raw_schema, document) if isinstance(raw_schema, Mapping) else None
+        # A field with a format or pattern already gets an invalid value of the wrong type.
+        if not isinstance(name, str) or not isinstance(schema, Mapping) or schema.get("type") not in WRONG_TYPE_VALUES or schema.get("format") or schema.get("pattern"):
+            continue
+        example = json_body_example(_body_with_value(valid_body, name, WRONG_TYPE_VALUES[schema["type"]]), error_codes)
+        if example is None:
+            break
+        scenarios.append(QaScenario(
+            category="invalid_value",
+            title=f"Send the wrong type for {name}",
+            rationale=f"Send text where the request field {name} must be {_with_article(schema['type'])}, and check that the API reports a validation error.",
+            review_required=True,
+            request_example=example,
+        ))
+        break
+
+    if body_schema.get("additionalProperties") is False:
+        field = "unexpected_field"
+        while field in properties:
+            field = f"_{field}"
+        example = json_body_example(_body_with_value(valid_body, field, "unexpected"), error_codes)
+        if example is not None:
+            scenarios.append(QaScenario(
+                category="negative",
+                title="Send an undocumented request field",
+                rationale=f"The contract does not allow fields beyond the documented ones; send an extra field ({field}) and check that the API rejects it.",
+                review_required=True,
+                request_example=example,
+            ))
+    return scenarios
+
+
+def _with_article(schema_type: str) -> str:
+    return f"an {schema_type}" if schema_type[0] in "aeiou" else f"a {schema_type}"
 
 
 def _request_body_schema(request_body: Any, document: Mapping[str, Any]) -> Mapping[str, Any] | None:

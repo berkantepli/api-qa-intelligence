@@ -93,6 +93,8 @@ describe("reimportedApi", () => {
     expect([api.targetUrl, api.maxDurationMs]).toEqual(["https://staging.example.com", 800]);
     expect(reimportedApi({ ...existing, criticality: { "GET /pets/{id}": "critical", "DELETE /pets/{id}": "normal" } }, imported).criticality).toEqual({ "GET /pets/{id}": "critical" });
     expect(api.contractChanges).toMatchObject({ added: ["GET /pets"], removed: ["DELETE /pets/{id}"], droppedChecks: 1 });
+    const signIn = { operationKey: "POST /login", tokenPointer: "/token", credentialKey: "parameter:header:Authorization" };
+    expect(reimportedApi({ ...existing, signIn }, imported).signIn).toEqual(signIn);
   });
 
   it("keeps the previous comparison when the contract did not change", () => {

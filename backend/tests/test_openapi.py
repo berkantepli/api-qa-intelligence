@@ -277,3 +277,52 @@ def test_lists_every_documented_response_code_with_or_without_a_body():
 
     assert operation.response_codes == ["204", "404", "4XX", "DEFAULT"]
     assert list(operation.response_schemas) == ["4XX"]
+
+
+def typed_spec(body_schema, parameters=None):
+    return {
+        "openapi": "3.0.3",
+        "info": {"title": "Typed", "version": "1"},
+        "paths": {
+            "/items/{id}": {
+                "put": {
+                    "parameters": parameters or [],
+                    "requestBody": {"content": {"application/json": {"schema": body_schema}}},
+                    "responses": {"200": {"description": "ok"}, "400": {"description": "bad"}},
+                }
+            }
+        },
+    }
+
+
+def test_wrong_type_checks_for_a_typed_parameter_and_body_field():
+    spec = typed_spec(
+        {"type": "object", "properties": {"name": {"type": "string"}, "id": {"type": "integer", "format": "int64"}, "count": {"type": "integer"}}},
+        [{"name": "id", "in": "path", "required": True, "schema": {"type": "integer"}}, {"name": "dry", "in": "query", "schema": {"type": "boolean"}}],
+    )
+    op = operation(summarize_openapi(spec), "PUT", "/items/{id}")
+
+    wrong = [item for item in op.scenarios if item.title.startswith("Send the wrong type")]
+    # One parameter check and one body check; `id` in the body already has a format check.
+    assert [item.title for item in wrong] == ["Send the wrong type for id", "Send the wrong type for count"]
+    assert wrong[0].request_example.parameter_values == {"path:id": "not-a-number"}
+    assert wrong[0].request_example.expected_status_codes == [400, 404]
+    assert wrong[1].request_example.json_body["count"] == "not-a-number"
+    assert wrong[1].request_example.expected_status_codes == [400]
+
+
+def test_string_inputs_get_no_wrong_type_check():
+    spec = typed_spec({"type": "object", "properties": {"name": {"type": "string"}}}, [{"name": "id", "in": "path", "required": True, "schema": {"type": "string"}}])
+    op = operation(summarize_openapi(spec), "PUT", "/items/{id}")
+
+    assert not [item for item in op.scenarios if item.title.startswith("Send the wrong type")]
+
+
+def test_undocumented_field_check_only_when_the_contract_forbids_extra_fields():
+    closed = typed_spec({"type": "object", "additionalProperties": False, "properties": {"unexpected_field": {"type": "string"}}})
+    open_schema = typed_spec({"type": "object", "properties": {"name": {"type": "string"}}})
+
+    check = scenario(operation(summarize_openapi(closed), "PUT", "/items/{id}"), "Send an undocumented request field")
+    assert check.request_example.json_body == {"unexpected_field": "sample", "_unexpected_field": "unexpected"}
+    assert check.request_example.expected_status_codes == [400]
+    assert "Send an undocumented request field" not in {item.title for item in operation(summarize_openapi(open_schema), "PUT", "/items/{id}").scenarios}
