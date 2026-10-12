@@ -95,6 +95,8 @@ export function flowRunEntry(flow, outcome, { apiId, api, target, id = Date.now(
       ...step.check,
       title: step.title,
       role: step.role,
+      // The check's path is the one it sent (/pets/2); the step's template finds its endpoint.
+      step_path: flow.steps[index]?.path,
       // A step can fail after a matching response, for example when its value could not be saved.
       result: step.status,
       reason: step.reason ?? null,

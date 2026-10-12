@@ -16,7 +16,7 @@ export const RISK_RULES = [
   { id: "contract-changed", kind: "evidence", points: 15, label: "Changed in the contract", description: "Changed since the previous import, and not run since. (A new endpoint counts as Never tested.)" },
   { id: "failing", kind: "evidence", points: 35, label: "Failing in latest run", description: "A check failed or errored in its latest run." },
   { id: "flaky", kind: "evidence", points: 15, label: "Flaky results", description: "A check's outcome flipped at least twice in its last five results." },
-  { id: "untested", kind: "evidence", points: 15, label: "Never tested", description: "No check has run against it." },
+  { id: "untested", kind: "evidence", points: 15, label: "Never tested", description: "No check or flow step has run against it." },
   { id: "auth", kind: "evidence", points: 10, label: "Auth not checked", description: "It requires authentication, but no check has called it without credentials." },
   { id: "happy-only", kind: "evidence", points: 10, label: "Only happy path tested", description: "Negative or boundary checks exist but only the valid request ran." },
   { id: "partial", kind: "evidence", points: 5, label: "Checks not run yet", description: "Some of its runnable checks have never run." },
