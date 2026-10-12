@@ -2,7 +2,7 @@
 
 The version lives in the [`VERSION`](VERSION) file and follows [Semantic Versioning](https://semver.org/). Before 1.0.0, a new feature raises the minor number (0.**x**.0) and a fix or visual change raises the patch number (0.x.**y**).
 
-## Unreleased
+## 1.14.1 — 2026-10-12
 
 - Removed a `frontend/node_modules` symlink that 1.14.0 committed by mistake (it pointed to a path on one developer's machine), and `.gitignore` now ignores `node_modules` whether it is a folder or a symlink.
 
