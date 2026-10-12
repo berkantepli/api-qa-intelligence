@@ -83,5 +83,7 @@ describe("inferCategory", () => {
     expect(inferCategory("Delete pet", 403)).toBe("security_minded");
     expect(inferCategory("Update pet", 409)).toBe("negative");
     expect(inferCategory("Some JUnit test", null)).toBe("imported");
+    expect(inferCategory("List orders", 401, "FAIL")).toBe("imported");
+    expect(inferCategory("List orders without token", 200, "FAIL")).toBe("security_minded");
   });
 });

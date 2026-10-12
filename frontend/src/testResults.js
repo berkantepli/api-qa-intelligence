@@ -41,9 +41,12 @@ const CATEGORY_WORDS = [
   ["invalid_value", /\b(invalid|malformed|wrong|bad|non-?existent|unknown|not found|undocumented|404|400|422)\b/i],
 ];
 
-export function inferCategory(title, responseStatus) {
+// The status only tells what a test was about when the test passed: a test that failed got a status it
+// did not expect, so "List orders" failing with a 401 is not an authentication test.
+export function inferCategory(title, responseStatus, result = "PASS") {
   const named = CATEGORY_WORDS.find(([, pattern]) => pattern.test(title ?? ""));
   if (named) return named[0];
+  if (result !== "PASS") return "imported";
   if (responseStatus >= 200 && responseStatus < 300) return "happy_path";
   if (responseStatus === 401 || responseStatus === 403) return "security_minded";
   if (responseStatus >= 400 && responseStatus < 500) return "negative";
@@ -53,7 +56,7 @@ export function inferCategory(title, responseStatus) {
 function importedResult(item, tool, operation) {
   const result = {
     title: item.title,
-    category: inferCategory(item.title, item.response_status),
+    category: inferCategory(item.title, item.response_status, item.result),
     source: tool,
     imported: tool,
     result: item.result,
