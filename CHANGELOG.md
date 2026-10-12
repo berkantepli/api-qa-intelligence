@@ -2,7 +2,7 @@
 
 The version lives in the [`VERSION`](VERSION) file and follows [Semantic Versioning](https://semver.org/). Before 1.0.0, a new feature raises the minor number (0.**x**.0) and a fix or visual change raises the patch number (0.x.**y**).
 
-## Unreleased
+## 1.17.0 — 2026-10-12
 
 ### Target and authentication
 - **Target & auth** in the topbar holds the active API's target URL, response time limit, and credentials, for every page. The endpoint panel shows a one-line summary with **Change** instead of the two fields.
