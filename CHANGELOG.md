@@ -2,7 +2,7 @@
 
 The version lives in the [`VERSION`](VERSION) file and follows [Semantic Versioning](https://semver.org/). Before 1.0.0, a new feature raises the minor number (0.**x**.0) and a fix or visual change raises the patch number (0.x.**y**).
 
-## Unreleased
+## 1.11.0 — 2026-10-12
 
 ### Contract quality
 - Every import scores how testable the contract is, from 0 to 100 with a grade from A to F, using fixed weighted rules per endpoint: success response schemas, examples for required inputs, a buildable valid request, documented 4xx, 401/403 on secured endpoints, and 404 on record endpoints, input limits, unique operationIds, summaries, input descriptions, and a declared server.
