@@ -29,6 +29,24 @@ test("imports a contract from a URL", async ({ page }) => {
   await expect(page.locator(".target-field input").first()).toHaveValue(TARGET_URL);
 });
 
+test("scores how testable the contract is and opens an endpoint from a finding", async ({ page }) => {
+  await page.goto("/");
+  await nav(page, "Overview");
+  const card = page.locator(".stat-card").filter({ hasText: "Contract quality" });
+  await expect(card).toContainText("/ 100");
+  await card.click();
+
+  const panel = page.locator(".quality-panel");
+  await expect(panel.locator(".quality-fixes")).toContainText("Add examples for required inputs");
+  const finding = panel.locator(".quality-findings details").filter({ hasText: "/pets/{id}" });
+  await finding.locator("summary").click();
+  await expect(finding).toContainText("No example, default, or enum for id (path).");
+  await finding.getByRole("button", { name: "Open endpoint" }).click();
+
+  await expect(panel).toHaveCount(0);
+  await expect(page.locator(".scenario-header h2")).toHaveText("GET /pets/{id}");
+});
+
 test("passes a correct endpoint and checks its body", async ({ page }) => {
   await page.goto("/");
   await nav(page, "Overview");

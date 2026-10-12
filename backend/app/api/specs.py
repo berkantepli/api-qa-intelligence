@@ -11,6 +11,7 @@ from app.domain.contract_diff import ContractDiff, diff_contracts
 from app.domain.documents import UNEXPECTED_SHAPE, DocumentTooComplexError, parse_document
 from app.domain.network import ensure_safe_target_host, request_error_reason, target_client
 from app.domain.openapi import ApiOverview, OpenApiDocumentError, SpecUrlRequest, summarize_openapi
+from app.domain.spec_quality import QualityReport, assess_quality
 
 router = APIRouter(prefix="/api/v1/specs", tags=["API specifications"])
 MAX_SPEC_SIZE_BYTES = 2_000_000
@@ -126,3 +127,9 @@ class ContractDiffRequest(BaseModel):
 def compare_specifications(payload: ContractDiffRequest) -> ContractDiff:
     """Compares two API overviews (the earlier version as base) and classifies every change."""
     return diff_contracts(payload.base, payload.head)
+
+
+@router.post("/quality", response_model=QualityReport)
+async def assess_specification(overview: ApiOverview) -> QualityReport:
+    """Scores how testable a saved API overview is; imports already include it as `quality`."""
+    return assess_quality(overview.operations, overview.servers)

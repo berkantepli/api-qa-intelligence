@@ -1,5 +1,5 @@
 """Command-line tools for CI pipelines: ``api-qa run --spec openapi.json --junit report.xml`` and
-``api-qa diff old.yaml new.yaml`` (see compare_contracts).
+``api-qa diff old.yaml new.yaml`` (see compare_contracts), and ``api-qa lint openapi.yaml`` (lint_contract).
 
 It runs an OpenAPI contract's runnable checks against a target API without the web app and
 exits with 0 when every check passes, 1 when a check fails or errors, and 2 on a usage or
@@ -79,7 +79,20 @@ def build_parser() -> argparse.ArgumentParser:
     diff.add_argument("--json", type=Path, metavar="FILE", help="Write a JSON report.")
     diff.add_argument("--fail-on", choices=["breaking", "warning", "never"], default="breaking",
                       help="Exit 1 when a change is at least this severe (default: breaking).")
+
+    lint = commands.add_parser("lint", help="Score how testable a contract is and list the fixes worth most.")
+    lint.add_argument("spec", help="OpenAPI 3.x or Swagger 2.0 document: a file path or an http(s) URL.")
+    lint.add_argument("--min-score", type=score_value, default=0, metavar="SCORE",
+                      help="Exit 1 when the score is below this (0-100; default 0 never fails).")
+    lint.add_argument("--markdown", metavar="FILE", help="Write a Markdown report; - writes it to standard output.")
+    lint.add_argument("--json", type=Path, metavar="FILE", help="Write a JSON report.")
     return parser
+
+
+def score_value(value: str) -> int:
+    if not value.isdigit() or int(value) > 100:
+        raise argparse.ArgumentTypeError(f"{value!r} must be a whole number from 0 to 100.")
+    return int(value)
 
 
 def duration_ms(value: str) -> int:
@@ -354,10 +367,39 @@ def compare_contracts(args: argparse.Namespace) -> int:
     return EXIT_FAILED if SEVERITY_ORDER[diff.severity] <= SEVERITY_ORDER[args.fail_on] else EXIT_OK
 
 
+def lint_contract(args: argparse.Namespace) -> int:
+    try:
+        overview = load_contract(args.spec)
+    except UsageError as error:
+        print(f"api-qa: {error}", file=sys.stderr)
+        return EXIT_USAGE
+    report = overview.quality
+    print(f"{overview.title} {overview.version}: contract quality {report.score} / 100 ({report.grade})", file=sys.stderr)
+    for fix in report.top_fixes:
+        where = f" ({plural(fix.endpoints, 'endpoint')})" if fix.endpoints else ""
+        print(f"  +{fix.points:<3} {fix.advice}{where}", file=sys.stderr)
+    try:
+        if args.markdown == "-":
+            sys.stdout.write(report.markdown)
+        elif args.markdown:
+            Path(args.markdown).write_text(report.markdown, encoding="utf-8")
+        if args.json:
+            args.json.write_text(report.model_dump_json(indent=2), encoding="utf-8")
+    except OSError as error:
+        print(f"api-qa: the report could not be written: {error}", file=sys.stderr)
+        return EXIT_USAGE
+    if report.score < args.min_score:
+        print(f"api-qa: the score {report.score} is below --min-score {args.min_score}.", file=sys.stderr)
+        return EXIT_FAILED
+    return EXIT_OK
+
+
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     if args.command == "diff":
         return compare_contracts(args)
+    if args.command == "lint":
+        return lint_contract(args)
     try:
         report = asyncio.run(run_checks(args))
     except UsageError as error:
