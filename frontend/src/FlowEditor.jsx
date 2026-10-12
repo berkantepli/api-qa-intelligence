@@ -62,7 +62,7 @@ export default function FlowEditor({ initialDraft, isNew, onSave, onCancel }) {
   };
 
   return <div className="flow-editor">
-    <label className="flow-edit-field"><span>Flow name</span><input value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} placeholder="Pet lifecycle" /><FieldError message={visible.title} /></label>
+    <label className="flow-edit-field"><span>Flow name</span><input value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} /><FieldError message={visible.title} /></label>
     <p className="flow-edit-help">Use <code>{"{{name}}"}</code> in a path, query value, or body to send a value an earlier step saved. Leave a path parameter such as <code>{"{ownerId}"}</code> as it is to fill it in before running.</p>
     <ol className="flow-edit-steps">{draft.steps.map((step, index) => <StepEditor
       key={index}
