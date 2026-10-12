@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { dailyTrend, dayKey, trendEndpoints, trendSamples, trendSummary } from "./trends.js";
+import { coverageTrend, dailyTrend, dayKey, recentRunsByEndpoint, slowdowns, trendEndpoints, trendSamples, trendSummary } from "./trends.js";
+import { sparklineLabel } from "./Sparkline.jsx";
 
 const overview = {
   operations: [
@@ -69,5 +70,59 @@ describe("daily trend", () => {
       current: { total: 5, passRate: 60, medianMs: 100, p95Ms: 300 },
       previous: { total: 1, passRate: 100, medianMs: 400, p95Ms: 400 },
     });
+  });
+});
+
+describe("slowdowns", () => {
+  const timedRun = (endpoint, day, durations) => run(endpoint, day, durations.map((ms) => check("PASS", ms)));
+
+  it("lists endpoints whose median grew by half and by 50 ms, slowest growth first", () => {
+    const samples = trendSamples(overview, [
+      timedRun("POST /pets", 1, [100, 110, 120]),
+      timedRun("POST /pets", 10, [300, 320, 340]),
+      timedRun("GET /pets/{petId}", 2, [40, 40, 40]),
+      timedRun("GET /pets/{petId}", 11, [80, 80, 80]),
+    ]);
+    const result = slowdowns(samples, { days: 7, now });
+
+    expect(result.compared).toBe(2);
+    expect(result.items).toEqual([{ key: "POST /pets", beforeMs: 110, afterMs: 320, ratio: 320 / 110 }]);
+  });
+
+  it("needs enough timed checks in both ranges", () => {
+    const samples = trendSamples(overview, [timedRun("POST /pets", 1, [100]), timedRun("POST /pets", 10, [900, 900, 900])]);
+    expect(slowdowns(samples, { days: 7, now })).toEqual({ items: [], compared: 0 });
+  });
+});
+
+describe("coverage trend", () => {
+  it("counts each contract endpoint from the day it first ran", () => {
+    const samples = trendSamples(overview, [
+      run("POST /pets", 8, [check("FAIL", 10)]),
+      run("POST /pets", 11, [check("PASS", 10)]),
+      run("GET /pets/{petId}", 11, [check("PASS", 10)]),
+      run("DELETE /gone", 9, [check("PASS", 10)]),
+    ]);
+    const trend = coverageTrend(samples, ["POST /pets", "GET /pets/{petId}"], { days: 7, now });
+
+    expect(trend.map((day) => [day.day, day.percent])).toEqual([
+      ["2026-10-06", 0], ["2026-10-07", 0], ["2026-10-08", 50], ["2026-10-09", 50], ["2026-10-10", 50], ["2026-10-11", 100], ["2026-10-12", 100],
+    ]);
+    expect(trend.at(-1)).toMatchObject({ tested: 2, total: 2 });
+  });
+});
+
+describe("recent runs per endpoint", () => {
+  it("keeps the latest runs, oldest first, with a failed flag and median per run", () => {
+    const samples = trendSamples(overview, [
+      run("POST /pets", 9, [check("PASS", 100), check("FAIL", 300), check("PASS", 200)]),
+      run("POST /pets", 10, [check("PASS", 50)]),
+      run("POST /pets", 11, [check("PASS", 70)]),
+    ]);
+    const recent = recentRunsByEndpoint(samples, 2)["POST /pets"];
+
+    expect(recent.map(({ failed, medianMs }) => [failed, medianMs])).toEqual([[false, 50], [false, 70]]);
+    expect(recentRunsByEndpoint(samples)["POST /pets"][0]).toMatchObject({ failed: true, medianMs: 200 });
+    expect(sparklineLabel(recentRunsByEndpoint(samples)["POST /pets"])).toBe("Last 3 runs: 1 failed, 50 ms to 200 ms");
   });
 });

@@ -1219,6 +1219,7 @@ function App() {
             onSetCriticality={setEndpointCriticality}
             onOpenFlows={openFlowsPage}
             trendRuns={apiTrendRuns}
+            timeLimitMs={maxDurationMs}
           />
         ) : page === "flows" ? (
           <FlowsPage

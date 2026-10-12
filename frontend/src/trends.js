@@ -24,7 +24,7 @@ export function trendSamples(overview, runs = []) {
       }
       // Imported Newman and JUnit results store 0 when the file had no duration.
       const duration = Number.isFinite(result.duration_ms) && !(result.imported && result.duration_ms === 0) ? result.duration_ms : null;
-      samples.push({ at, key, outcome: result.result, durationMs: duration });
+      samples.push({ at, key, runId: run.id, outcome: result.result, durationMs: duration });
     }
   }
   return samples;
@@ -85,4 +85,77 @@ export function trendSummary(samples, { days = 30, now = new Date(), endpoint = 
 // Endpoints that have at least one sample, for the endpoint picker.
 export function trendEndpoints(samples) {
   return [...new Set(samples.map((sample) => sample.key).filter(Boolean))].sort();
+}
+
+const median = (values) => {
+  const sorted = [...values].sort((a, b) => a - b);
+  return sorted.length ? percentile(sorted, 0.5) : null;
+};
+const rangeStart = (now, daysBack) => new Date(now.getFullYear(), now.getMonth(), now.getDate() - daysBack + 1);
+
+// Endpoints whose median response time grew the most against the range before. Both ranges need
+// `minSamples` timed checks, and the median must grow by `minRatio` and `minIncreaseMs`, so a
+// single slow call or a few milliseconds of noise are not reported. `compared` counts endpoints
+// that had enough data in both ranges.
+export function slowdowns(samples, { days = 30, now = new Date(), minSamples = 3, minRatio = 1.5, minIncreaseMs = 50, limit = 5 } = {}) {
+  const end = rangeStart(now, 0); // the start of tomorrow
+  const start = rangeStart(now, days);
+  const previousStart = rangeStart(now, 2 * days);
+  const byEndpoint = new Map();
+  for (const sample of samples) {
+    if (!sample.key || sample.durationMs == null || sample.at < previousStart || sample.at >= end) continue;
+    if (!byEndpoint.has(sample.key)) byEndpoint.set(sample.key, { current: [], previous: [] });
+    byEndpoint.get(sample.key)[sample.at >= start ? "current" : "previous"].push(sample.durationMs);
+  }
+  let compared = 0;
+  const items = [];
+  for (const [key, { current, previous }] of byEndpoint) {
+    if (current.length < minSamples || previous.length < minSamples) continue;
+    compared += 1;
+    const before = median(previous);
+    const after = median(current);
+    const ratio = before > 0 ? after / before : Infinity;
+    if (ratio >= minRatio && after - before >= minIncreaseMs) items.push({ key, beforeMs: before, afterMs: after, ratio });
+  }
+  items.sort((a, b) => b.ratio - a.ratio || b.afterMs - a.afterMs);
+  return { items: items.slice(0, limit), compared };
+}
+
+// Per day, the share of the contract's endpoints that had run at least once by the end of that
+// day, the same rule as "Endpoints tested" on Coverage & Risk.
+export function coverageTrend(samples, endpointKeys = [], { days = 30, now = new Date() } = {}) {
+  const contract = new Set(endpointKeys);
+  const firstRun = new Map();
+  for (const sample of samples) {
+    if (!contract.has(sample.key)) continue;
+    const known = firstRun.get(sample.key);
+    if (!known || sample.at < known) firstRun.set(sample.key, sample.at);
+  }
+  const firsts = [...firstRun.values()];
+  return Array.from({ length: days }, (_, index) => {
+    const date = rangeStart(now, days - index);
+    const endOfDay = new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1);
+    const tested = firsts.filter((at) => at < endOfDay).length;
+    return { day: dayKey(date), date, tested, total: contract.size, percent: contract.size ? Math.round((tested / contract.size) * 100) : 0 };
+  });
+}
+
+// The latest `limit` runs of each endpoint, oldest first: when, whether a check or step failed,
+// and the median response time of that run. A flow run counts once per endpoint it called.
+export function recentRunsByEndpoint(samples, limit = 12) {
+  const runs = new Map();
+  for (const sample of samples) {
+    if (!sample.key) continue;
+    const id = `${sample.key}::${sample.runId ?? sample.at.getTime()}`;
+    if (!runs.has(id)) runs.set(id, { key: sample.key, at: sample.at, failed: false, durations: [] });
+    const run = runs.get(id);
+    if (sample.outcome !== "PASS") run.failed = true;
+    if (sample.durationMs != null) run.durations.push(sample.durationMs);
+  }
+  const byEndpoint = {};
+  for (const run of [...runs.values()].sort((a, b) => a.at - b.at)) {
+    (byEndpoint[run.key] ??= []).push({ at: run.at, failed: run.failed, medianMs: median(run.durations) });
+  }
+  for (const key of Object.keys(byEndpoint)) byEndpoint[key] = byEndpoint[key].slice(-limit);
+  return byEndpoint;
 }

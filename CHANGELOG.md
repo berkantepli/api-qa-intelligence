@@ -2,6 +2,13 @@
 
 The version lives in the [`VERSION`](VERSION) file and follows [Semantic Versioning](https://semver.org/). Before 1.0.0, a new feature raises the minor number (0.**x**.0) and a fix or visual change raises the patch number (0.x.**y**).
 
+## 1.16.0 — 2026-10-12
+
+- **Endpoints tested** over time on **Trends**: the share of the contract's endpoints that had run at least once by each day, with the change over the range.
+- **Slowed down** on **Trends** lists the endpoints whose median response time grew by at least 50% and 50 ms against the days before (3 or more timed checks in both ranges); select one to see its trend.
+- The response time chart draws the API's response time limit as a dashed line.
+- Each tested endpoint on **Coverage & Risk** shows a small line of its latest 12 runs' response times, with failed runs marked.
+
 ## 1.15.0 — 2026-10-12
 
 - **Trends** on **Coverage & Risk**: the daily pass rate and the median and 95th-percentile response time over the last 7, 30, or 90 days, for the whole API or one endpoint, each compared with the same number of days before. Checks and flow steps both count; days without checks are left empty. Hover a day for its numbers, or open **Show as table**.

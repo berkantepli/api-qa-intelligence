@@ -7,7 +7,9 @@ import { GAP_KINDS } from "./coverageGaps.js";
 import ErrorAlert from "./ErrorAlert.jsx";
 import Icon from "./Icon.jsx";
 import { RISK_LEVELS, RISK_RULES } from "./riskScore.js";
+import Sparkline from "./Sparkline.jsx";
 import TrendsPanel from "./TrendsPanel.jsx";
+import { recentRunsByEndpoint, trendSamples } from "./trends.js";
 
 const statusLabels = { failing: "Failing", untested: "Not tested", passing: "Passing" };
 const filters = [
@@ -122,7 +124,7 @@ function download(content, fileName, type) {
 export default function CoveragePage({
   overview, apiRuns, onOpenEndpoint, onGoToSpecs,
   inputsByOperation, filesByOperation, targetUrl, targetProblem, bulkRun, onBulkRun, onStopBulkRun, onDismissBulkRun, onImportTestResults, contractChanges,
-  lifecycle = null, onOpenFlows, trendRuns = [], criticality = {}, onSetCriticality,
+  lifecycle = null, onOpenFlows, trendRuns = [], timeLimitMs = null, criticality = {}, onSetCriticality,
 }) {
   const [filterId, setFilterId] = useState("all");
   const [importMessage, setImportMessage] = useState(null);
@@ -149,6 +151,7 @@ export default function CoveragePage({
   }
 
   const { endpoints, totals } = computeCoverage(overview, apiRuns, Date.now(), contractChanges, lifecycle, criticality);
+  const recentRuns = recentRunsByEndpoint(trendSamples(overview, trendRuns));
   const flowTotals = lifecycle?.totals;
   const filter = filters.find((item) => item.id === filterId) ?? filters[0];
   const visible = endpoints.filter(filter.matches);
@@ -184,7 +187,7 @@ export default function CoveragePage({
 
     <ContractChanges changes={contractChanges} endpoints={endpoints} overview={overview} />
 
-    <TrendsPanel overview={overview} runs={trendRuns} />
+    <TrendsPanel overview={overview} runs={trendRuns} timeLimitMs={timeLimitMs} />
 
     {(planning || bulkRun) && <BulkRunPanel
       overview={overview}
@@ -226,7 +229,7 @@ export default function CoveragePage({
           <span className={`method-tag method-${endpoint.method.toLowerCase()}`}>{endpoint.method}</span>
           <span className="coverage-endpoint"><strong>{endpoint.path}</strong><small>{endpoint.summary || "API endpoint"}</small></span>
           <span className={`coverage-status coverage-status-${endpoint.status}`} title={endpoint.statusSource === "flow" ? `From the latest ${endpoint.flowTitle || "flow"} run` : undefined}>{statusLabels[endpoint.status]}{endpoint.statusSource === "flow" && <small>via flow</small>}</span>
-          <span className="coverage-checks">{endpoint.coveredChecks}/{endpoint.runnableChecks} checks{endpoint.importedTests > 0 && <small>+ {endpoint.importedTests} imported {endpoint.importedTests === 1 ? "test" : "tests"}</small>}<small>{endpoint.lastRunAt ? `last run ${new Date(endpoint.lastRunAt).toLocaleString()}` : "never run"}</small></span>
+          <span className="coverage-checks">{endpoint.coveredChecks}/{endpoint.runnableChecks} checks{endpoint.importedTests > 0 && <small>+ {endpoint.importedTests} imported {endpoint.importedTests === 1 ? "test" : "tests"}</small>}<small>{endpoint.lastRunAt ? `last run ${new Date(endpoint.lastRunAt).toLocaleString()}` : "never run"}</small><Sparkline runs={recentRuns[endpoint.key]} /></span>
           <span className="coverage-risks">
             <b className={`risk-score risk-score-${endpoint.risk.level}`} aria-label={`Risk score ${endpoint.risk.score} of 100, ${levelLabels[endpoint.risk.level]}`}>{endpoint.risk.score}<small>{levelLabels[endpoint.risk.level]}</small></b>
             {endpoint.risk.factors.map((factor) => <i key={factor.id} className={factorClass(factor)} title={endpoint.risks.find((risk) => risk.id === factor.id)?.detail}>+{factor.points} {factor.label}</i>)}
