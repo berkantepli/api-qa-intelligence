@@ -170,6 +170,12 @@ api-qa run --spec openapi.yaml --target https://staging.example.com \
 
 A ready-to-copy GitHub Actions job is in [`docs/examples/github-actions-api-qa.yml`](docs/examples/github-actions-api-qa.yml).
 
+## Contract quality
+
+Every import scores how well the contract supports testing, from 0 to 100 with a grade (A from 90, B from 75, C from 60, D from 40, F below). Fixed, weighted rules are checked on every endpoint they apply to: success responses have a JSON schema (3), required inputs have an example, default, or enum (3), a valid request can be built (2), 4xx responses are documented (2), inputs have limits such as a format, enum, length, or range (1), secured endpoints document 401 or 403 (1), endpoints that take a record id document 404 (1), unique operationIds (1), summaries (1), and input descriptions (1); the contract also needs a server (2). Rules that do not apply to an endpoint are left out, and some give partial credit (the share of inputs with an example). No AI is involved.
+
+On the overview, the **Contract quality** card opens the report: the fixes worth most points, each rule's score, and the findings per endpoint, with **Open endpoint** and **Copy as Markdown**. In CI, `api-qa lint openapi.yaml --min-score 70` prints the score and top fixes, writes `--markdown` (`-` for standard output) and `--json` reports, and exits `1` below the minimum. `POST /api/v1/specs/quality` scores an overview; APIs saved before 1.11 are scored when their overview opens.
+
 ## Comparing contract versions
 
 `api-qa diff` compares two versions of a contract, as files or URLs, from a client's point of view:

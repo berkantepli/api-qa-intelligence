@@ -2,13 +2,25 @@
 
 The version lives in the [`VERSION`](VERSION) file and follows [Semantic Versioning](https://semver.org/). Before 1.0.0, a new feature raises the minor number (0.**x**.0) and a fix or visual change raises the patch number (0.x.**y**).
 
-## 1.11.0 — 2026-10-12
+## 1.12.0 — 2026-10-12
 
 ### Sharper coverage
 - **Coverage gaps** match a runnable check to an input by what its request does compared with the valid request: it leaves the input out, or sends another value in a parameter, query, form field, or JSON body field. A title that names an input no longer counts on its own. AI ideas and imported tests are still matched by their words, and short, common names such as `id` or `name` need a clear form (`{id}`, "id parameter", "invalid id", "without name").
 - Tests imported from Newman or JUnit get a category from their name, or from their status when they passed, so they count on the category strip, for *Only happy path tested* and *Auth not checked*, and for input gaps. Each Coverage row shows how many imported tests the endpoint has.
 - *Sensitive area* also reads an endpoint's summary, tags, and operation id, and the names of its inputs (*Sensitive data: cardNumber*).
 - A **Criticality** select on each Coverage row: **Critical** adds +20 *Marked critical* instead of the guess, **Not critical** drops *Sensitive area*. Marks are saved with the API and kept when it is imported again.
+
+## 1.11.1 — 2026-10-12
+
+- **New flow** opens with an empty flow name instead of a *Pet lifecycle* placeholder that looked filled in.
+
+## 1.11.0 — 2026-10-12
+
+### Contract quality
+- Every import scores how testable the contract is, from 0 to 100 with a grade from A to F, using fixed weighted rules per endpoint: success response schemas, examples for required inputs, a buildable valid request, documented 4xx, 401/403 on secured endpoints, and 404 on record endpoints, input limits, unique operationIds, summaries, input descriptions, and a declared server.
+- The overview's **Contract quality** card opens the report: the fixes worth most points, each rule's score, and the findings per endpoint, with **Open endpoint** and **Copy as Markdown**.
+- `api-qa lint SPEC` prints the score and top fixes, writes Markdown and JSON reports, and exits 1 below `--min-score`.
+- The API overview gains `quality`; `POST /api/v1/specs/quality` scores overviews saved before.
 
 ## 1.10.0 — 2026-10-12
 
