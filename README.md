@@ -216,7 +216,7 @@ npm test
 
 The backend tests replace outbound HTTP calls with an in-memory transport, so they never contact a target API or Ollama.
 
-Browser tests (Playwright) walk the main flows — import, passing and failing checks, schema differences, a missing-key finding, data surviving a cleared browser, Run again, a bulk run with data-changing endpoints, and Delete all — against a small target API with deliberate problems ([`frontend/e2e/target_api.py`](frontend/e2e/target_api.py)). They start the app on a throwaway database:
+Browser tests (Playwright) walk the main flows — import, passing and failing checks, schema differences, a missing-key finding, data surviving a cleared browser, Run again, a bulk run with data-changing endpoints, and Delete all — against a small target API with deliberate problems ([`frontend/e2e/target_api.py`](frontend/e2e/target_api.py)). They start the app on a throwaway database; each test empties it and resets the target API first, then sets up what it needs, so any test can run alone (`npx playwright test e2e/workspace.spec.js:LINE`) and a retry starts clean:
 
 ```bash
 cd frontend
