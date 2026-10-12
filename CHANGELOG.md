@@ -2,7 +2,7 @@
 
 The version lives in the [`VERSION`](VERSION) file and follows [Semantic Versioning](https://semver.org/). Before 1.0.0, a new feature raises the minor number (0.**x**.0) and a fix or visual change raises the patch number (0.x.**y**).
 
-## Unreleased
+## 1.14.0 — 2026-10-12
 
 ### Postman collections and HAR files
 - **Import Postman or HAR** on the overview compares a Postman collection (v2.0, v2.1) or a browser HAR file with the contract: the endpoints it calls, those it never calls, and requests to paths the contract does not document.
