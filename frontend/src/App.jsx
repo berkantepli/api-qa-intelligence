@@ -13,6 +13,8 @@ import { connectionLabel, targetUrlProblem } from "./targetConnection.js";
 import { postJson, requestJson } from "./apiClient.js";
 import ErrorAlert from "./ErrorAlert.jsx";
 import FlowsPage from "./FlowsPage.jsx";
+import QualityPanel from "./QualityPanel.jsx";
+import { qualityTone } from "./quality.js";
 import { draftToFlow, effectiveFlows, withoutFlowChanges, withSavedFlow } from "./flowEditor.js";
 import { buildFlowRequest, flowRunEntry, isFlowRun } from "./flows.js";
 import Icon from "./Icon.jsx";
@@ -180,6 +182,9 @@ function App() {
   const [flowPathValues, setFlowPathValues] = useState({});
   // Suggesting flows for an API saved before imports included them: { [apiId]: { loading, error } }.
   const [flowSuggestions, setFlowSuggestions] = useState({});
+  // The contract quality panel on the overview, and scoring APIs saved before imports included it.
+  const [showQuality, setShowQuality] = useState(false);
+  const [qualityRequests, setQualityRequests] = useState({});
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   // After importing an API whose title matches another saved API: { newId, oldId, oldSource }.
@@ -312,6 +317,16 @@ function App() {
     }).catch(() => setStorage((current) => ({ ...current, error: "Some changes could not be saved to the workspace database. They are kept in this browser; reload to try again." })));
   }, [savedApis, runHistory, storedInputs, storage.mode]);
   useEffect(() => { refreshAiStatus(); }, []);
+
+  // APIs saved before 1.11 have no quality report; ask the backend once when the overview opens.
+  useEffect(() => {
+    if (page !== "overview" || !overview || overview.quality !== undefined || qualityRequests[activeApiId]) return;
+    const apiId = activeApiId;
+    setQualityRequests((current) => ({ ...current, [apiId]: "loading" }));
+    postJson("/api/v1/specs/quality", overview, "The contract quality could not be scored.")
+      .then((quality) => setSavedApis((current) => current.map((api) => api.id === apiId ? { ...api, overview: { ...api.overview, quality } } : api)))
+      .catch(() => setQualityRequests((current) => ({ ...current, [apiId]: "failed" })));
+  }, [page, overview, activeApiId, qualityRequests]);
 
   // APIs saved before 1.3 have no flows in their overview; ask the backend once when Flows opens.
   useEffect(() => {
@@ -1240,11 +1255,13 @@ function App() {
               <button className="secondary-button" type="button" onClick={mergeImportedApi}>Merge into it</button>
               <button className="text-button" type="button" onClick={() => setMergeOffer(null)}>Keep separate</button>
             </div>}
-            <div className="stats-row">
+            <div className={`stats-row ${overview.quality ? "stats-row-4" : ""}`}>
               <div className="stat-card"><span className="stat-label">Endpoints</span><strong>{overview.operation_count}</strong><span className="stat-note">available to review</span></div>
               <button className="stat-card stat-card-link" type="button" onClick={openCoveragePage} title="Open Coverage & Risk"><span className="stat-label">Endpoints tested</span><strong>{apiCoverage.totals.tested} / {apiCoverage.totals.endpoints}</strong><span className="stat-note">{apiCoverage.totals.tested ? (apiCoverage.totals.failing ? <span className="history-fail">{apiCoverage.totals.failing} failing in latest run</span> : "all passing in latest run") : "run checks to start"}</span></button>
               <div className="stat-card"><span className="stat-label">Runnable checks</span><strong>{checkReadiness.total}</strong><span className="stat-note">{checkReadiness.needDetails ? `${checkReadiness.total - checkReadiness.needDetails} ready now · ${checkReadiness.needDetails} need request details` : "all ready to run"}</span></div>
+              {overview.quality && <button className={`stat-card stat-card-link ${showQuality ? "stat-card-active" : ""}`} type="button" onClick={() => setShowQuality((current) => !current)} aria-expanded={showQuality} title="How testable this contract is"><span className="stat-label">Contract quality</span><strong>{overview.quality.score} / 100 <span className={`quality-grade quality-${qualityTone(overview.quality.score)}`}>{overview.quality.grade}</span></strong><span className="stat-note">{overview.quality.top_fixes[0] ? `Top fix: +${overview.quality.top_fixes[0].points} ${overview.quality.top_fixes[0].advice.toLowerCase()}` : "nothing to fix"}</span></button>}
             </div>
+            {showQuality && overview.quality && <QualityPanel quality={overview.quality} operations={overview.operations} onOpenEndpoint={(index) => { selectOperation(index); setShowQuality(false); }} onClose={() => setShowQuality(false)} />}
             <div className="workspace-grid">
               <section className="panel endpoints-panel">
                 <div className="panel-header"><div><h2>Endpoints</h2><p>Select an endpoint to review its scenarios.</p></div><span className="count-pill">{overview.operation_count}</span></div>
