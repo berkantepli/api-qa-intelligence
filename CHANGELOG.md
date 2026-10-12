@@ -2,6 +2,21 @@
 
 The version lives in the [`VERSION`](VERSION) file and follows [Semantic Versioning](https://semver.org/). Before 1.0.0, a new feature raises the minor number (0.**x**.0) and a fix or visual change raises the patch number (0.x.**y**).
 
+## Unreleased
+
+### Target and authentication
+- **Target & auth** in the topbar holds the active API's target URL, response time limit, and credentials, for every page. The endpoint panel shows a one-line summary with **Change** instead of the two fields.
+- A credential the contract documents (an API key or `Authorization`) is entered once for the whole API and sent by every check, bulk run, and flow that needs it. An endpoint's own value still takes precedence, and *Call without authentication* still leaves it out.
+- **Get a token from a sign-in request** sends one request to a sign-in endpoint and puts the token from its JSON response into the credential (`Bearer` is added for `Authorization`). New route: `POST /api/v1/auth/sign-in`.
+- **Remember in this tab until it is closed** keeps credentials across reloads of the tab; they are still never saved to the workspace, evidence, or exports.
+
+### Checks
+- New contract checks: **Send the wrong type for …** for a typed path or query parameter and a typed body field (text where a number, boolean, array, or object is expected), and **Send an undocumented request field** when the schema sets `additionalProperties: false`. Both expect a documented 4xx response. Import an API again to get them.
+
+### Simpler by default
+- Coverage & Risk and the overview start in a simple view. **Advanced view** (on Coverage & Risk, or in Settings) adds the risk score and its rules, criticality, Trends, **Import test results**, and duplicate hints.
+- The README starts with the one-line Docker command and marks the AI features as optional.
+
 ## 1.16.1 — 2026-10-12
 
 - Summary cards stay on one line above phone width, whatever their number: Overview, Coverage & Risk (the Lifecycle flows card used to wrap onto a row of its own), the Postman and HAR panel, run details (a flow run's Skipped used to wrap), and the Settings facts. On phones they use two columns, and an odd last card takes the whole row.
