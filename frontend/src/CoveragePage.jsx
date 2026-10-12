@@ -125,6 +125,7 @@ export default function CoveragePage({
   overview, apiRuns, onOpenEndpoint, onGoToSpecs,
   inputsByOperation, filesByOperation, targetUrl, targetProblem, bulkRun, onBulkRun, onStopBulkRun, onDismissBulkRun, onImportTestResults, contractChanges,
   lifecycle = null, onOpenFlows, trendRuns = [], timeLimitMs = null, criticality = {}, onSetCriticality,
+  advanced = false, onAdvancedChange,
 }) {
   const [filterId, setFilterId] = useState("all");
   const [importMessage, setImportMessage] = useState(null);
@@ -153,7 +154,9 @@ export default function CoveragePage({
   const { endpoints, totals } = computeCoverage(overview, apiRuns, Date.now(), contractChanges, lifecycle, criticality);
   const recentRuns = recentRunsByEndpoint(trendSamples(overview, trendRuns));
   const flowTotals = lifecycle?.totals;
-  const filter = filters.find((item) => item.id === filterId) ?? filters[0];
+  // The advanced view adds the risk score, criticality, trends, and imported test results.
+  const shownFilters = filters.filter((item) => advanced || item.id !== "high");
+  const filter = shownFilters.find((item) => item.id === filterId) ?? shownFilters[0];
   const visible = endpoints.filter(filter.matches);
   const exportReport = (format) => {
     const coverage = { endpoints, totals, contractChanges };
@@ -167,7 +170,8 @@ export default function CoveragePage({
     <div className="coverage-heading">
       <p className="page-lede">{overview.title} · based on {totals.checksExecuted} {totals.checksExecuted === 1 ? "check" : "checks"} in Run history.</p>
       <div className="coverage-export">
-        <button className="secondary-button" type="button" onClick={() => reportInput.current?.click()} title="Add test results: an api-qa run --json report, a Newman JSON report, or JUnit XML"><Icon name="upload" size={14} /> Import test results</button>
+        <label className="advanced-toggle" title="Show the risk score, criticality, trends, and test results imported from CI or other tools"><input type="checkbox" checked={advanced} onChange={(event) => onAdvancedChange(event.target.checked)} /> Advanced view</label>
+        {advanced && <button className="secondary-button" type="button" onClick={() => reportInput.current?.click()} title="Add test results: an api-qa run --json report, a Newman JSON report, or JUnit XML"><Icon name="upload" size={14} /> Import test results</button>}
         <input ref={reportInput} type="file" accept="application/json,.json,application/xml,text/xml,.xml" hidden onChange={importTestResults} />
         <button className="secondary-button" type="button" onClick={() => exportReport("md")}><Icon name="arrow" size={14} /> Export Markdown</button>
         <button className="secondary-button" type="button" onClick={() => exportReport("json")}><Icon name="arrow" size={14} /> Export JSON</button>
@@ -181,13 +185,13 @@ export default function CoveragePage({
       <div className="stat-card"><span className="stat-label">Endpoints tested</span><strong>{totals.tested} / {totals.endpoints}</strong><span className="stat-note">{totals.coveragePercent}% coverage</span><span className="coverage-meter" aria-hidden="true"><span style={{ width: `${totals.coveragePercent}%` }} /></span></div>
       <div className="stat-card"><span className="stat-label">Failing endpoints</span><strong className={totals.failing ? "history-fail" : undefined}>{totals.failing}</strong><span className="stat-note">in their latest run</span></div>
       <div className="stat-card"><span className="stat-label">Untested write endpoints</span><strong className={totals.untestedWrites ? "coverage-warning" : undefined}>{totals.untestedWrites}</strong><span className="stat-note">POST, PUT, PATCH, DELETE</span></div>
-      <button className="stat-card stat-card-link" type="button" onClick={() => setFilterId("high")} title="Show high-risk endpoints"><span className="stat-label">High-risk endpoints</span><strong className={totals.highRisk ? "history-fail" : undefined}>{totals.highRisk}</strong><span className="stat-note">risk score {RISK_LEVELS[0].min} or more</span></button>
+      {advanced && <button className="stat-card stat-card-link" type="button" onClick={() => setFilterId("high")} title="Show high-risk endpoints"><span className="stat-label">High-risk endpoints</span><strong className={totals.highRisk ? "history-fail" : undefined}>{totals.highRisk}</strong><span className="stat-note">risk score {RISK_LEVELS[0].min} or more</span></button>}
       {flowTotals?.flows > 0 && <button className="stat-card stat-card-link" type="button" onClick={onOpenFlows} title="Open Flows"><span className="stat-label">Lifecycle flows passing</span><strong className={flowTotals.failing ? "history-fail" : undefined}>{flowTotals.passing} / {flowTotals.flows}</strong><span className="stat-note">{[flowTotals.failing && `${flowTotals.failing} failing`, flowTotals.untested && `${flowTotals.untested} never run`].filter(Boolean).join(" · ") || "all passing in their latest run"}</span></button>}
     </div>
 
     <ContractChanges changes={contractChanges} endpoints={endpoints} overview={overview} />
 
-    <TrendsPanel overview={overview} runs={trendRuns} timeLimitMs={timeLimitMs} />
+    {advanced && <TrendsPanel overview={overview} runs={trendRuns} timeLimitMs={timeLimitMs} />}
 
     {(planning || bulkRun) && <BulkRunPanel
       overview={overview}
@@ -207,21 +211,21 @@ export default function CoveragePage({
     <section className="history-group coverage-list">
       <div className="coverage-toolbar">
         <div className="coverage-filters" role="tablist" aria-label="Filter endpoints">
-          {filters.map((item) => {
+          {shownFilters.map((item) => {
             const count = endpoints.filter(item.matches).length;
             if (item.optional && !count && item.id !== filter.id) return null;
             return <button key={item.id} type="button" role="tab" aria-selected={item.id === filter.id} className={item.id === filter.id ? "selected" : ""} onClick={() => setFilterId(item.id)}>{item.label}<span>{count}</span></button>;
           })}
         </div>
         <button className="secondary-button coverage-run-button" type="button" disabled={planning || Boolean(bulkRun) || !visible.length} onClick={() => setPlanning(true)}><Icon name="run" size={13} /> Run checks</button>
-        <details className="risk-rules">
+        {advanced && <details className="risk-rules">
           <summary>How the risk score works</summary>
           <p>Each endpoint's score is the sum of the rules below, capped at 100: <strong>high</strong> from {RISK_LEVELS[0].min}, <strong>medium</strong> from {RISK_LEVELS[1].min}. Impact comes from the contract, evidence from Run history. No AI is used, so the same history always gives the same score.</p>
           <table>
             <thead><tr><th>Rule</th><th>Points</th><th>When it applies</th></tr></thead>
             <tbody>{RISK_RULES.map((rule) => <tr key={rule.id}><td><i className={factorClass(rule)}>{rule.label}</i></td><td>+{rule.points}</td><td>{rule.kind === "impact" ? "Impact" : "Evidence"} · {rule.description}</td></tr>)}</tbody>
           </table>
-        </details>
+        </details>}
         <span className="coverage-legend" aria-hidden="true"><i className="coverage-category coverage-category-passing">Passed</i><i className="coverage-category coverage-category-failing">Failures</i><i className="coverage-category coverage-category-not_run">Not run</i><i className="coverage-category coverage-category-none">No check</i></span>
       </div>
       {visible.length ? <ul className="history-runs">{visible.map((endpoint) => <li key={endpoint.key}>
@@ -231,22 +235,22 @@ export default function CoveragePage({
           <span className={`coverage-status coverage-status-${endpoint.status}`} title={endpoint.statusSource === "flow" ? `From the latest ${endpoint.flowTitle || "flow"} run` : undefined}>{statusLabels[endpoint.status]}{endpoint.statusSource === "flow" && <small>via flow</small>}</span>
           <span className="coverage-checks">{endpoint.coveredChecks}/{endpoint.runnableChecks} checks{endpoint.importedTests > 0 && <small>+ {endpoint.importedTests} imported {endpoint.importedTests === 1 ? "test" : "tests"}</small>}<small>{endpoint.lastRunAt ? `last run ${new Date(endpoint.lastRunAt).toLocaleString()}` : "never run"}</small><Sparkline runs={recentRuns[endpoint.key]} /></span>
           <span className="coverage-risks">
-            <b className={`risk-score risk-score-${endpoint.risk.level}`} aria-label={`Risk score ${endpoint.risk.score} of 100, ${levelLabels[endpoint.risk.level]}`}>{endpoint.risk.score}<small>{levelLabels[endpoint.risk.level]}</small></b>
-            {endpoint.risk.factors.map((factor) => <i key={factor.id} className={factorClass(factor)} title={endpoint.risks.find((risk) => risk.id === factor.id)?.detail}>+{factor.points} {factor.label}</i>)}
+            {advanced && <b className={`risk-score risk-score-${endpoint.risk.level}`} aria-label={`Risk score ${endpoint.risk.score} of 100, ${levelLabels[endpoint.risk.level]}`}>{endpoint.risk.score}<small>{levelLabels[endpoint.risk.level]}</small></b>}
+            {endpoint.risk.factors.filter((factor) => advanced || factor.kind !== "impact").map((factor) => <i key={factor.id} className={factorClass(factor)} title={endpoint.risks.find((risk) => risk.id === factor.id)?.detail}>{advanced && `+${factor.points} `}{factor.label}</i>)}
           </span>
           <Icon className="history-chevron" name="chevron" size={15} />
           <span className="coverage-categories" aria-label="Checks by category">{endpoint.categories.map((category) => <i key={category.id} className={`coverage-category coverage-category-${category.state}`} title={`${category.label}: ${categoryStates[category.state]}`}>{categoryShort[category.id]}</i>)}</span>
         </button>
         <div className="coverage-extras">
           <GapDetails endpoint={endpoint} />
-          <label className="coverage-criticality" title="Auto guesses from the path, description, and inputs. Critical adds +20 to the risk score; Not critical drops Sensitive area.">
+          {advanced && <label className="coverage-criticality" title="Auto guesses from the path, description, and inputs. Critical adds +20 to the risk score; Not critical drops Sensitive area.">
             Criticality
             <select value={endpoint.criticality ?? "auto"} onChange={(event) => onSetCriticality(endpoint.key, event.target.value === "auto" ? null : event.target.value)}>
               <option value="auto">Auto</option>
               <option value="critical">Critical</option>
               <option value="normal">Not critical</option>
             </select>
-          </label>
+          </label>}
         </div>
       </li>)}</ul> : <p className="coverage-empty">No endpoints match this filter.</p>}
     </section>

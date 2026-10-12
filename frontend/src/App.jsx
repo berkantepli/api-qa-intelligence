@@ -32,6 +32,8 @@ import { buildWorkspaceExport, mergeWorkspace, parseWorkspaceImport, workspaceFi
 import { persistableInputs } from "./bulkRun.js";
 import { isEmptyWorkspace, workspaceRequests } from "./workspaceSync.js";
 import { buildCheckRequest, describeOperation, isValidJson, readFileUploads, requestReadiness, requestValues } from "./requestBuilder.js";
+import { apiCredentialList, readSessionCredentials, withApiCredentials, writeSessionCredentials } from "./apiCredentials.js";
+import ConnectionPanel from "./ConnectionPanel.jsx";
 import { buildEditedScenario, createDraft, editedCheckSummary, isEditedScenario, statusCodeSuggestions, validateDraftFields } from "./scenarioDraft.js";
 
 const DEFAULT_TARGET_URL = "http://127.0.0.1:8000";
@@ -43,6 +45,7 @@ const STORAGE_KEYS = {
   activeApi: "api-qa-intelligence-active-api",
   runHistory: "api-qa-intelligence-run-history",
   requestInputs: "api-qa-intelligence-request-inputs",
+  advancedView: "api-qa-intelligence-advanced-view",
 };
 
 function readStoredJson(key, fallback) {
@@ -126,6 +129,8 @@ function FillHint({ hint }) {
 
 function App() {
   const [theme, setTheme] = useState(() => localStorage.getItem(STORAGE_KEYS.theme) || "dark");
+  // The advanced view adds the risk score, criticality, trends, imported test results, and duplicate hints.
+  const [advancedView, setAdvancedView] = useState(() => readStoredJson(STORAGE_KEYS.advancedView, false) === true);
   const [savedApis, setSavedApis] = useState(() => readStoredJson(STORAGE_KEYS.savedApis, []));
   const [activeApiId, setActiveApiId] = useState(() => localStorage.getItem(STORAGE_KEYS.activeApi) || "");
   const activeApi = savedApis.find((api) => api.id === activeApiId);
@@ -170,6 +175,13 @@ function App() {
   const synced = useRef(null);
   const syncQueue = useRef(Promise.resolve());
   const [requestFiles, setRequestFiles] = useState({});
+  // API-wide credentials by saved API: { [apiId]: { "parameter:header:Authorization": value } }. They live in
+  // memory, or in this tab's session storage for APIs where "Remember in this tab" is on.
+  const [apiCredentials, setApiCredentials] = useState(readSessionCredentials);
+  const [rememberCredentials, setRememberCredentials] = useState(() => Object.fromEntries(Object.keys(readSessionCredentials()).map((apiId) => [apiId, true])));
+  const [showConnection, setShowConnection] = useState(false);
+  // The sign-in request body typed for each API; it may hold a password, so it is never stored.
+  const [signInBodies, setSignInBodies] = useState({});
   // Per endpoint: { loading, summary, error, marks: { [inputKey]: { kind, reason } } } from "Fill with AI".
   const [sampleFill, setSampleFill] = useState({});
   const [targetUrl, setTargetUrl] = useState(() => resolveApiTarget(savedApis.find((api) => api.id === activeApiId)) || DEFAULT_TARGET_URL);
@@ -203,7 +215,12 @@ function App() {
   const aiScenarioIdeas = operationScenarios.map((scenario, scenarioIndex) => ({ scenario, scenarioIndex })).filter(({ scenario }) => scenario.source === "ai");
   const contractScenarios = operationScenarios.filter((scenario) => !isEditedScenario(scenario));
   const scenarioIdeaStatus = scenarioIdeaState[`${activeApiId}:${operationKey}`] ?? {};
-  const apiInputs = requestInputs[activeApiId] ?? {};
+  // What the user typed per endpoint, and the same with the API-wide credentials filled in.
+  const ownApiInputs = requestInputs[activeApiId] ?? {};
+  const sharedCredentials = apiCredentials[activeApiId] ?? {};
+  const apiInputs = useMemo(() => withApiCredentials(overview, ownApiInputs, sharedCredentials), [overview, ownApiInputs, sharedCredentials]);
+  const credentialList = useMemo(() => apiCredentialList(overview), [overview]);
+  const credentialsSet = credentialList.filter((credential) => sharedCredentials[credential.key]?.trim()).length;
   // Optional per-API response time limit in milliseconds; null means no limit.
   const maxDurationMs = savedApis.find((api) => api.id === activeApiId)?.maxDurationMs ?? null;
   // What is typed in the time limit field; only a whole number from 1 to 120000 is saved.
@@ -270,8 +287,12 @@ function App() {
 
   useEffect(() => { writeStored(STORAGE_KEYS.savedApis, JSON.stringify(savedApis)); }, [savedApis]);
   useEffect(() => { writeStored(STORAGE_KEYS.activeApi, activeApiId); }, [activeApiId]);
+  useEffect(() => { writeStored(STORAGE_KEYS.advancedView, JSON.stringify(advancedView)); }, [advancedView]);
   useEffect(() => { writeStored(STORAGE_KEYS.runHistory, JSON.stringify(runHistory)); }, [runHistory]);
   useEffect(() => { writeStored(STORAGE_KEYS.requestInputs, JSON.stringify(storedInputs)); }, [storedInputs]);
+  useEffect(() => {
+    writeSessionCredentials(Object.fromEntries(Object.entries(apiCredentials).filter(([apiId, values]) => rememberCredentials[apiId] && Object.keys(values).length)));
+  }, [apiCredentials, rememberCredentials]);
 
   // Load the workspace database once. On its first use, this browser's saved data moves into it.
   useEffect(() => {
@@ -668,14 +689,14 @@ function App() {
     let filled = 0;
     for (const item of comparison.matched) {
       const key = `${item.operation.method} ${item.operation.path}`;
-      const result = mergeInputs(apiInputs[key], item.suggested, replace);
+      const result = mergeInputs(ownApiInputs[key], item.suggested, replace);
       if (result.filled) updates[key] = result.inputs;
       filled += result.filled;
     }
     setRequestInputs((current) => ({ ...current, [activeApiId]: { ...(current[activeApiId] ?? {}), ...updates } }));
     const after = (overview?.operations ?? []).reduce((count, operation) => {
       const key = `${operation.method} ${operation.path}`;
-      const ready = requestReadiness(describeOperation(operation), updates[key] ?? apiInputs[key], requestFiles[key]).ready;
+      const ready = requestReadiness(describeOperation(operation), updates[key] ? { ...apiInputs[key], ...updates[key] } : apiInputs[key], requestFiles[key]).ready;
       return count + (ready ? runnableCheckCount(operation) : 0);
     }, 0);
     const endpoints = Object.keys(updates).length;
@@ -881,9 +902,22 @@ function App() {
     setFlowPathValues((current) => ({ ...current, [activeApiId]: { ...current[activeApiId], [flowId]: { ...current[activeApiId]?.[flowId], [name]: value } } }));
   }
 
-  // A credential typed on the Flows page also fills it in the overview for the same endpoints.
+  // A credential typed on the Flows page is the API-wide one, so every endpoint uses it too.
   function updateFlowCredential(credential, value) {
-    for (const key of credential.operationKeys) mergeOperationInputs(activeApiId, key, { [credential.key]: value });
+    updateApiCredential(credential.key, value);
+    // An endpoint's own value would take precedence over what was just typed here.
+    for (const key of credential.operationKeys) {
+      if (ownApiInputs[key]?.[credential.key]) mergeOperationInputs(activeApiId, key, { [credential.key]: "" });
+    }
+  }
+
+  // The API-wide credential an endpoint's credential parameter falls back to, if one is set.
+  function sharedCredentialFor(parameter) {
+    return parameter.credential ? sharedCredentials[parameterInputKey(parameter)]?.trim() ?? "" : "";
+  }
+
+  function updateApiCredential(key, value) {
+    setApiCredentials((current) => ({ ...current, [activeApiId]: { ...(current[activeApiId] ?? {}), [key]: value } }));
   }
 
   async function runFlow(flow) {
@@ -1038,6 +1072,9 @@ function App() {
     setSavedApis([]);
     setRunHistory([]);
     setRequestInputs({});
+    setApiCredentials({});
+    setRememberCredentials({});
+    setSignInBodies({});
     setActiveApiId("");
     setTargetUrl(DEFAULT_TARGET_URL);
     setSelectedRunId(null);
@@ -1055,6 +1092,10 @@ function App() {
     const { remaining, nextActiveApi, activeChanged } = removeSavedApi(savedApis, apiId, activeApiId);
     setSavedApis(remaining);
     setPendingDeleteApiId(null);
+    const without = (current) => Object.fromEntries(Object.entries(current).filter(([id]) => id !== apiId));
+    setApiCredentials(without);
+    setRememberCredentials(without);
+    setSignInBodies(without);
     if (!activeChanged) return;
     setActiveApiId(nextActiveApi?.id ?? "");
     setTargetUrl(resolveApiTarget(nextActiveApi) || DEFAULT_TARGET_URL);
@@ -1181,9 +1222,30 @@ function App() {
               <span className="connection-dot" aria-hidden="true" />
               {connectionView.text}
             </button>
+            {activeApi && <button className={`connection-settings ${showConnection ? "active" : ""}`} type="button" onClick={() => setShowConnection((current) => !current)} aria-expanded={showConnection} aria-label="Target & auth" title="Target URL, response time limit, and credentials for this API">
+              <Icon name="key" size={14} /><span>Target &amp; auth</span>{credentialList.length > 0 && <small className={credentialsSet ? "connection-settings-set" : ""}>{credentialsSet ? "credentials set" : "no credentials"}</small>}
+            </button>}
           </div> : <nav className="breadcrumbs" aria-label="Current page"><strong>{page === "history" ? "Run history" : page === "import" ? "Import API" : "API specs"}</strong></nav>}
           <div className="topbar-right"><button className="theme-switch" type="button" onClick={() => setTheme((current) => current === "dark" ? "light" : "dark")} aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`} aria-pressed={theme === "light"} title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}><span className="theme-switch-track"><svg className="theme-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><circle cx="12" cy="12" r="4" /><path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32 1.41 1.41M2 12h2m16 0h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" /></svg><svg className="theme-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3 6.7 6.7 0 0 0 21 12.8Z" /></svg></span><span className="theme-knob" /></button></div>
         </header>
+        {showConnection && activeApi && page !== "import" && <ConnectionPanel
+          key={activeApiId}
+          overview={overview}
+          targetUrl={targetUrl}
+          onTargetUrlChange={updateTargetUrl}
+          targetProblem={targetProblem}
+          timeLimit={{ value: limitDraft ?? maxDurationMs ?? "", saved: maxDurationMs, invalid: limitInvalid, onChange: updateTimeLimit, onBlur: () => setLimitDraft(null) }}
+          credentials={credentialList}
+          credentialValues={sharedCredentials}
+          onCredentialChange={updateApiCredential}
+          remember={Boolean(rememberCredentials[activeApiId])}
+          onRememberChange={(remember) => setRememberCredentials((current) => ({ ...current, [activeApiId]: remember }))}
+          signIn={activeApi.signIn}
+          onSignInChange={(signIn) => updateSavedApi(activeApiId, { signIn })}
+          signInBody={signInBodies[activeApiId] ?? null}
+          onSignInBodyChange={(body) => setSignInBodies((current) => ({ ...current, [activeApiId]: body }))}
+          onClose={() => setShowConnection(false)}
+        />}
 
         {page === "settings" ? (
           <SettingsPage
@@ -1197,6 +1259,8 @@ function App() {
             onExport={exportWorkspace}
             onImport={importWorkspace}
             onDeleteAll={deleteAllData}
+            advancedView={advancedView}
+            onAdvancedViewChange={setAdvancedView}
           />
         ) : page === "coverage" ? (
           <CoveragePage
@@ -1220,6 +1284,8 @@ function App() {
             onOpenFlows={openFlowsPage}
             trendRuns={apiTrendRuns}
             timeLimitMs={maxDurationMs}
+            advanced={advancedView}
+            onAdvancedChange={setAdvancedView}
           />
         ) : page === "flows" ? (
           <FlowsPage
@@ -1364,8 +1430,7 @@ function App() {
               </section>
               <section className="panel scenario-panel">
                 <div className="panel-header scenario-header"><div><div className="panel-kicker"><Icon name="spark" size={15} /> RUNNABLE CHECKS {isDataChangingMethod && <span className="mutation-badge">May change data</span>}</div><h2>{operation?.method} <span>{operation?.path}</span></h2><p>These checks include a complete request and can be executed now.</p>{operation && !operation.response_schemas && <p className="schema-note">Import this API again to also check response bodies against the contract.</p>}</div></div>
-                <label className="target-field"><span>Target API base URL</span><input value={targetUrl} onChange={(event) => updateTargetUrl(event.target.value)} placeholder="http://127.0.0.1:8000" /></label>
-                <label className="target-field time-limit-field"><span>Response time limit</span><input type="number" min="1" max="120000" step="100" inputMode="numeric" value={limitDraft ?? maxDurationMs ?? ""} onChange={(event) => updateTimeLimit(event.target.value)} onBlur={() => setLimitDraft(null)} aria-invalid={limitInvalid} placeholder="No limit" />{limitInvalid ? <small className="request-input-error" role="alert">Enter a whole number from 1 to 120000 ms. The saved limit{maxDurationMs ? ` (${maxDurationMs} ms)` : ""} is kept.</small> : <small>ms · a slower response fails the check</small>}</label>
+                <div className="target-summary"><span><span>Target</span><code>{targetUrl.trim() || "not set"}</code></span>{maxDurationMs ? <span><span>Limit</span>{maxDurationMs} ms</span> : null}{credentialList.length > 0 && <span><span>Auth</span>{credentialsSet ? "API-wide credentials set" : "none set"}</span>}<button className="text-button" type="button" onClick={() => setShowConnection(true)}>Change</button></div>
                 {(operationParameters.length > 0 || bodyFields.length > 0 || needsRawJsonBody) && <div className="request-inputs">
                   <div className="request-inputs-heading">
                     <div><strong>Request details</strong><span>Fill in required values from your test environment.</span></div>
@@ -1374,8 +1439,10 @@ function App() {
                   {(operationFill.summary || operationFill.error) && <p className={`fill-summary ${operationFill.error ? "request-input-error" : ""}`} role="status">{operationFill.error || operationFill.summary}</p>}
                   {operationParameters.map((parameter) => <label className={`request-input ${parameter.required && !getParameterValue(parameter).trim() ? "request-input-missing" : ""}`} key={`${parameter.location}:${parameter.name}`}>
                     <span>{parameter.name}<small>{parameterLabel(parameter)}</small></span>
-                    <input type={parameter.location === "header" ? "password" : "text"} value={getParameterValue(parameter)} onChange={(event) => updateRequestInput(`parameter:${parameter.location}:${parameter.name}`, event.target.value)} placeholder={parameter.example == null ? `Enter ${parameter.name}` : String(parameter.example)} />
-                    {inputHelp(parameter) && <small className="request-input-help">{inputHelp(parameter)}</small>}
+                    <input type={parameter.location === "header" ? "password" : "text"} value={sharedCredentialFor(parameter) ? ownApiInputs[operationKey]?.[parameterInputKey(parameter)] ?? "" : getParameterValue(parameter)} onChange={(event) => updateRequestInput(`parameter:${parameter.location}:${parameter.name}`, event.target.value)} placeholder={sharedCredentialFor(parameter) ? "Using the API-wide value" : parameter.example == null ? `Enter ${parameter.name}` : String(parameter.example)} />
+                    {sharedCredentialFor(parameter)
+                      ? <small className="request-input-help">Set in Target &amp; auth for every endpoint; enter a value here to use another one for this endpoint only.</small>
+                      : inputHelp(parameter) && <small className="request-input-help">{inputHelp(parameter)}</small>}
                     {parameter.required && !getParameterValue(parameter).trim() && <small className="request-input-help request-input-required">Required to run the checks.</small>}
                     <FillHint hint={fillMarkFor(parameterInputKey(parameter))} />
                   </label>)}
@@ -1389,7 +1456,7 @@ function App() {
                   </label>)}
                   {needsRawJsonBody && <label className="request-input"><span>Request body JSON<small>required</small></span><textarea rows="6" value={rawJsonBodyValue} onChange={(event) => updateRequestInput("body:__raw", event.target.value)} placeholder="Enter a complete JSON request body" />{rawJsonBodyValue.trim() && !rawJsonBodyIsValid && <small className="request-input-help request-input-error">Enter valid JSON before running checks.</small>}</label>}
                 </div>}
-                <DuplicateNotice pairs={duplicatePairs} scenarios={operationScenarios} disabled={running} onDrop={dropDuplicate} onKeepBoth={keepDuplicatePair} />
+                {advancedView && <DuplicateNotice pairs={duplicatePairs} scenarios={operationScenarios} disabled={running} onDrop={dropDuplicate} onKeepBoth={keepDuplicatePair} />}
                 <div className="scenario-list">
                   {availableScenarios.map((scenario, index) => {
                     const result = results[index];
@@ -1400,7 +1467,7 @@ function App() {
                           <input type="checkbox" checked={checked} disabled={running} onChange={() => toggleScenario(index)} />
                           <span className="custom-check"><Icon name="check" size={13} /></span>
                         </label>
-                        <div className="scenario-content"><div className="scenario-title-row"><span className={`category-pill category-${scenario.category}`}>{categoryLabels[scenario.category] || scenario.category}</span>{isEditedScenario(scenario) && <span className="edited-pill">AI idea · edited</span>}{duplicateIndexes.has(scenario.scenarioIndex) && <span className="duplicate-pill">Possible duplicate</span>}</div><h3>{scenario.title}</h3><p>{scenario.rationale}</p>
+                        <div className="scenario-content"><div className="scenario-title-row"><span className={`category-pill category-${scenario.category}`}>{categoryLabels[scenario.category] || scenario.category}</span>{isEditedScenario(scenario) && <span className="edited-pill">AI idea · edited</span>}{advancedView && duplicateIndexes.has(scenario.scenarioIndex) && <span className="duplicate-pill">Possible duplicate</span>}</div><h3>{scenario.title}</h3><p>{scenario.rationale}</p>
                         {isEditedScenario(scenario) && <p className="edited-check-summary">{editedCheckSummary(scenario.request_example)}</p>}
                         {isEditedScenario(scenario) && staleCheckReasons(scenario, operation).length > 0 && <div className="stale-check" role="note"><strong>Review against the current contract</strong><ul>{staleCheckReasons(scenario, operation).map((reason) => <li key={reason}>{reason}</li>)}</ul></div>}
                         {isEditedScenario(scenario) && editingDraft?.scenarioIndex !== scenario.scenarioIndex && <div className="card-actions"><button className="text-button" type="button" disabled={running} onClick={() => openDraftEditor(scenario.scenarioIndex)}>{draftStash[draftKey(scenario)] ? "Continue editing" : "Edit"}</button><button className="text-button danger" type="button" disabled={running} onClick={() => removeEditedCheck(scenario.scenarioIndex)}>Remove</button></div>}
@@ -1418,7 +1485,7 @@ function App() {
                   {savedCheck?.operationKey === operationKey && <div className="alert success-alert saved-check-notice" role="status"><Icon name="check" size={16} /><span>“{savedCheck.title}” was saved as a check under Runnable checks{inputsReady ? "." : "; complete the request details above to run it."}</span>{inputsReady && <button className="text-button" type="button" onClick={() => setHighlightedCheck(savedCheck.scenarioIndex)}>Show it</button>}</div>}
                   {scenarioIdeaStatus.skipped > 0 && <small className="ai-suggestions-note">Skipped {scenarioIdeaStatus.skipped} {scenarioIdeaStatus.skipped === 1 ? "idea that repeats" : "ideas that repeat"} an existing check.</small>}
                   {aiScenarioIdeas.length ? <div className="ai-suggestions-list">{aiScenarioIdeas.map(({ scenario, scenarioIndex }) => <article className="ai-suggestion-card" key={`${scenario.title}-${scenarioIndex}`}>
-                    <div className="scenario-title-row"><span className={`category-pill category-${scenario.category}`}>{categoryLabels[scenario.category] || scenario.category}</span><span className="review-pill">Review · not runnable</span>{duplicateIndexes.has(scenarioIndex) && <span className="duplicate-pill">Possible duplicate</span>}{draftStash[draftKey(scenario)] && editingDraft?.scenarioIndex !== scenarioIndex && <span className="edited-pill">Draft in progress</span>}</div>
+                    <div className="scenario-title-row"><span className={`category-pill category-${scenario.category}`}>{categoryLabels[scenario.category] || scenario.category}</span><span className="review-pill">Review · not runnable</span>{advancedView && duplicateIndexes.has(scenarioIndex) && <span className="duplicate-pill">Possible duplicate</span>}{draftStash[draftKey(scenario)] && editingDraft?.scenarioIndex !== scenarioIndex && <span className="edited-pill">Draft in progress</span>}</div>
                     <h3>{scenario.title}</h3><p>{scenario.rationale}</p>
                     {editingDraft?.scenarioIndex === scenarioIndex
                       ? draftEditor

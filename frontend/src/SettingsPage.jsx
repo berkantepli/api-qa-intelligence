@@ -49,7 +49,7 @@ function AiDiagnosis({ diagnosis }) {
   </div>;
 }
 
-export default function SettingsPage({ aiStatus, onRefreshAiStatus, aiDiagnosis, onRunDiagnosis, storageMode, savedApiCount, runCount, onExport, onImport, onDeleteAll }) {
+export default function SettingsPage({ aiStatus, onRefreshAiStatus, aiDiagnosis, onRunDiagnosis, storageMode, savedApiCount, runCount, onExport, onImport, onDeleteAll, advancedView = false, onAdvancedViewChange }) {
   const fileInput = useRef(null);
   const [importMessage, setImportMessage] = useState(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -74,7 +74,7 @@ export default function SettingsPage({ aiStatus, onRefreshAiStatus, aiDiagnosis,
   return <section className="history-page settings-page">
     <div className="page-eyebrow">PREFERENCES</div>
     <h1>Settings</h1>
-    <p className="page-lede">Check the AI model and manage your saved workspace data.</p>
+    <p className="page-lede">Check the AI model, choose how much the pages show, and manage your saved workspace data.</p>
 
     <section className="settings-card">
       <div className="settings-card-heading">
@@ -93,6 +93,13 @@ export default function SettingsPage({ aiStatus, onRefreshAiStatus, aiDiagnosis,
       {aiStatus?.reachable && !aiStatus.model_available && <p className="settings-note">The Ollama server is running but <code>{aiStatus.model}</code> is not installed. Installed models: {aiStatus.available_models?.length ? aiStatus.available_models.join(", ") : "none"}.</p>}
       {aiStatus && !aiStatus.loading && !aiStatus.reachable && <p className="settings-note">Start Ollama or check <code>OLLAMA_BASE_URL</code>. Everything except the AI features keeps working without it.</p>}
       {aiDiagnosis && <AiDiagnosis diagnosis={aiDiagnosis} />}
+    </section>
+
+    <section className="settings-card">
+      <div className="settings-card-heading">
+        <div><h2>Advanced view</h2><p>Adds the risk score, endpoint criticality, and trends to Coverage &amp; Risk, test results imported from CI or other tools, and hints about checks that may test the same thing. Off by default to keep the pages simple.</p></div>
+        <label className="advanced-toggle"><input type="checkbox" checked={advancedView} onChange={(event) => onAdvancedViewChange(event.target.checked)} /> Show advanced features</label>
+      </div>
     </section>
 
     <section className="settings-card">

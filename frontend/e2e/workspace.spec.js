@@ -28,6 +28,17 @@ async function runAll(page) {
   await run;
 }
 
+// The target URL, time limit, and credentials live in the Target & auth panel under the topbar.
+async function openTarget(page) {
+  await page.getByRole("button", { name: /Target & auth/ }).click();
+  await expect(page.locator(".connection-panel")).toBeVisible();
+}
+
+// The risk score, criticality, trends, and imported results are shown in the advanced view.
+async function showAdvanced(page) {
+  await page.getByLabel("Advanced view").check();
+}
+
 // Imports the target API's contract the way a user does, and waits until it is saved.
 async function importPets(page) {
   await page.goto("/");
@@ -73,6 +84,8 @@ test("imports a contract from a URL", async ({ page }) => {
 
   await expect(page.getByRole("heading", { name: "E2E Pets" })).toBeVisible();
   await expect(page.locator(".endpoint-row")).toHaveCount(4);
+  await expect(page.locator(".target-summary")).toContainText(TARGET_URL);
+  await openTarget(page);
   await expect(page.locator(".target-field input").first()).toHaveValue(TARGET_URL);
 });
 
@@ -133,12 +146,13 @@ test("does not run checks without a usable target", async ({ page }) => {
   await importPets(page);
   await endpoint(page, "GET", "/pets").click();
   await page.getByRole("button", { name: "Select all" }).click();
+  await openTarget(page);
   const target = page.locator(".target-field input").first();
   const run = page.getByRole("button", { name: /Run selected/ });
 
   await target.fill("");
   await expect(page.locator(".connection-status")).toContainText("No target URL");
-  await expect(page.getByText("Enter a Target API base URL to run checks.")).toBeVisible();
+  await expect(page.locator(".run-footer")).toContainText("Enter a Target API base URL to run checks.");
   await expect(run).toBeDisabled();
 
   await target.fill("not a url");
@@ -243,6 +257,11 @@ test("runs data-changing checks in bulk only after confirmation", async ({ page 
 test("scores each endpoint's risk and explains the score", async ({ page }) => {
   await importPets(page);
   await nav(page, "Coverage");
+  // The simple view names the risks without a score.
+  await expect(page.locator(".coverage-row .risk-score")).toHaveCount(0);
+  await expect(page.locator(".coverage-row").filter({ has: page.locator(".method-post") }).first()).toContainText("Never tested");
+  await expect(page.locator(".coverage-row").filter({ has: page.locator(".method-post") }).first()).not.toContainText("Changes data");
+  await showAdvanced(page);
 
   const rows = page.locator(".coverage-row");
   await expect(rows.first().locator(".risk-score")).toBeVisible();
@@ -257,13 +276,17 @@ test("scores each endpoint's risk and explains the score", async ({ page }) => {
 test("lists the coverage gaps of an endpoint", async ({ page }) => {
   await importPets(page);
   await enterPetId(page);
-  await runAll(page);
+  // Only the valid request runs; the wrong-type check for id, which expects 404, does not.
+  await check(page, "Valid request").locator(".scenario-select").click();
+  const run = saved(page, "runs");
+  await page.getByRole("button", { name: /Run selected/ }).click();
+  await run;
   await nav(page, "Coverage");
 
   const item = page.locator(".history-runs > li").filter({ has: page.locator(".coverage-row", { hasText: "/pets/{id}" }) });
   await item.locator(".coverage-gaps summary").click();
-  await expect(item.locator(".coverage-gap-list")).toContainText("No invalid-value check for path parameter id");
-  await expect(item.locator(".coverage-gap-list")).toContainText("HTTP 404 is documented, but no check expects it");
+  await expect(item.locator(".coverage-gap-list")).toContainText("An invalid-value check for path parameter id has not run yet");
+  await expect(item.locator(".coverage-gap-list")).toContainText("HTTP 404 is expected by a check but has never been received");
   await expect(item.locator(".coverage-gap-codes")).toContainText("200Received");
 });
 
@@ -294,6 +317,7 @@ test("runs a flow that passes the created id to the next request", async ({ page
   await expect(row("get", "/pets/{id}").locator(".coverage-status")).toHaveText("Failingvia flow");
 
   // Trends count every check and flow step of the day, with a tooltip and a table view.
+  await showAdvanced(page);
   const trends = page.locator(".trends-panel");
   const passRate = trends.locator(".trend-card").filter({ hasText: "Pass rate" });
   await expect(trends.locator(".trend-card").first()).toContainText("Endpoints tested");
@@ -407,6 +431,7 @@ test("imports Newman and JUnit results so other test suites count on Coverage", 
 test("marks an endpoint critical or not critical, and keeps the mark", async ({ page }) => {
   await importPets(page);
   await nav(page, "Coverage");
+  await showAdvanced(page);
   const item = page.locator(".history-runs > li").filter({ has: page.locator(".coverage-row", { hasText: "List orders" }) });
   await expect(item.locator(".coverage-row")).toContainText("+10 Sensitive area: orders");
 
@@ -446,7 +471,7 @@ test("shows what changed when a contract is imported again", async ({ page }) =>
   await expect(panel.locator("li").filter({ hasText: "GET /pets/{id}" }).first()).toContainText("New documented response.");
   // A new endpoint is scored once, as never tested; a changed one adds Changed in the contract.
   await expect(page.locator(".coverage-row").filter({ hasText: "/pets/{id}" }).filter({ has: page.locator(".method-delete") })).not.toContainText("in the contract");
-  await expect(page.locator(".coverage-row").filter({ hasText: "/pets/{id}" }).filter({ has: page.locator(".method-get") })).toContainText("+15 Changed in the contract");
+  await expect(page.locator(".coverage-row").filter({ hasText: "/pets/{id}" }).filter({ has: page.locator(".method-get") })).toContainText("Changed in the contract");
 });
 
 test("matches a renamed contract by its source and offers to merge one with the same title", async ({ page }) => {
@@ -519,6 +544,39 @@ test("flags a saved AI check that no longer fits the contract", async ({ page, r
   await expect(warning).toContainText("Review against the current contract");
   await expect(warning).toContainText("Sends header parameter X-Old, which the contract no longer has");
   await expect(warning).toContainText("Expects HTTP 410, which the contract does not document");
+});
+
+test("signs in once and sends the token to every endpoint that needs it", async ({ page, request }) => {
+  const contract = await (await request.get(`${TARGET_URL}/openapi.json`)).json();
+  contract.servers = [{ url: TARGET_URL }];
+  contract.paths["/login"] = { post: {
+    summary: "Sign in",
+    requestBody: { required: true, content: { "application/json": { schema: { type: "object", properties: { user: { type: "string", example: "qa" }, password: { type: "string", example: "wrong" } } } } } },
+    responses: { 200: { description: "signed in" }, 401: { description: "wrong password" } },
+  } };
+  await importFile(page, "auth-contract.json", contract);
+
+  await expect(page.locator(".connection-settings")).toContainText("no credentials");
+  await openTarget(page);
+  const panel = page.locator(".connection-panel");
+  await expect(panel).toContainText("used by 1 endpoint");
+  await panel.getByRole("button", { name: "Get a token from a sign-in request instead" }).click();
+  await expect(panel.getByLabel("Sign-in endpoint")).toHaveValue("POST /login");
+
+  // A wrong password is explained, then the right one fills X-Key for every endpoint.
+  await panel.getByRole("button", { name: "Sign in" }).click();
+  await expect(panel.locator(".error-alert")).toContainText("returned HTTP 401");
+  await panel.getByLabel(/Request body/).fill(JSON.stringify({ user: "qa", password: "e2e-secret" }));
+  await panel.getByRole("button", { name: "Sign in" }).click();
+  await expect(panel.locator(".success-alert")).toContainText("Signed in (HTTP 200, token at /access_token). X-Key is set for 1 endpoint.");
+  await expect(page.locator(".connection-settings")).toContainText("credentials set");
+  await panel.getByRole("button", { name: "Close target and authentication" }).click();
+
+  await endpoint(page, "GET", "/orders").click();
+  await expect(page.getByPlaceholder("Using the API-wide value")).toBeVisible();
+  await runAll(page);
+  // The valid request carries the token; "Call without authentication" still leaves it out.
+  expect(await (await request.get(`${TARGET_URL}/__order-keys`)).json()).toEqual(["e2e-token", null]);
 });
 
 test("deletes all saved data", async ({ page }) => {

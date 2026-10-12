@@ -4,6 +4,8 @@
 - GET /pets/{id} returns a pet without its required name, so the schema check fails.
 - GET /orders documents an API key but never asks for one, so "Call without authentication" fails.
 - POST /pets creates a pet and validates its body.
+- POST /login (not in the contract; a test adds it) returns a token, and GET /orders records the
+  X-Key values it receives, so a test can see the token reach every endpoint.
 - DELETE /pets/{id} is served but not documented, so a flow test adds it with the flow editor;
   a deleted pet is then not found until one is created again.
 """
@@ -13,6 +15,7 @@ from fastapi.responses import JSONResponse, Response
 
 app = FastAPI(openapi_url=None, docs_url=None, redoc_url=None)
 DELETED: set[str] = set()
+ORDER_KEYS: list[str | None] = []
 
 PET = {"type": "object", "required": ["id", "name"], "properties": {"id": {"type": "integer"}, "name": {"type": "string"}}}
 CONTRACT = {
@@ -64,6 +67,7 @@ def contract() -> dict:
 def reset() -> Response:
     """Not part of the contract: each end-to-end test starts with no pet deleted."""
     DELETED.clear()
+    ORDER_KEYS.clear()
     return Response(status_code=204)
 
 
@@ -97,5 +101,19 @@ def delete_pet(pet_id: str) -> Response:
 
 
 @app.get("/orders")
-def list_orders() -> list[dict]:
+def list_orders(request: Request) -> list[dict]:
+    ORDER_KEYS.append(request.headers.get("X-Key"))
     return [{"id": 10}]
+
+
+@app.get("/__order-keys", include_in_schema=False)
+def order_keys() -> list[str | None]:
+    return ORDER_KEYS
+
+
+@app.post("/login")
+async def login(request: Request) -> JSONResponse:
+    body = await request.json() if await request.body() else None
+    if not isinstance(body, dict) or body.get("password") != "e2e-secret":
+        return JSONResponse({"detail": "wrong password"}, status_code=401)
+    return JSONResponse({"access_token": "e2e-token", "token_type": "bearer"})
