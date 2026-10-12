@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { dailyTrend, TREND_RANGES, trendEndpoints, trendSamples, trendSummary } from "./trends.js";
+import { coverageTrend, dailyTrend, slowdowns, TREND_RANGES, trendEndpoints, trendSamples, trendSummary } from "./trends.js";
 
 const HEIGHT = 168;
 const MARGIN = { top: 10, right: 14, bottom: 24, left: 44 };
@@ -38,7 +38,9 @@ function segments(points) {
   return runs;
 }
 
-function LineChart({ label, days, series, yMax, formatValue, tooltipRows }) {
+// `threshold` draws a reference line such as the response time limit; `dots: false` draws a
+// continuous line with only the latest and hovered points marked.
+function LineChart({ label, days, series, yMax, formatValue, tooltipRows, threshold = null, dots = true, hasData = (day) => day.total > 0 }) {
   const [ref, width] = useWidth();
   const [hover, setHover] = useState(null);
   const plotWidth = Math.max(0, width - MARGIN.left - MARGIN.right);
@@ -62,18 +64,22 @@ function LineChart({ label, days, series, yMax, formatValue, tooltipRows }) {
         <text className="trend-axis" x={MARGIN.left - 8} y={y(tick)} dy="0.32em" textAnchor="end">{formatValue(tick)}</text>
       </g>)}
       {[...new Set(labelDays)].map((index) => <text key={index} className="trend-axis" x={x(index)} y={HEIGHT - 6} textAnchor={index === 0 ? "start" : index === days.length - 1 ? "end" : "middle"}>{shortDate(days[index].date)}</text>)}
+      {threshold && <g className="trend-threshold">
+        <line x1={MARGIN.left} x2={width - MARGIN.right} y1={y(threshold.value)} y2={y(threshold.value)} />
+        <text x={width - MARGIN.right} y={y(threshold.value) - 5} textAnchor="end">{threshold.label}</text>
+      </g>}
       {hovered && <line className="trend-crosshair" x1={x(hover)} x2={x(hover)} y1={MARGIN.top} y2={MARGIN.top + plotHeight} />}
       {series.map((item) => {
         const points = days.map((day, index) => item.value(day) == null ? null : [x(index), y(item.value(day))]);
         return <g key={item.id} className={`trend-series ${item.className}`}>
           {segments(points).filter((run) => run.length > 1).map((run) => <polyline key={run[0][0]} points={run.map((point) => point.join(",")).join(" ")} />)}
-          {points.map((point, index) => point && <circle key={index} cx={point[0]} cy={point[1]} r={hover === index ? 5 : 4} />)}
+          {points.map((point, index) => point && (dots || hover === index || index === points.length - 1) && <circle key={index} cx={point[0]} cy={point[1]} r={hover === index ? 5 : 4} />)}
         </g>;
       })}
     </svg>}
     {hovered && <div className={`trend-tooltip ${x(hover) > width / 2 ? "trend-tooltip-left" : ""}`} style={{ left: x(hover) }} role="status">
       <strong>{shortDate(hovered.date)}</strong>
-      {hovered.total ? tooltipRows(hovered).map(([key, text, className]) => <span key={key}>{className && <i className={`trend-key ${className}`} aria-hidden="true" />}{text}</span>) : <span>No checks ran</span>}
+      {hasData(hovered) ? tooltipRows(hovered).map(([key, text, className]) => <span key={key}>{className && <i className={`trend-key ${className}`} aria-hidden="true" />}{text}</span>) : <span>No checks ran</span>}
     </div>}
   </div>;
 }
@@ -87,7 +93,7 @@ function Delta({ current, previous, format, lowerIsBetter = false, days }) {
   return <small className={better ? "trend-better" : "trend-worse"}>{change > 0 ? "▲" : "▼"} {format(Math.abs(change))} vs the {days} days before</small>;
 }
 
-export default function TrendsPanel({ overview, runs }) {
+export default function TrendsPanel({ overview, runs, timeLimitMs = null }) {
   const [days, setDays] = useState(30);
   const [endpoint, setEndpoint] = useState("");
   const samples = useMemo(() => trendSamples(overview, runs), [overview, runs]);
@@ -98,7 +104,11 @@ export default function TrendsPanel({ overview, runs }) {
   const { current, previous } = trendSummary(samples, { days, now, endpoint: selected || null });
   const ran = trend.some((day) => day.total);
   const timed = trend.some((day) => day.timed);
-  const latencyMax = niceMax(Math.max(0, ...trend.map((day) => day.p95Ms ?? 0)));
+  const latencyMax = niceMax(Math.max(0, timeLimitMs ?? 0, ...trend.map((day) => day.p95Ms ?? 0)));
+  const endpointKeys = useMemo(() => (overview?.operations ?? []).map((operation) => `${operation.method} ${operation.path}`), [overview]);
+  const coverage = coverageTrend(samples, endpointKeys, { days, now });
+  const coverageChange = coverage.at(-1).percent - coverage[0].percent;
+  const slower = selected ? null : slowdowns(samples, { days, now });
 
   return <section className="panel trends-panel" aria-labelledby="trends-title">
     <div className="trends-heading">
@@ -115,6 +125,12 @@ export default function TrendsPanel({ overview, runs }) {
     </div>
     {!samples.length ? <p className="trends-empty">Run checks or flows to see how the pass rate and response times change over time.</p> : <>
       <div className="trends-grid">
+        {!selected && <div className="trend-card">
+          <div className="trend-card-heading"><span>Endpoints tested</span><strong>{coverage.at(-1).percent}%</strong><small>{coverageChange ? `${coverageChange > 0 ? "▲" : "▼"} ${Math.abs(coverageChange)} pts in ${days} days` : `Unchanged in ${days} days`}</small></div>
+          <LineChart label={`Share of endpoints tested, last ${days} days`} days={coverage} yMax={100} formatValue={(value) => `${value}%`} dots={false} hasData={() => true}
+            series={[{ id: "coverage", className: "trend-series-1", value: (day) => day.percent }]}
+            tooltipRows={(day) => [["percent", `${day.percent}% tested`], ["count", `${day.tested} of ${day.total} endpoints`]]} />
+        </div>}
         <div className="trend-card">
           <div className="trend-card-heading"><span>Pass rate</span><strong>{formatRate(current.passRate)}</strong><Delta current={current.passRate} previous={previous.passRate} format={(value) => `${value} pts`} days={days} /></div>
           {ran ? <LineChart label={`Daily pass rate, last ${days} days`} days={trend} yMax={100} formatValue={(value) => `${value}%`}
@@ -126,12 +142,22 @@ export default function TrendsPanel({ overview, runs }) {
           <div className="trend-card-heading"><span>Response time · median</span><strong>{formatMs(current.medianMs)}</strong><Delta current={current.medianMs} previous={previous.medianMs} format={formatMs} lowerIsBetter days={days} /></div>
           {timed ? <>
             <LineChart label={`Daily median and 95th percentile response time, last ${days} days`} days={trend} yMax={latencyMax} formatValue={formatMs}
+              threshold={timeLimitMs ? { value: timeLimitMs, label: `Limit ${formatMs(timeLimitMs)}` } : null}
               series={[{ id: "median", className: "trend-series-1", value: (day) => day.medianMs }, { id: "p95", className: "trend-series-2", value: (day) => day.p95Ms }]}
               tooltipRows={(day) => day.timed ? [["median", `Median ${formatMs(day.medianMs)}`, "trend-series-1"], ["p95", `95th percentile ${formatMs(day.p95Ms)}`, "trend-series-2"], ["count", `${day.timed} timed`]] : [["none", "No response times"]]} />
-            <div className="trend-legend"><span><i className="trend-key trend-series-1" aria-hidden="true" />Median</span><span><i className="trend-key trend-series-2" aria-hidden="true" />95th percentile</span></div>
+            <div className="trend-legend"><span><i className="trend-key trend-series-1" aria-hidden="true" />Median</span><span><i className="trend-key trend-series-2" aria-hidden="true" />95th percentile</span>{timeLimitMs && <span><i className="trend-key trend-key-threshold" aria-hidden="true" />Response time limit</span>}</div>
           </> : <p className="trends-empty">No response times in the last {days} days.</p>}
         </div>
       </div>
+      {slower && slower.compared > 0 && <div className="trend-slowdowns">
+        <strong>Slowed down</strong>
+        <small>Median response time against the {days} days before, for endpoints with 3 or more timed checks in both.</small>
+        {slower.items.length ? <ul>{slower.items.map((item) => <li key={item.key}>
+          <button type="button" className="text-button" onClick={() => setEndpoint(item.key)} title="Show this endpoint's trend"><code>{item.key}</code></button>
+          <span>{formatMs(item.beforeMs)} → {formatMs(item.afterMs)}</span>
+          <b>{item.ratio === Infinity ? `+${formatMs(item.afterMs - item.beforeMs)}` : `${item.ratio.toFixed(1)}×`}</b>
+        </li>)}</ul> : <p>No endpoint got 50% slower.</p>}
+      </div>}
       {ran && <details className="trends-table">
         <summary>Show as table</summary>
         <table>

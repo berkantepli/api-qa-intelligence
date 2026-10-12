@@ -249,8 +249,9 @@ test("runs a flow that passes the created id to the next request", async ({ page
 
   // Trends count every check and flow step of the day, with a tooltip and a table view.
   const trends = page.locator(".trends-panel");
-  await expect(trends.locator(".trend-card").first()).toContainText("Pass rate");
-  await expect(trends.locator(".trend-card").first().locator("strong")).toHaveText(/^\d+%$/);
+  const passRate = trends.locator(".trend-card").filter({ hasText: "Pass rate" });
+  await expect(trends.locator(".trend-card").first()).toContainText("Endpoints tested");
+  await expect(passRate.locator("strong")).toHaveText(/^\d+%$/);
   await trends.getByRole("combobox", { name: "Endpoint" }).selectOption("GET /pets/{id}");
   await trends.getByText("Show as table").click();
   await expect(trends.locator(".trends-table tbody tr")).toHaveCount(1);
@@ -258,6 +259,8 @@ test("runs a flow that passes the created id to the next request", async ({ page
   const box = await chart.boundingBox();
   await page.mouse.move(box.x + box.width - 16, box.y + 40);
   await expect(trends.locator(".trend-tooltip").first()).toContainText("checks");
+  // With one endpoint picked, the API-wide coverage chart steps aside.
+  await expect(trends.locator(".trend-card").filter({ hasText: "Endpoints tested" })).toHaveCount(0);
 });
 
 test("edits a flow to clean up after itself, and shows untested lifecycles on Coverage", async ({ page }) => {
