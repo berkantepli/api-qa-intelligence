@@ -2,6 +2,10 @@
 
 The version lives in the [`VERSION`](VERSION) file and follows [Semantic Versioning](https://semver.org/). Before 1.0.0, a new feature raises the minor number (0.**x**.0) and a fix or visual change raises the patch number (0.x.**y**).
 
+## 1.11.1 — 2026-10-12
+
+- **New flow** opens with an empty flow name instead of a *Pet lifecycle* placeholder that looked filled in.
+
 ## 1.11.0 — 2026-10-12
 
 ### Contract quality
