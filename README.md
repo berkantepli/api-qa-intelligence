@@ -52,7 +52,7 @@ From the repository root:
 python -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
-uvicorn app.main:app --app-dir backend --reload --port 8001
+uvicorn app.main:app --app-dir backend --reload --reload-dir backend --port 8001
 ```
 
 The API QA Intelligence docs are available at `http://127.0.0.1:8001/docs`. Import a file with `POST /api/v1/specs/import` using the multipart field name `file`, or import your target API’s OpenAPI URL with `POST /api/v1/specs/import-url` and `{"url":"http://127.0.0.1:8000/openapi.json"}`. Both import methods return the API title, version, operations, and baseline scenario suggestions; importing a spec does not call its API operations.
@@ -67,10 +67,10 @@ npm install
 npm run build
 cd ..
 source .venv/bin/activate
-uvicorn app.main:app --app-dir backend --reload --port 8001
+uvicorn app.main:app --app-dir backend --reload --reload-dir backend --port 8001
 ```
 
-Open `http://127.0.0.1:8001` for the API QA Intelligence interface and API. The backend serves the built frontend from `frontend/dist`.
+Open `http://127.0.0.1:8001` for the API QA Intelligence interface and API. The backend serves the built frontend from `frontend/dist`. `--reload-dir backend` restarts the server only when backend code changes; without it, the server also restarts for frontend files and for other git worktrees inside the repository. After pulling a new version, run `npm run build` again for the interface and restart the server so `/health` and the API docs report the new version.
 
 To run one explicit check, use `POST /api/v1/runs/execute`. Provide a base URL (it may include the server’s base path, such as `https://petstore3.swagger.io/api/v3`; the operation path is appended to it), method, path, optional query parameters, headers or JSON body, expected status codes, and optionally the operation’s `response_schemas` from the API overview. For example:
 
