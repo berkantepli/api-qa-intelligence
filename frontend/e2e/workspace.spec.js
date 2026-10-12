@@ -1,4 +1,5 @@
-// The main flows of the app against e2e/target_api.py, in order: they share one workspace database.
+// The main flows of the app against e2e/target_api.py. Each test starts from an empty workspace and a
+// reset target API and sets up what it needs, so a test can run alone, in any order, or be retried.
 import { spawnSync } from "node:child_process";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -6,16 +7,61 @@ import { join, resolve } from "node:path";
 import { expect, test } from "@playwright/test";
 import { python, TARGET_URL } from "../playwright.config.js";
 
-test.describe.configure({ mode: "serial" });
+// All tests share one backend database, which each test empties first (see playwright.config.js: one worker).
+test.beforeEach(async ({ request }) => {
+  expect((await request.delete("/api/v1/workspace")).status()).toBe(204);
+  expect((await request.post(`${TARGET_URL}/__reset`)).status()).toBe(204);
+});
 
 const endpoint = (page, method, path) => page.locator(".endpoint-row").filter({ has: page.locator(".method-tag", { hasText: method }) }).filter({ has: page.getByText(path, { exact: true }) });
 const nav = (page, label) => page.locator(".sidebar .nav-link").filter({ hasText: label }).click();
 const check = (page, title) => page.locator(".scenario-card").filter({ has: page.getByText(title, { exact: true }) });
 
+// The app saves to the backend in the background; a test that reloads or opens a new page waits for it.
+const saved = (page, kind) => page.waitForResponse((response) => response.request().method() === "PUT" && response.url().includes(`/api/v1/workspace/${kind}/`));
+
 async function runAll(page) {
   await page.getByRole("button", { name: "Select all" }).click();
+  const run = saved(page, "runs");
   await page.getByRole("button", { name: /Run selected/ }).click();
   await expect(page.getByRole("button", { name: "View run details" })).toBeVisible();
+  await run;
+}
+
+// Imports the target API's contract the way a user does, and waits until it is saved.
+async function importPets(page) {
+  await page.goto("/");
+  await page.getByPlaceholder("https://api.example.com/openapi.json").fill(`${TARGET_URL}/openapi.json`);
+  const api = saved(page, "apis");
+  await page.getByRole("button", { name: "Import API" }).click();
+  expect((await api).status()).toBe(204);
+  await expect(page.getByRole("heading", { name: "E2E Pets" })).toBeVisible();
+}
+
+// Types the path id of GET /pets/{id} (7, a pet the target knows) and waits until it is saved.
+async function enterPetId(page, value = "7") {
+  await endpoint(page, "GET", "/pets/{id}").click();
+  const inputs = saved(page, "inputs");
+  await page.getByPlaceholder("Enter id").fill(value);
+  await inputs;
+}
+
+// Runs every check of one endpoint from the overview.
+async function runEndpoint(page, method, path) {
+  await endpoint(page, method, path).click();
+  await runAll(page);
+}
+
+async function importFile(page, name, document) {
+  await page.goto("/");
+  await nav(page, "API specs");
+  await page.getByRole("button", { name: "Import API" }).first().click();
+  await page.getByRole("tab", { name: "Upload file" }).click();
+  await page.locator(".import-card input[type=file]").setInputFiles({ name, mimeType: "application/json", buffer: Buffer.from(JSON.stringify(document)) });
+  const api = saved(page, "apis");
+  await page.locator(".import-card").getByRole("button", { name: /Import API/ }).click();
+  await api;
+  await expect(page.locator(".overview-heading")).toBeVisible();
 }
 
 test("imports a contract from a URL", async ({ page }) => {
@@ -23,11 +69,7 @@ test("imports a contract from a URL", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Start with an API contract" })).toBeVisible();
   await expect(page.locator(".sample-api")).toHaveCount(4);
   await page.getByPlaceholder("https://api.example.com/openapi.json").fill(`${TARGET_URL}/openapi.json`);
-  // The app saves the imported API to the backend in the background; the next test opens a new browser
-  // that reads the workspace from the backend, so wait for the save before this test ends.
-  const saved = page.waitForResponse((response) => response.request().method() === "PUT" && response.url().includes("/api/v1/workspace/apis/"));
   await page.getByRole("button", { name: "Import API" }).click();
-  expect((await saved).status()).toBe(204);
 
   await expect(page.getByRole("heading", { name: "E2E Pets" })).toBeVisible();
   await expect(page.locator(".endpoint-row")).toHaveCount(4);
@@ -35,8 +77,7 @@ test("imports a contract from a URL", async ({ page }) => {
 });
 
 test("scores how testable the contract is and opens an endpoint from a finding", async ({ page }) => {
-  await page.goto("/");
-  await nav(page, "Overview");
+  await importPets(page);
   const card = page.locator(".stat-card").filter({ hasText: "Contract quality" });
   await expect(card).toContainText("/ 100");
   await card.click();
@@ -53,8 +94,7 @@ test("scores how testable the contract is and opens an endpoint from a finding",
 });
 
 test("passes a correct endpoint and checks its body", async ({ page }) => {
-  await page.goto("/");
-  await nav(page, "Overview");
+  await importPets(page);
   await endpoint(page, "GET", "/pets").click();
   await runAll(page);
 
@@ -65,8 +105,7 @@ test("passes a correct endpoint and checks its body", async ({ page }) => {
 });
 
 test("explains a body that breaks the contract", async ({ page }) => {
-  await page.goto("/");
-  await nav(page, "Overview");
+  await importPets(page);
   await endpoint(page, "GET", "/pets/{id}").click();
   await expect(page.getByText("Complete required request details first")).toBeVisible();
   const idField = page.locator(".request-input").filter({ has: page.getByPlaceholder("Enter id") });
@@ -82,8 +121,7 @@ test("explains a body that breaks the contract", async ({ page }) => {
 });
 
 test("flags an endpoint that does not ask for its documented key", async ({ page }) => {
-  await page.goto("/");
-  await nav(page, "Overview");
+  await importPets(page);
   await endpoint(page, "GET", "/orders").click();
   await runAll(page);
 
@@ -92,8 +130,7 @@ test("flags an endpoint that does not ask for its documented key", async ({ page
 });
 
 test("does not run checks without a usable target", async ({ page }) => {
-  await page.goto("/");
-  await nav(page, "Overview");
+  await importPets(page);
   await endpoint(page, "GET", "/pets").click();
   await page.getByRole("button", { name: "Select all" }).click();
   const target = page.locator(".target-field input").first();
@@ -120,6 +157,12 @@ test("does not run checks without a usable target", async ({ page }) => {
 });
 
 test("keeps the workspace after the browser is cleared", async ({ page }) => {
+  await importPets(page);
+  await runEndpoint(page, "GET", "/pets");
+  await enterPetId(page);
+  await runAll(page);
+  await runEndpoint(page, "GET", "/orders");
+
   await page.goto("/");
   await page.evaluate(() => localStorage.clear());
   await page.reload();
@@ -144,8 +187,8 @@ test("compares a Postman collection with the contract and reuses its values", as
       { name: "Health", request: { method: "GET", url: "{{baseUrl}}/health" } },
     ],
   };
-  await page.goto("/");
-  await nav(page, "Overview");
+  await importPets(page);
+  await enterPetId(page);
   await page.locator(".overview-heading input[type=file]").setInputFiles({ name: "pets.postman_collection.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(collection)) });
 
   const panel = page.locator(".request-import-panel");
@@ -168,7 +211,8 @@ test("compares a Postman collection with the contract and reuses its values", as
 });
 
 test("opens a run again with the same checks selected", async ({ page }) => {
-  await page.goto("/");
+  await importPets(page);
+  await runEndpoint(page, "GET", "/orders");
   await nav(page, "Run history");
   await page.locator(".history-group-toggle").first().click();
   await page.locator(".history-run").filter({ hasText: "GET /orders" }).click();
@@ -180,7 +224,7 @@ test("opens a run again with the same checks selected", async ({ page }) => {
 });
 
 test("runs data-changing checks in bulk only after confirmation", async ({ page }) => {
-  await page.goto("/");
+  await importPets(page);
   await nav(page, "Coverage");
   await page.locator(".coverage-run-button").click();
   const panel = page.locator(".bulk-run");
@@ -197,7 +241,7 @@ test("runs data-changing checks in bulk only after confirmation", async ({ page 
 });
 
 test("scores each endpoint's risk and explains the score", async ({ page }) => {
-  await page.goto("/");
+  await importPets(page);
   await nav(page, "Coverage");
 
   const rows = page.locator(".coverage-row");
@@ -211,7 +255,9 @@ test("scores each endpoint's risk and explains the score", async ({ page }) => {
 });
 
 test("lists the coverage gaps of an endpoint", async ({ page }) => {
-  await page.goto("/");
+  await importPets(page);
+  await enterPetId(page);
+  await runAll(page);
   await nav(page, "Coverage");
 
   const item = page.locator(".history-runs > li").filter({ has: page.locator(".coverage-row", { hasText: "/pets/{id}" }) });
@@ -222,7 +268,7 @@ test("lists the coverage gaps of an endpoint", async ({ page }) => {
 });
 
 test("runs a flow that passes the created id to the next request", async ({ page }) => {
-  await page.goto("/");
+  await importPets(page);
   await nav(page, "Flows");
   const flow = page.locator(".flow-card").filter({ has: page.getByRole("heading", { name: "Pet lifecycle" }) });
   await expect(flow.locator(".flow-step")).toHaveCount(2);
@@ -261,7 +307,7 @@ test("runs a flow that passes the created id to the next request", async ({ page
 });
 
 test("edits a flow to clean up after itself, and shows untested lifecycles on Coverage", async ({ page }) => {
-  await page.goto("/");
+  await importPets(page);
   await nav(page, "Flows");
   const flow = page.locator(".flow-card").filter({ has: page.getByRole("heading", { name: "Pet lifecycle" }) });
   await flow.getByRole("button", { name: "Edit" }).click();
@@ -311,7 +357,7 @@ test("imports a CLI report so CI runs count on Coverage", async ({ page }) => {
   });
   expect(cli.status, cli.stderr).toBe(0);
 
-  await page.goto("/");
+  await importPets(page);
   await nav(page, "Coverage");
   await page.locator(".coverage-export input[type=file]").setInputFiles(reportPath);
   await expect(page.locator(".success-alert")).toContainText("Imported 1 check on 1 endpoint from the CLI report");
@@ -339,7 +385,7 @@ test("imports Newman and JUnit results so other test suites count on Coverage", 
     ] },
   };
 
-  await page.goto("/");
+  await importPets(page);
   await nav(page, "Coverage");
   const input = page.locator(".coverage-export input[type=file]");
   await input.setInputFiles({ name: "newman.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(newman)) });
@@ -356,7 +402,7 @@ test("imports Newman and JUnit results so other test suites count on Coverage", 
 });
 
 test("marks an endpoint critical or not critical, and keeps the mark", async ({ page }) => {
-  await page.goto("/");
+  await importPets(page);
   await nav(page, "Coverage");
   const item = page.locator(".history-runs > li").filter({ has: page.locator(".coverage-row", { hasText: "List orders" }) });
   await expect(item.locator(".coverage-row")).toContainText("+10 Sensitive area: orders");
@@ -376,24 +422,13 @@ test("marks an endpoint critical or not critical, and keeps the mark", async ({ 
 
 test("shows what changed when a contract is imported again", async ({ page }) => {
   const contract = await (await fetch(`${TARGET_URL}/openapi.json`)).json();
-  const upload = (document) => ({ name: "pets-contract.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(document)) });
-  const importFile = async (document) => {
-    await page.goto("/");
-    await nav(page, "API specs");
-    await page.getByRole("button", { name: "Import API" }).first().click();
-    await page.getByRole("tab", { name: "Upload file" }).click();
-    await page.locator(".import-card input[type=file]").setInputFiles(upload(document));
-    await page.locator(".import-card").getByRole("button", { name: /Import API/ }).click();
-    await expect(page.locator(".overview-heading")).toBeVisible();
-  };
-
-  await importFile(contract);
+  await importFile(page, "pets-contract.json", contract);
   const changed = structuredClone(contract);
   changed.info.version = "1.1.0";
   changed.paths["/pets/{id}"].get.responses["410"] = { description: "gone" };
   delete changed.paths["/orders"];
   changed.paths["/pets/{id}"].delete = { summary: "Delete a pet", parameters: changed.paths["/pets/{id}"].get.parameters, responses: { 204: { description: "deleted" } } };
-  await importFile(changed);
+  await importFile(page, "pets-contract.json", changed);
 
   await expect(page.locator(".import-notice")).toContainText("1 new endpoint, 1 changed endpoint, 1 removed endpoint");
   await nav(page, "Coverage");
@@ -413,24 +448,16 @@ test("shows what changed when a contract is imported again", async ({ page }) =>
 
 test("matches a renamed contract by its source and offers to merge one with the same title", async ({ page }) => {
   const contract = await (await fetch(`${TARGET_URL}/openapi.json`)).json();
-  const importFile = async (name, document) => {
-    await page.goto("/");
-    await nav(page, "API specs");
-    await page.getByRole("button", { name: "Import API" }).first().click();
-    await page.getByRole("tab", { name: "Upload file" }).click();
-    await page.locator(".import-card input[type=file]").setInputFiles({ name, mimeType: "application/json", buffer: Buffer.from(JSON.stringify(document)) });
-    await page.locator(".import-card").getByRole("button", { name: /Import API/ }).click();
-    await expect(page.locator(".overview-heading")).toBeVisible();
-  };
+  await importFile(page, "pets-contract.json", contract);
 
   const renamed = structuredClone(contract);
   renamed.info.title = "E2E Pets Renamed";
-  await importFile("pets-contract.json", renamed);
+  await importFile(page, "pets-contract.json", renamed);
   await expect(page.locator(".import-notice")).toContainText("Imported E2E Pets again, now titled E2E Pets Renamed");
 
   const copy = structuredClone(renamed);
   copy.paths["/pets"].get.responses["500"] = { description: "error" };
-  await importFile("pets-copy.json", copy);
+  await importFile(page, "pets-copy.json", copy);
   await expect(page.locator(".merge-offer")).toContainText("imported from pets-contract.json");
   await page.getByRole("button", { name: "Merge into it" }).click();
   await expect(page.locator(".import-notice")).toContainText("1 changed endpoint");
@@ -443,13 +470,7 @@ test("matches a renamed contract by its source and offers to merge one with the 
 test("opening an endpoint from Coverage scrolls the endpoint list to it", async ({ page }) => {
   const paths = Object.fromEntries(Array.from({ length: 40 }, (_, index) => [`/items${String(index).padStart(2, "0")}`, { get: { summary: `Item ${index}`, responses: { 200: { description: "ok" } } } }]));
   const contract = { openapi: "3.0.3", info: { title: "Long API", version: "1.0.0" }, servers: [{ url: TARGET_URL }], paths };
-  await page.goto("/");
-  await nav(page, "API specs");
-  await page.getByRole("button", { name: "Import API" }).first().click();
-  await page.getByRole("tab", { name: "Upload file" }).click();
-  await page.locator(".import-card input[type=file]").setInputFiles({ name: "long.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(contract)) });
-  await page.locator(".import-card").getByRole("button", { name: /Import API/ }).click();
-  await expect(page.locator(".overview-heading")).toBeVisible();
+  await importFile(page, "long.json", contract);
 
   await nav(page, "Coverage");
   await page.locator(".coverage-row").filter({ hasText: "/items39" }).click();
@@ -464,6 +485,9 @@ test("opening an endpoint from Coverage scrolls the endpoint list to it", async 
 });
 
 test("flags a saved AI check that no longer fits the contract", async ({ page, request }) => {
+  await importPets(page);
+  // Leave the app first, so a background save from the open page cannot overwrite what is written next.
+  await page.goto("about:blank");
   // A saved AI check normally needs an AI model; here one is written straight into the saved workspace.
   const { savedApis } = await (await request.get("/api/v1/workspace")).json();
   const position = savedApis.findIndex((api) => api.source === `${TARGET_URL}/openapi.json`);
@@ -485,7 +509,7 @@ test("flags a saved AI check that no longer fits the contract", async ({ page, r
 
   await page.goto("/");
   await page.locator(".spec-card").filter({ has: page.getByText(api.title, { exact: true }) }).locator(".spec-card-open").click();
-  await endpoint(page, "GET", "/pets/{id}").click();
+  await enterPetId(page);
   const card = check(page, "Gone pet returns 410");
   await expect(card.locator(".edited-pill")).toHaveText("AI idea · edited");
   const warning = card.locator(".stale-check");
@@ -495,7 +519,7 @@ test("flags a saved AI check that no longer fits the contract", async ({ page, r
 });
 
 test("deletes all saved data", async ({ page }) => {
-  await page.goto("/");
+  await importPets(page);
   await nav(page, "Settings");
   await page.getByRole("button", { name: "Delete all" }).click();
   await page.getByRole("button", { name: "Delete everything" }).click();

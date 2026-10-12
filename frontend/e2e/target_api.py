@@ -60,6 +60,13 @@ def contract() -> dict:
     return CONTRACT
 
 
+@app.post("/__reset", include_in_schema=False)
+def reset() -> Response:
+    """Not part of the contract: each end-to-end test starts with no pet deleted."""
+    DELETED.clear()
+    return Response(status_code=204)
+
+
 @app.get("/pets")
 def list_pets() -> list[dict]:
     return [{"id": 1, "name": "Rex"}]
