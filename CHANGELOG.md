@@ -2,6 +2,14 @@
 
 The version lives in the [`VERSION`](VERSION) file and follows [Semantic Versioning](https://semver.org/). Before 1.0.0, a new feature raises the minor number (0.**x**.0) and a fix or visual change raises the patch number (0.x.**y**).
 
+## 1.10.0 — 2026-10-12
+
+### Sharper coverage
+- **Coverage gaps** match a runnable check to an input by what its request does compared with the valid request: it leaves the input out, or sends another value in a parameter, query, form field, or JSON body field. A title that names an input no longer counts on its own. AI ideas and imported tests are still matched by their words, and short, common names such as `id` or `name` need a clear form (`{id}`, "id parameter", "invalid id", "without name").
+- Tests imported from Newman or JUnit get a category from their name, or from their status when they passed, so they count on the category strip, for *Only happy path tested* and *Auth not checked*, and for input gaps. Each Coverage row shows how many imported tests the endpoint has.
+- *Sensitive area* also reads an endpoint's summary, tags, and operation id, and the names of its inputs (*Sensitive data: cardNumber*).
+- A **Criticality** select on each Coverage row: **Critical** adds +20 *Marked critical* instead of the guess, **Not critical** drops *Sensitive area*. Marks are saved with the API and kept when it is imported again.
+
 ## 1.9.2 — 2026-10-12
 
 - Opening an endpoint from **Coverage & Risk** (or **Run again** in Run history) scrolls the overview's endpoint list to it, so it is in sight in a long API.

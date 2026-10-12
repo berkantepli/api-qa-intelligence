@@ -1,7 +1,7 @@
 {
   "name": "api-qa-intelligence-web",
   "private": true,
-  "version": "1.9.2",
+  "version": "1.10.0",
   "license": "MIT",
   "type": "module",
   "scripts": {
