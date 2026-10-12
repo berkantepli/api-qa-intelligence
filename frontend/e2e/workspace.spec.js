@@ -184,6 +184,12 @@ test("runs a flow that passes the created id to the next request", async ({ page
   await expect(page.getByRole("heading", { name: "Flow: Pet lifecycle" })).toBeVisible();
   await expect(page.locator(".run-check").nth(1)).toContainText("GET http://127.0.0.1");
   await expect(page.locator(".run-check").nth(1)).toContainText("/pets/2");
+
+  // Each step counts as a run of the endpoint it called.
+  await nav(page, "Coverage");
+  const row = (method, path) => page.locator(".coverage-row").filter({ has: page.locator(`.method-${method}`) }).filter({ has: page.getByText(path, { exact: true }) });
+  await expect(row("post", "/pets").locator(".coverage-status")).toHaveText("Passingvia flow");
+  await expect(row("get", "/pets/{id}").locator(".coverage-status")).toHaveText("Failingvia flow");
 });
 
 test("edits a flow to clean up after itself, and shows untested lifecycles on Coverage", async ({ page }) => {

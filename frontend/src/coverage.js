@@ -30,8 +30,31 @@ export function flowRunsForApi(runs = [], apiId, savedApis = []) {
   return runs.filter((run) => run.kind === "flow" && runApiKey(run, idsByTitle) === apiId);
 }
 
-// Each flow's latest outcome, and the endpoints it creates records with. A flow whose latest run
-// skipped a step counts as failing: part of the lifecycle did not run.
+// Per endpoint, the newest flow run that sent a request to it: "failing" when any of its steps there
+// did not pass. Skipped steps sent nothing, so they do not count; runs of deleted flows still do.
+function flowStepEvidence(overview, flows, flowRuns) {
+  const evidence = {};
+  for (const run of [...flowRuns].sort(byNewest)) {
+    const outcomes = {};
+    for (const result of run.results ?? []) {
+      // Flow runs saved before 1.10.0 have no step_path; their filled paths match only literal routes.
+      const path = result.step_path ?? result.path;
+      if (!result.method || !path || result.result === "SKIPPED") continue;
+      const operation = stepOperation(overview, { method: result.method, path });
+      if (!operation) continue;
+      const key = endpointKey(operation);
+      outcomes[key] = outcomes[key] === "failing" || result.result !== "PASS" ? "failing" : "passing";
+    }
+    for (const [key, status] of Object.entries(outcomes)) {
+      const flowTitle = flows.find((flow) => flow.id === run.flowId)?.title ?? String(run.endpoint ?? "").replace(/^Flow: /, "");
+      evidence[key] ??= { status, createdAt: run.createdAt, flowTitle };
+    }
+  }
+  return evidence;
+}
+
+// Each flow's latest outcome, the endpoints it creates records with, and what flow steps showed
+// per endpoint. A flow whose latest run skipped a step counts as failing: part of the lifecycle did not run.
 export function flowCoverage(overview, flows = [], flowRuns = []) {
   const items = flows.map((flow) => {
     const latest = flowRuns.filter((run) => run.flowId === flow.id).sort(byNewest)[0];
@@ -43,7 +66,7 @@ export function flowCoverage(overview, flows = [], flowRuns = []) {
     return { id: flow.id, title: flow.title, status, lastRunAt: latest?.createdAt, createKeys };
   });
   const count = (status) => items.filter((item) => item.status === status).length;
-  return { flows: items, totals: { flows: items.length, passing: count("passing"), failing: count("failing"), untested: count("untested") } };
+  return { flows: items, endpoints: flowStepEvidence(overview, flows, flowRuns), totals: { flows: items.length, passing: count("passing"), failing: count("failing"), untested: count("untested") } };
 }
 
 // A check is flaky when its recent outcomes flip at least twice (for example PASS → FAIL → PASS);
@@ -84,14 +107,19 @@ function categoryCoverage(runnable, outcomes) {
 }
 
 // `contractChanges` is the saved API's comparison with its previous import, if any; `lifecycle` is
-// flowCoverage() for the API's flows, which flags create endpoints whose flows never ran.
+// flowCoverage() for the API's flows, which flags create endpoints whose flows never ran. A flow step
+// counts as a run of its endpoint: whichever is newer, the endpoint's own checks or a flow step, sets
+// its status. Categories, check counts, and gaps come from the endpoint's own checks only.
 // `criticality` is the saved API's own marks per endpoint key: "critical" or "normal".
 export function computeCoverage(overview, apiRuns = [], now = Date.now(), contractChanges = null, lifecycle = null, criticality = {}) {
   const endpoints = (overview?.operations ?? []).map((operation, operationIndex) => {
     const key = endpointKey(operation);
     const runs = apiRuns.filter((run) => run.endpoint === key).sort(byNewest);
     const latest = runs[0];
-    const status = !latest ? "untested" : hasProblems(latest.results) ? "failing" : "passing";
+    const flowStep = lifecycle?.endpoints?.[key];
+    const byFlow = Boolean(flowStep) && (!latest || new Date(flowStep.createdAt) > new Date(latest.createdAt));
+    const status = byFlow ? flowStep.status : !latest ? "untested" : hasProblems(latest.results) ? "failing" : "passing";
+    const lastRunAt = byFlow ? flowStep.createdAt : latest?.createdAt;
     const executed = runs.flatMap((run) => run.results ?? []);
     const executedTitles = new Set(executed.map((result) => result.title).filter(Boolean));
     const executedCategories = new Set(executed.map((result) => result.category).filter(Boolean));
@@ -101,10 +129,10 @@ export function computeCoverage(overview, apiRuns = [], now = Date.now(), contra
     const hasNegativeIdeas = (operation.scenarios ?? []).some((scenario) => scenario.category && scenario.category !== "happy_path");
     const outcomes = outcomesByTitle(runs);
     const flakyChecks = [...outcomes.entries()].filter(([, entry]) => isFlaky(entry.outcomes)).map(([title]) => title);
-    const stale = Boolean(latest) && now - new Date(latest.createdAt) > STALE_AFTER_DAYS * DAY_MS;
+    const stale = Boolean(lastRunAt) && now - new Date(lastRunAt) > STALE_AFTER_DAYS * DAY_MS;
 
     const risks = [];
-    if (status === "failing") risks.push({ id: "failing", label: "Failing in latest run" });
+    if (status === "failing") risks.push({ id: "failing", label: "Failing in latest run", ...(byFlow && { detail: flowStep.flowTitle ? `A step failed in the latest ${flowStep.flowTitle} flow run.` : "A step failed in the latest flow run." }) });
     if (status === "untested" && writes) risks.push({ id: "untested-write", label: "Changes data, not tested" });
     if (status !== "untested" && hasNegativeIdeas && [...executedCategories].every((category) => category === "happy_path")) {
       risks.push({ id: "happy-only", label: "Only happy path tested" });
@@ -120,7 +148,7 @@ export function computeCoverage(overview, apiRuns = [], now = Date.now(), contra
     const coveredChecks = runnable.filter((scenario) => executedTitles.has(scenario.title)).length;
     // Tests imported from Newman or JUnit are not the app's checks; they are counted on their own.
     const importedTests = new Set(executed.filter((result) => result.imported).map((result) => result.title)).size;
-    const contractChange = pendingChange(contractChanges, key, latest?.createdAt);
+    const contractChange = pendingChange(contractChanges, key, lastRunAt);
     const risk = scoreEndpoint({
       method: operation.method, path: operation.path, summary: operation.summary, operationId: operation.operation_id, tags: operation.tags,
       fieldNames: [...(operation.parameters ?? []).filter((parameter) => !parameter.credential).map((parameter) => parameter.name), ...(operation.request_body_fields ?? []).map((field) => field.name)],
@@ -135,11 +163,14 @@ export function computeCoverage(overview, apiRuns = [], now = Date.now(), contra
       path: operation.path,
       summary: operation.summary || operation.operation_id || "",
       status,
+      // "flow" when the latest evidence is a flow step, "check" when it is the endpoint's own checks.
+      statusSource: byFlow ? "flow" : latest ? "check" : null,
+      flowTitle: byFlow ? flowStep.flowTitle : null,
       writes,
       runCount: runs.length,
       importedTests,
       criticality: criticality?.[key] ?? null,
-      lastRunAt: latest?.createdAt,
+      lastRunAt,
       coveredChecks,
       runnableChecks: runnable.length,
       categories: categoryCoverage(runnable, outcomes),
@@ -207,6 +238,7 @@ export function coverageReportJson(overview, coverage, generatedAt = new Date())
       method: endpoint.method,
       path: endpoint.path,
       status: endpoint.status,
+      status_source: endpoint.statusSource,
       checks: { covered: endpoint.coveredChecks, runnable: endpoint.runnableChecks },
       last_run_at: endpoint.lastRunAt ?? null,
       categories: Object.fromEntries(endpoint.categories.map((category) => [category.id, category.state])),
@@ -234,7 +266,7 @@ export function coverageReportMarkdown(overview, coverage, generatedAt = new Dat
   const lines = [
     `# Coverage & Risk: ${overview.title} ${overview.version ?? ""}`.trimEnd(),
     "",
-    `Generated ${generatedAt.toISOString()} from the checks run in this browser.`,
+    `Generated ${generatedAt.toISOString()} from the checks run in this browser. An endpoint also counts as tested when a flow step called it.`,
     "",
     `- Endpoints tested: ${totals.tested} / ${totals.endpoints} (${totals.coveragePercent}%)`,
     `- Failing endpoints: ${totals.failing}`,
@@ -252,7 +284,7 @@ export function coverageReportMarkdown(overview, coverage, generatedAt = new Dat
     ...coverage.endpoints.map((endpoint) => [
       `\`${endpoint.method} ${cell(endpoint.path)}\``,
       `${endpoint.risk.score} ${endpoint.risk.level}`,
-      endpoint.status,
+      endpoint.statusSource === "flow" ? `${endpoint.status} (flow)` : endpoint.status,
       `${endpoint.coveredChecks}/${endpoint.runnableChecks}`,
       ...endpoint.categories.map((category) => CATEGORY_MARKS[category.state]),
       cell(endpoint.risk.factors.map((factor) => `+${factor.points} ${factor.label}`).join(", ") || "–"),

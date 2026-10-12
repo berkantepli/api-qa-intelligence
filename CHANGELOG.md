@@ -2,13 +2,19 @@
 
 The version lives in the [`VERSION`](VERSION) file and follows [Semantic Versioning](https://semver.org/). Before 1.0.0, a new feature raises the minor number (0.**x**.0) and a fix or visual change raises the patch number (0.x.**y**).
 
-## 1.10.0 — 2026-10-12
+## 1.11.0 — 2026-10-12
 
 ### Sharper coverage
 - **Coverage gaps** match a runnable check to an input by what its request does compared with the valid request: it leaves the input out, or sends another value in a parameter, query, form field, or JSON body field. A title that names an input no longer counts on its own. AI ideas and imported tests are still matched by their words, and short, common names such as `id` or `name` need a clear form (`{id}`, "id parameter", "invalid id", "without name").
 - Tests imported from Newman or JUnit get a category from their name, or from their status when they passed, so they count on the category strip, for *Only happy path tested* and *Auth not checked*, and for input gaps. Each Coverage row shows how many imported tests the endpoint has.
 - *Sensitive area* also reads an endpoint's summary, tags, and operation id, and the names of its inputs (*Sensitive data: cardNumber*).
 - A **Criticality** select on each Coverage row: **Critical** adds +20 *Marked critical* instead of the guess, **Not critical** drops *Sensitive area*. Marks are saved with the API and kept when it is imported again.
+
+## 1.10.0 — 2026-10-12
+
+- Flow steps now count toward endpoint coverage: an endpoint a flow step called counts as tested, and fails when that step failed. Skipped steps do not count. Whichever is newer, the endpoint's own checks or a flow step, sets its status, marked *via flow* on **Coverage & Risk**. Check counts, categories, and coverage gaps still come from the endpoint's own checks.
+- The overview, API specs, and both coverage reports use the same numbers; the JSON report adds `status_source` (`check` or `flow`) per endpoint.
+- Flow runs saved before this version count only for steps without a path parameter (such as `POST /pets`); run a flow again to count its other steps.
 
 ## 1.9.2 — 2026-10-12
 
