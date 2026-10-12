@@ -31,6 +31,7 @@ The backend has no login and is meant to run on your own machine; it answers onl
 | POST | `/api/v1/specs/scenario-ideas` | Ask the configured Ollama model for review-only scenario ideas for one operation. |
 | POST | `/api/v1/specs/sample-values` | Suggest schema-valid sample values for empty request inputs (Ollama, with schema-based fallback). |
 | POST | `/api/v1/specs/diff` | Compare two API overviews (`base`, the earlier version, and `head`) and classify every change as breaking, warning, or safe, with the checks to run again per endpoint. `api-qa diff` uses the same comparison. |
+| POST | `/api/v1/specs/quality` | Score how testable an API overview is (0–100, grade, rule scores, findings, top fixes, and a Markdown report). Imports already return it as the overview's `quality`. |
 
 ### Running checks
 

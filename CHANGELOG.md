@@ -2,6 +2,14 @@
 
 The version lives in the [`VERSION`](VERSION) file and follows [Semantic Versioning](https://semver.org/). Before 1.0.0, a new feature raises the minor number (0.**x**.0) and a fix or visual change raises the patch number (0.x.**y**).
 
+## Unreleased
+
+### Contract quality
+- Every import scores how testable the contract is, from 0 to 100 with a grade from A to F, using fixed weighted rules per endpoint: success response schemas, examples for required inputs, a buildable valid request, documented 4xx, 401/403 on secured endpoints, and 404 on record endpoints, input limits, unique operationIds, summaries, input descriptions, and a declared server.
+- The overview's **Contract quality** card opens the report: the fixes worth most points, each rule's score, and the findings per endpoint, with **Open endpoint** and **Copy as Markdown**.
+- `api-qa lint SPEC` prints the score and top fixes, writes Markdown and JSON reports, and exits 1 below `--min-score`.
+- The API overview gains `quality`; `POST /api/v1/specs/quality` scores overviews saved before.
+
 ## 1.10.0 — 2026-10-12
 
 - Flow steps now count toward endpoint coverage: an endpoint a flow step called counts as tested, and fails when that step failed. Skipped steps do not count. Whichever is newer, the endpoint's own checks or a flow step, sets its status, marked *via flow* on **Coverage & Risk**. Check counts, categories, and coverage gaps still come from the endpoint's own checks.
