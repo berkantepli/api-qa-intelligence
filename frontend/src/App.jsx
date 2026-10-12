@@ -14,6 +14,8 @@ import { postJson, requestJson } from "./apiClient.js";
 import ErrorAlert from "./ErrorAlert.jsx";
 import FlowsPage from "./FlowsPage.jsx";
 import QualityPanel from "./QualityPanel.jsx";
+import RequestImportPanel from "./RequestImportPanel.jsx";
+import { compareRequests, mergeInputs, suggestedInputs } from "./requestImport.js";
 import { qualityTone } from "./quality.js";
 import { draftToFlow, effectiveFlows, withoutFlowChanges, withSavedFlow } from "./flowEditor.js";
 import { buildFlowRequest, flowRunEntry, isFlowRun } from "./flows.js";
@@ -184,6 +186,9 @@ function App() {
   const [flowSuggestions, setFlowSuggestions] = useState({});
   // The contract quality panel on the overview, and scoring APIs saved before imports included it.
   const [showQuality, setShowQuality] = useState(false);
+  // A Postman collection or HAR file read for the active API: { apiId, collection, applied, error }.
+  const [requestImport, setRequestImport] = useState(null);
+  const requestFileInput = useRef(null);
   const [qualityRequests, setQualityRequests] = useState({});
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -636,6 +641,51 @@ function App() {
       const { [inputKey]: _removed, ...marks } = state.marks;
       return { ...current, [operationKey]: { ...state, marks } };
     });
+  }
+
+  async function readRequestFile(event) {
+    const fileItem = event.target.files?.[0];
+    event.target.value = "";
+    if (!fileItem) return;
+    const apiId = activeApiId;
+    setRequestImport({ apiId, loading: true });
+    try {
+      const data = new FormData();
+      data.append("file", fileItem);
+      const collection = await requestJson("/api/v1/requests/parse", { method: "POST", body: data }, "The file could not be read.");
+      setRequestImport({ apiId, collection });
+      setShowQuality(false);
+    } catch (caught) {
+      setRequestImport({ apiId, error: caught.message || "The file could not be read." });
+    }
+  }
+
+  // Fills request details from the imported file; counts how many more checks can run afterwards.
+  function applyImportedRequests(comparison, replace) {
+    const before = checkReadiness.total - checkReadiness.needDetails;
+    const updates = {};
+    let filled = 0;
+    for (const item of comparison.matched) {
+      const key = `${item.operation.method} ${item.operation.path}`;
+      const result = mergeInputs(apiInputs[key], item.suggested, replace);
+      if (result.filled) updates[key] = result.inputs;
+      filled += result.filled;
+    }
+    setRequestInputs((current) => ({ ...current, [activeApiId]: { ...(current[activeApiId] ?? {}), ...updates } }));
+    const after = (overview?.operations ?? []).reduce((count, operation) => {
+      const key = `${operation.method} ${operation.path}`;
+      const ready = requestReadiness(describeOperation(operation), updates[key] ?? apiInputs[key], requestFiles[key]).ready;
+      return count + (ready ? runnableCheckCount(operation) : 0);
+    }, 0);
+    const endpoints = Object.keys(updates).length;
+    setRequestImport((current) => ({ ...current, applied: filled
+      ? `Filled ${filled} ${filled === 1 ? "value" : "values"} on ${endpoints} ${endpoints === 1 ? "endpoint" : "endpoints"}${after > before ? `; ${after - before} more ${after - before === 1 ? "check is" : "checks are"} ready to run` : ""}.`
+      : "Every value from the file was already entered." }));
+  }
+
+  function openOperation(operation) {
+    const index = overview?.operations.findIndex((item) => item.method === operation.method && item.path === operation.path) ?? -1;
+    if (index >= 0) selectOperation(index);
   }
 
   function mergeOperationInputs(apiId, key, inputs) {
@@ -1262,7 +1312,10 @@ function App() {
           <section className="overview-page">
             <div className="overview-heading">
               <div><div className="page-eyebrow">API OVERVIEW</div><h1>{overview.title}</h1><p className="page-lede">Version {overview.version} <span className="dot-sep">·</span> OpenAPI {overview.openapi_version}</p></div>
+              <button className="secondary-button" type="button" disabled={requestImport?.loading} onClick={() => requestFileInput.current?.click()} title="Compare a Postman collection or HAR file with this contract and reuse its values">{requestImport?.loading ? <><span className="spinner" /> Reading…</> : <><Icon name="upload" size={14} /> Import Postman or HAR</>}</button>
+              <input ref={requestFileInput} type="file" accept="application/json,.json,.har" hidden onChange={readRequestFile} />
             </div>
+            {requestImport?.apiId === activeApiId && requestImport.error && <ErrorAlert message={requestImport.error} />}
             {notice && <div className="alert success-alert import-notice" role="status"><Icon name="check" size={17} /><span>{notice}</span><button className="text-button" type="button" onClick={() => setNotice("")}>Dismiss</button></div>}
             {mergeOffer?.newId === activeApiId && <div className="alert merge-offer" role="status">
               <Icon name="link" size={17} />
@@ -1276,6 +1329,21 @@ function App() {
               <div className="stat-card"><span className="stat-label">Runnable checks</span><strong>{checkReadiness.total}</strong><span className="stat-note">{checkReadiness.needDetails ? `${checkReadiness.total - checkReadiness.needDetails} ready now · ${checkReadiness.needDetails} need request details` : "all ready to run"}</span></div>
               {overview.quality && <button className={`stat-card stat-card-link ${showQuality ? "stat-card-active" : ""}`} type="button" onClick={() => setShowQuality((current) => !current)} aria-expanded={showQuality} title="How testable this contract is"><span className="stat-label">Contract quality</span><strong>{overview.quality.score} / 100 <span className={`quality-grade quality-${qualityTone(overview.quality.score)}`}>{overview.quality.grade}</span></strong><span className="stat-note">{overview.quality.top_fixes[0] ? `Top fix: +${overview.quality.top_fixes[0].points} ${overview.quality.top_fixes[0].advice.toLowerCase()}` : "nothing to fix"}</span></button>}
             </div>
+            {requestImport?.apiId === activeApiId && requestImport.collection && (() => {
+              const comparison = compareRequests(overview, requestImport.collection);
+              comparison.matched = comparison.matched.map((item) => {
+                const suggested = suggestedInputs(item.operation, item.requests);
+                return { ...item, suggested, suggestedCount: Object.keys(suggested).length };
+              });
+              return <RequestImportPanel
+                collection={requestImport.collection}
+                comparison={comparison}
+                applied={requestImport.applied}
+                onApply={(replace) => applyImportedRequests(comparison, replace)}
+                onOpenEndpoint={openOperation}
+                onClose={() => setRequestImport(null)}
+              />;
+            })()}
             {showQuality && overview.quality && <QualityPanel quality={overview.quality} operations={overview.operations} onOpenEndpoint={(index) => { selectOperation(index); setShowQuality(false); }} onClose={() => setShowQuality(false)} />}
             <div className="workspace-grid">
               <section className="panel endpoints-panel">

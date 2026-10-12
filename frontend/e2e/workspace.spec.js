@@ -130,6 +130,39 @@ test("keeps the workspace after the browser is cleared", async ({ page }) => {
   await expect(page.getByPlaceholder("Enter id")).toHaveValue("7");
 });
 
+test("compares a Postman collection with the contract and reuses its values", async ({ page }) => {
+  const collection = {
+    info: { name: "E2E Postman", schema: "https://schema.getpostman.com/json/collection/v2.1.0/collection.json" },
+    variable: [{ key: "baseUrl", value: TARGET_URL }],
+    item: [
+      { name: "Find pet", request: { method: "GET", header: [{ key: "Authorization", value: "Bearer abcdefghijklmnop" }], url: "{{baseUrl}}/pets/9" } },
+      { name: "Create pet", request: { method: "POST", url: "{{baseUrl}}/pets", body: { mode: "raw", raw: JSON.stringify({ name: "Bella", password: "x" }) } } },
+      { name: "Health", request: { method: "GET", url: "{{baseUrl}}/health" } },
+    ],
+  };
+  await page.goto("/");
+  await nav(page, "Overview");
+  await page.locator(".overview-heading input[type=file]").setInputFiles({ name: "pets.postman_collection.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(collection)) });
+
+  const panel = page.locator(".request-import-panel");
+  await expect(panel).toContainText("Postman collection · 3 requests · 1 credential-like value left out");
+  await expect(panel.locator(".stat-card").filter({ hasText: "Endpoints it calls" })).toContainText("2 / 4");
+  await expect(panel.locator(".stat-card").filter({ hasText: "Not in the contract" })).toContainText("1");
+  await expect(panel.locator("details").filter({ hasText: "Endpoints the file never calls" })).toContainText("/orders");
+
+  // The id typed earlier (7) is kept; only the empty body field is filled.
+  await panel.getByRole("button", { name: "Fill request details" }).click();
+  await expect(panel.locator(".success-alert")).toContainText("Filled 1 value on 1 endpoint");
+  await panel.getByRole("checkbox", { name: "Replace values I already entered" }).check();
+  await panel.getByRole("button", { name: "Fill request details" }).click();
+  await expect(panel.locator(".success-alert")).toContainText("Filled 1 value on 1 endpoint");
+
+  await panel.locator("details").filter({ hasText: "Endpoints it calls" }).locator("summary").click();
+  await panel.locator(".request-import-list li").filter({ hasText: "/pets/{id}" }).getByRole("button", { name: "Open" }).click();
+  await expect(page.getByPlaceholder("Enter id")).toHaveValue("9");
+  await page.getByPlaceholder("Enter id").fill("7");
+});
+
 test("opens a run again with the same checks selected", async ({ page }) => {
   await page.goto("/");
   await nav(page, "Run history");
