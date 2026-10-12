@@ -990,7 +990,7 @@ h1, h2, h3, p { margin-top: 0; }
 .segmented { display: inline-flex; padding: 2px; border: 1px solid var(--line); border-radius: 8px; }
 .segmented button { padding: 4px 10px; border: 0; border-radius: 6px; background: transparent; color: var(--muted); font-size: 12px; }
 .segmented button.selected { background: var(--accent-soft); color: var(--text); font-weight: 600; }
-.trends-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-top: 14px; }
+.trends-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; margin-top: 14px; }
 .trend-card { min-width: 0; padding: 12px 12px 8px; border: 1px solid var(--line); border-radius: 9px; }
 .trend-card-heading { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin-bottom: 6px; }
 .trend-card-heading span { width: 100%; color: var(--muted); font-size: 12px; }
@@ -1012,6 +1012,20 @@ h1, h2, h3, p { margin-top: 0; }
 .trend-tooltip { position: absolute; top: 0; z-index: 2; display: grid; gap: 2px; min-width: 150px; padding: 7px 9px; transform: translateX(10px); border: 1px solid var(--line); border-radius: 8px; background: var(--surface); box-shadow: var(--shadow); color: var(--text); font-size: 12px; pointer-events: none; }
 .trend-tooltip span { color: var(--muted); }
 .trend-tooltip-left { transform: translateX(calc(-100% - 10px)); }
+.trend-threshold line { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 4 3; }
+.trend-threshold text { fill: var(--muted); font-size: 11px; paint-order: stroke; stroke: var(--surface); stroke-width: 4px; stroke-linejoin: round; }
+.trend-key.trend-key-threshold { height: 0; border-top: 1px dashed var(--muted); background: none; }
+.sparkline { display: block; margin-top: 4px; overflow: visible; }
+.sparkline polyline { fill: none; stroke: var(--chart-1); stroke-width: 1.5; stroke-linejoin: round; stroke-linecap: round; }
+.sparkline circle { fill: var(--chart-1); stroke: var(--surface); stroke-width: 1.5; }
+.sparkline circle.sparkline-failed { fill: var(--red); }
+.trend-slowdowns { display: grid; gap: 4px; margin-top: 14px; padding: 12px; border: 1px solid var(--line); border-radius: 9px; font-size: 13px; }
+.trend-slowdowns small, .trend-slowdowns p { margin: 0; color: var(--muted); font-size: 12px; }
+.trend-slowdowns ul { display: grid; gap: 2px; margin: 6px 0 0; padding: 0; list-style: none; }
+.trend-slowdowns li { display: grid; grid-template-columns: minmax(0, 1fr) auto 52px; align-items: center; gap: 12px; padding: 4px 0; border-top: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+.trend-slowdowns li .text-button { overflow: hidden; padding: 0; text-align: left; text-overflow: ellipsis; white-space: nowrap; }
+.trend-slowdowns li span { color: var(--muted); }
+.trend-slowdowns li b { text-align: right; }
 .trend-legend { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 4px; color: var(--muted); font-size: 12px; }
 .trends-empty { margin: 12px 0 4px; color: var(--muted); font-size: 13px; }
 .trends-table { margin-top: 10px; font-size: 13px; }
@@ -1021,4 +1035,6 @@ h1, h2, h3, p { margin-top: 0; }
 .trends-table th { color: var(--muted); font-weight: 600; }
 @media (max-width: 780px) {
   .trends-grid { grid-template-columns: minmax(0, 1fr); }
+  .trend-slowdowns li { grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px; }
+  .trend-slowdowns li .text-button { grid-column: 1 / -1; white-space: normal; overflow-wrap: anywhere; }
 }
