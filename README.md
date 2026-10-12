@@ -220,7 +220,7 @@ Every feature of the web app goes through a documented HTTP API under `/api/v1`,
 
 ## Roadmap
 
-[docs/MVP_ROADMAP.md](docs/MVP_ROADMAP.md) records how the project was planned up to 1.0. Ideas after 1.0 include a built-in demo API, a hosted demo, and more AI providers than a local Ollama.
+[docs/MVP_ROADMAP.md](docs/MVP_ROADMAP.md) records how the project was planned up to 1.0. Ideas after 1.0 include a built-in demo API and a hosted demo.
 
 ## Security and responsible use
 
