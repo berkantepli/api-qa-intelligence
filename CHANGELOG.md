@@ -2,6 +2,11 @@
 
 The version lives in the [`VERSION`](VERSION) file and follows [Semantic Versioning](https://semver.org/). Before 1.0.0, a new feature raises the minor number (0.**x**.0) and a fix or visual change raises the patch number (0.x.**y**).
 
+## 1.13.0 — 2026-10-12
+
+### Sample APIs
+- The import page offers four public APIs to try when you have no contract at hand, each with a short note: **Swagger Petstore** (the classic example), **FakeRESTApi** (full CRUD whose writes are not kept, so flows are safe to run), **Toolshop** (a QA practice shop API with login and roles), and **PokéAPI** (large and read-only). Each imports with its target URL filled in.
+
 ## 1.12.0 — 2026-10-12
 
 ### Sharper coverage
