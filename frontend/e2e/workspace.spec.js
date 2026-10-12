@@ -21,6 +21,7 @@ async function runAll(page) {
 test("imports a contract from a URL", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "Start with an API contract" })).toBeVisible();
+  await expect(page.locator(".sample-api")).toHaveCount(4);
   await page.getByPlaceholder("https://api.example.com/openapi.json").fill(`${TARGET_URL}/openapi.json`);
   await page.getByRole("button", { name: "Import API" }).click();
 

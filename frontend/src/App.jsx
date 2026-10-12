@@ -18,6 +18,7 @@ import { qualityTone } from "./quality.js";
 import { draftToFlow, effectiveFlows, withoutFlowChanges, withSavedFlow } from "./flowEditor.js";
 import { buildFlowRequest, flowRunEntry, isFlowRun } from "./flows.js";
 import Icon from "./Icon.jsx";
+import { SAMPLE_APIS } from "./sampleApis.js";
 import RunDetail, { SchemaDifferences } from "./RunDetail.jsx";
 import { outcomeSummary } from "./runDetail.js";
 import RunHistoryList from "./RunHistoryList.jsx";
@@ -33,7 +34,6 @@ import { buildEditedScenario, createDraft, editedCheckSummary, isEditedScenario,
 
 const DEFAULT_TARGET_URL = "http://127.0.0.1:8000";
 const APP_VERSION = __APP_VERSION__;
-const SAMPLE_SPEC_URL = "https://petstore3.swagger.io/api/v3/openapi.json";
 const RELEASES_URL = "https://github.com/berkantepli/api-qa-intelligence/releases";
 const STORAGE_KEYS = {
   theme: "api-qa-intelligence-theme",
@@ -1230,7 +1230,12 @@ function App() {
               </div>
               {sourceMode === "url" ? (<>
                 <label className="field-wrap"><span className="field-label">OpenAPI URL</span><span className="input-with-icon"><Icon name="link" size={17} /><input autoComplete="url" type="url" value={specUrl} onChange={(event) => setSpecUrl(event.target.value)} placeholder="https://api.example.com/openapi.json" /></span></label>
-                  <p className="sample-hint">No spec at hand? <button className="text-button" type="button" disabled={loading} onClick={() => { setSpecUrl(SAMPLE_SPEC_URL); importSpec(null, SAMPLE_SPEC_URL); }}>Try the Swagger Petstore sample</button></p>
+                  <div className="sample-apis">
+                    <span className="sample-apis-label">No spec at hand? Try a public API:</span>
+                    <div className="sample-api-grid">{SAMPLE_APIS.map((sample) => <button key={sample.id} className="sample-api" type="button" disabled={loading} onClick={() => { setSpecUrl(sample.url); importSpec(null, sample.url); }}>
+                      <strong>{sample.name}</strong><small>{sample.note}</small>
+                    </button>)}</div>
+                  </div>
               </>) : (
                 <label className={`upload-box ${file ? "has-file" : ""}`}>
                   <span className="upload-icon"><Icon name={file ? "check" : "upload"} size={21} /></span>
