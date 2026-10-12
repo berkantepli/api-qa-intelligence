@@ -413,6 +413,37 @@ test("opening an endpoint from Coverage scrolls the endpoint list to it", async 
   expect(visible).toBe(true);
 });
 
+test("flags a saved AI check that no longer fits the contract", async ({ page, request }) => {
+  // A saved AI check normally needs an AI model; here one is written straight into the saved workspace.
+  const { savedApis } = await (await request.get("/api/v1/workspace")).json();
+  const position = savedApis.findIndex((api) => api.source === `${TARGET_URL}/openapi.json`);
+  const api = structuredClone(savedApis[position]);
+  const operation = api.overview.operations.find((item) => item.method === "GET" && item.path === "/pets/{id}");
+  operation.scenarios.push({
+    category: "negative",
+    title: "Gone pet returns 410",
+    rationale: "A deleted pet should answer 410 Gone.",
+    review_required: true,
+    source: "ai_edited",
+    request_example: {
+      method: "GET", path: "/pets/{id}", query_params: {}, form_body: false, form_fields: {},
+      omitted_parameters: [], parameter_values: { "header:X-Old": "1" }, json_body: null, expected_status_codes: [410],
+    },
+  });
+  const saved = await request.put(`/api/v1/workspace/apis/${encodeURIComponent(api.id)}`, { params: { position }, data: api });
+  expect(saved.status()).toBe(204);
+
+  await page.goto("/");
+  await page.locator(".spec-card").filter({ has: page.getByText(api.title, { exact: true }) }).locator(".spec-card-open").click();
+  await endpoint(page, "GET", "/pets/{id}").click();
+  const card = check(page, "Gone pet returns 410");
+  await expect(card.locator(".edited-pill")).toHaveText("AI idea · edited");
+  const warning = card.locator(".stale-check");
+  await expect(warning).toContainText("Review against the current contract");
+  await expect(warning).toContainText("Sends header parameter X-Old, which the contract no longer has");
+  await expect(warning).toContainText("Expects HTTP 410, which the contract does not document");
+});
+
 test("deletes all saved data", async ({ page }) => {
   await page.goto("/");
   await nav(page, "Settings");
