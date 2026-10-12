@@ -2,6 +2,14 @@
 
 The version lives in the [`VERSION`](VERSION) file and follows [Semantic Versioning](https://semver.org/). Before 1.0.0, a new feature raises the minor number (0.**x**.0) and a fix or visual change raises the patch number (0.x.**y**).
 
+## Unreleased
+
+### Postman collections and HAR files
+- **Import Postman or HAR** on the overview compares a Postman collection (v2.0, v2.1) or a browser HAR file with the contract: the endpoints it calls, those it never calls, and requests to paths the contract does not document.
+- **Fill request details** reuses the file's path, query, and body values for the endpoints it calls (only empty details, unless you choose to replace yours) and says how many more checks are ready to run.
+- Headers, auth settings, and cookies are never read; credential-like names and values that look like secrets are left out and counted.
+- `POST /api/v1/requests/parse` reads the file.
+
 ## 1.13.0 — 2026-10-12
 
 ### Sample APIs

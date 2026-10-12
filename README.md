@@ -170,6 +170,12 @@ api-qa run --spec openapi.yaml --target https://staging.example.com \
 
 A ready-to-copy GitHub Actions job is in [`docs/examples/github-actions-api-qa.yml`](docs/examples/github-actions-api-qa.yml).
 
+## Postman collections and HAR files
+
+**Import Postman or HAR** on the overview reads a Postman collection (v2.0 or v2.1) or a HAR file saved from the browser's developer tools and compares its requests with the contract: how many endpoints it calls, which endpoints it never calls, and which requests go to paths the contract does not document. Requests are matched like imported test results: same method, and the path template matches the end of the request's path, so a base path in front is fine. Postman variables are resolved from the collection's variables (`{{baseUrl}}`, `:petId` path variables); a HAR file keeps only API calls (fetch and XHR) and skips scripts, styles, and images.
+
+**Fill request details** then reuses the values the file sends: path and query parameters and body fields of the endpoints it calls, filling only empty details unless **Replace values I already entered** is checked, and says how many more checks are ready to run. Headers, auth settings, and cookies are never read; query parameters, body fields, and variables with credential-like names, and values that look like secrets (bearer tokens, JWTs, card numbers), are left out and counted. Nothing is stored except the request details you fill, which follow the usual rules (credentials are never saved). `POST /api/v1/requests/parse` reads the file.
+
 ## Contract quality
 
 Every import scores how well the contract supports testing, from 0 to 100 with a grade (A from 90, B from 75, C from 60, D from 40, F below). Fixed, weighted rules are checked on every endpoint they apply to: success responses have a JSON schema (3), required inputs have an example, default, or enum (3), a valid request can be built (2), 4xx responses are documented (2), inputs have limits such as a format, enum, length, or range (1), secured endpoints document 401 or 403 (1), endpoints that take a record id document 404 (1), unique operationIds (1), summaries (1), and input descriptions (1); the contract also needs a server (2). Rules that do not apply to an endpoint are left out, and some give partial credit (the share of inputs with an example). No AI is involved.
