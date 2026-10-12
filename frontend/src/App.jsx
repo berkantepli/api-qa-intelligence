@@ -135,6 +135,7 @@ function App() {
   const [page, setPage] = useState(() => savedApis.length ? "specs" : "import");
   const [runHistory, setRunHistory] = useState(() => readStoredJson(STORAGE_KEYS.runHistory, []));
   const apiLifecycle = useMemo(() => flowCoverage(overview, apiFlows, flowRunsForApi(runHistory, activeApiId, savedApis)), [overview, apiFlows, runHistory, activeApiId, savedApis]);
+  const apiTrendRuns = useMemo(() => [...runsForApi(runHistory, activeApiId, savedApis), ...flowRunsForApi(runHistory, activeApiId, savedApis)], [runHistory, activeApiId, savedApis]);
   const [selectedRunId, setSelectedRunId] = useState(null);
   const [pendingDeleteApiId, setPendingDeleteApiId] = useState(null);
   const [aiStatus, setAiStatus] = useState({ loading: true });
@@ -1217,6 +1218,7 @@ function App() {
             criticality={activeApi?.criticality ?? {}}
             onSetCriticality={setEndpointCriticality}
             onOpenFlows={openFlowsPage}
+            trendRuns={apiTrendRuns}
           />
         ) : page === "flows" ? (
           <FlowsPage

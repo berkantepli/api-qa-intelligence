@@ -7,6 +7,7 @@ import { GAP_KINDS } from "./coverageGaps.js";
 import ErrorAlert from "./ErrorAlert.jsx";
 import Icon from "./Icon.jsx";
 import { RISK_LEVELS, RISK_RULES } from "./riskScore.js";
+import TrendsPanel from "./TrendsPanel.jsx";
 
 const statusLabels = { failing: "Failing", untested: "Not tested", passing: "Passing" };
 const filters = [
@@ -121,7 +122,7 @@ function download(content, fileName, type) {
 export default function CoveragePage({
   overview, apiRuns, onOpenEndpoint, onGoToSpecs,
   inputsByOperation, filesByOperation, targetUrl, targetProblem, bulkRun, onBulkRun, onStopBulkRun, onDismissBulkRun, onImportTestResults, contractChanges,
-  lifecycle = null, onOpenFlows, criticality = {}, onSetCriticality,
+  lifecycle = null, onOpenFlows, trendRuns = [], criticality = {}, onSetCriticality,
 }) {
   const [filterId, setFilterId] = useState("all");
   const [importMessage, setImportMessage] = useState(null);
@@ -182,6 +183,8 @@ export default function CoveragePage({
     </div>
 
     <ContractChanges changes={contractChanges} endpoints={endpoints} overview={overview} />
+
+    <TrendsPanel overview={overview} runs={trendRuns} />
 
     {(planning || bulkRun) && <BulkRunPanel
       overview={overview}
