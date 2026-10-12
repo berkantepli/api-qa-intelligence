@@ -224,7 +224,7 @@ npm run build
 npm run test:e2e
 ```
 
-Locally they use the installed Google Chrome; set `E2E_PYTHON` if the backend's Python is not `../.venv/bin/python`.
+Locally they use the installed Google Chrome; set `E2E_PYTHON` if the backend's Python is not `../.venv/bin/python`. Each run starts its servers on two ports that are free at that moment, so several runs on one machine do not collide; set `E2E_APP_PORT` and `E2E_TARGET_PORT` to choose them.
 
 The same checks run on GitHub Actions for every pull request and push to `main` ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)): backend lint and tests, frontend tests and build, the browser tests, and a Docker image build with a smoke test.
 

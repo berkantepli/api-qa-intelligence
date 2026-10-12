@@ -23,7 +23,11 @@ test("imports a contract from a URL", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Start with an API contract" })).toBeVisible();
   await expect(page.locator(".sample-api")).toHaveCount(4);
   await page.getByPlaceholder("https://api.example.com/openapi.json").fill(`${TARGET_URL}/openapi.json`);
+  // The app saves the imported API to the backend in the background; the next test opens a new browser
+  // that reads the workspace from the backend, so wait for the save before this test ends.
+  const saved = page.waitForResponse((response) => response.request().method() === "PUT" && response.url().includes("/api/v1/workspace/apis/"));
   await page.getByRole("button", { name: "Import API" }).click();
+  expect((await saved).status()).toBe(204);
 
   await expect(page.getByRole("heading", { name: "E2E Pets" })).toBeVisible();
   await expect(page.locator(".endpoint-row")).toHaveCount(4);
