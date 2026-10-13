@@ -2,7 +2,7 @@
 
 The version lives in the [`VERSION`](VERSION) file and follows [Semantic Versioning](https://semver.org/). Before 1.0.0, a new feature raises the minor number (0.**x**.0) and a fix or visual change raises the patch number (0.x.**y**).
 
-## Unreleased
+## 1.19.1 — 2026-10-14
 
 ### Masked evidence
 - Schema differences no longer quote a contract credential that the API echoed back in its response; a field named like a credential reads "[REDACTED] does not match the documented schema".
