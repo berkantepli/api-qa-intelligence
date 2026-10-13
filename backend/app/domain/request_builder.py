@@ -134,7 +134,9 @@ def build_check_request(
         name = match.group(1)
         if f"path:{name}" in omitted:
             return ""
-        value = overrides.get(f"path:{name}", parameter_value(ApiParameter(name=name, location="path"), inputs))
+        # A path parameter falls back to its documented example, as the readiness check does.
+        documented = next((p for p in described.parameters if p.location == "path" and p.name == name), None)
+        value = overrides.get(f"path:{name}", parameter_value(documented or ApiParameter(name=name, location="path"), inputs))
         return quote(value, safe="-_.!~*'()")
 
     path = PATH_PARAMETER.sub(path_value, operation.path)

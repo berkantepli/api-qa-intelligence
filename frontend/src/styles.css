@@ -316,14 +316,6 @@ h1, h2, h3, p { margin-top: 0; }
 .stat-card-link:hover { border-color: var(--accent); }
 .run-detail-heading { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px; }
 .run-detail-heading .secondary-button { min-height: 34px; font-size: 12px; }
-.sample-apis { display: grid; gap: 8px; margin-top: 14px; }
-.sample-apis-label { color: var(--muted); font-size: 12px; }
-.sample-api-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-.sample-api { display: grid; align-content: start; gap: 3px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface); color: var(--text); text-align: left; cursor: pointer; }
-.sample-api strong { font-size: 13px; }
-.sample-api small { color: var(--muted); font-size: 12px; line-height: 1.4; }
-.sample-api:hover:not(:disabled) { border-color: var(--accent); }
-.sample-api:disabled { cursor: default; opacity: .6; }
 .storage-alert { margin: 12px 32px 0; }
 .coverage-empty { margin: 0; padding: 24px 18px; border-top: 1px solid var(--line); color: var(--muted); font-size: 13px; text-align: center; }
 .history-confirm span { flex: 1; min-width: 200px; color: var(--text); font-size: 13px; }
@@ -788,7 +780,6 @@ h1, h2, h3, p { margin-top: 0; }
   .topbar-right { gap: 8px; }
   .setup-page h1, .overview-heading h1, .specs-heading h1, .history-page h1 { font-size: 25px; }
   .import-card { padding: 18px 16px 15px; }
-  .sample-api-grid { grid-template-columns: 1fr; }
   .card-heading p { max-width: 220px; line-height: 1.4; }
   .card-footer { align-items: stretch; flex-direction: column; }
   .card-footer .primary-button { width: 100%; }
@@ -1126,3 +1117,26 @@ h1, h2, h3, p { margin-top: 0; }
 .result-box .response-changes-none, :root[data-theme="dark"] .result-box .response-changes-none { color: var(--muted); }
 .coverage-endpoint .response-change-pill { justify-self: start; }
 .response-change-pill { padding: 2px 7px; border-radius: 999px; background: var(--accent-soft); color: var(--accent-dark); font-size: 11px; font-weight: 600; white-space: nowrap; }
+
+/* The built-in demo API: offered on the import page, with a tour on its overview. */
+.demo-offer { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-top: 14px; padding: 12px 14px; border: 1px dashed var(--line); border-radius: 9px; background: var(--surface-soft); }
+.demo-offer > div { display: grid; gap: 3px; min-width: 0; }
+.demo-offer strong { color: var(--text); font-size: 13px; }
+.demo-offer small { color: var(--muted); font-size: 12px; line-height: 1.45; }
+.demo-offer .secondary-button { flex: 0 0 auto; }
+.history-empty-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+.demo-guide { margin: 16px 0; padding: 12px 16px; border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 10px; background: var(--surface); box-shadow: var(--shadow); }
+.demo-guide summary { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; color: var(--text); font-size: 14px; font-weight: 650; cursor: pointer; }
+.demo-guide summary svg { align-self: center; color: var(--accent); }
+.demo-guide summary small { color: var(--muted); font-size: 12px; font-weight: 500; }
+.demo-guide ol { display: grid; gap: 8px; margin: 12px 0 0; padding-left: 20px; }
+.demo-guide li { color: var(--muted); font-size: 12px; }
+.demo-guide li > div { display: inline; }
+.demo-guide li strong { margin-right: 6px; color: var(--text); font-size: 13px; }
+.demo-guide li .text-button { margin-left: 8px; white-space: nowrap; }
+.demo-guide-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); color: var(--muted); font-size: 12px; }
+.demo-guide-footer .secondary-button { flex: 0 0 auto; min-height: 32px; font-size: 13px; }
+.demo-guide-note { margin: 8px 0 0; color: var(--green); font-size: 12px; }
+@media (max-width: 560px) {
+  .demo-offer, .demo-guide-footer { align-items: stretch; flex-direction: column; }
+}

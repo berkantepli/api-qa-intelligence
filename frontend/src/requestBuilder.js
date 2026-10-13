@@ -96,7 +96,9 @@ export function buildCheckRequest(described, inputs, scenario, { targetUrl, file
   const isEditedCheck = isEditedScenario(scenario);
   const omittedParameters = new Set((example.omitted_parameters ?? []).map((parameter) => `${parameter.location}:${parameter.name}`));
   const parameterValue = (parameter) => example.parameter_values?.[`${parameter.location}:${parameter.name}`] ?? getParameterValue(parameter);
-  const path = operation.path.replace(/\{([^}]+)\}/g, (_, name) => omittedParameters.has(`path:${name}`) ? "" : encodeURIComponent(parameterValue({ location: "path", name })));
+  // A path parameter falls back to its documented example, as the readiness check does.
+  const pathParameter = (name) => operationParameters.find((parameter) => parameter.location === "path" && parameter.name === name) ?? { location: "path", name };
+  const path = operation.path.replace(/\{([^}]+)\}/g, (_, name) => omittedParameters.has(`path:${name}`) ? "" : encodeURIComponent(parameterValue(pathParameter(name))));
   const queryParams = { ...example.query_params };
   const headers = {};
   const cookieValues = [];

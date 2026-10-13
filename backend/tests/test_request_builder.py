@@ -93,3 +93,12 @@ def test_extra_headers_never_reach_a_check_that_omits_them():
 
     assert build_check_request(DESCRIBED, inputs, VALID, "http://api.test", extra)["headers"] == extra
     assert build_check_request(DESCRIBED, inputs, UNAUTHENTICATED, "http://api.test", extra)["headers"] == {}
+
+
+def test_path_parameters_fall_back_to_their_documented_example():
+    operation = OPERATION.model_copy(update={"parameters": [*OPERATION.parameters, ApiParameter(name="id", location="path", required=True, example=7)]})
+    described = describe_operation(operation)
+
+    assert request_readiness(described, {}).ready is False  # the required body field name is still missing
+    assert build_check_request(described, {"body:name": "Max"}, VALID, "http://api.test")["path"] == "/pets/7"
+    assert build_check_request(described, {"body:name": "Max", "parameter:path:id": "9"}, VALID, "http://api.test")["path"] == "/pets/9"
