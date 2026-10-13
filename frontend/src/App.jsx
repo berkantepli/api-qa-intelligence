@@ -8,6 +8,7 @@ import CoveragePage from "./CoveragePage.jsx";
 import DuplicateNotice from "./DuplicateNotice.jsx";
 import { duplicatePairKey, filterNewIdeas, findDuplicateScenarios, findSameRequest } from "./duplicates.js";
 import { computeCoverage, flowCoverage, flowRunsForApi, runsForApi } from "./coverage.js";
+import { responseChanges, responseSchema } from "./responseChanges.js";
 import CoverageRing from "./CoverageRing.jsx";
 import { connectionLabel, targetUrlProblem } from "./targetConnection.js";
 import { postJson, requestJson } from "./apiClient.js";
@@ -21,7 +22,7 @@ import { draftToFlow, effectiveFlows, withoutFlowChanges, withSavedFlow } from "
 import { buildFlowRequest, flowRunEntry, isFlowRun } from "./flows.js";
 import Icon from "./Icon.jsx";
 import { SAMPLE_APIS } from "./sampleApis.js";
-import RunDetail, { SchemaDifferences } from "./RunDetail.jsx";
+import RunDetail, { ResponseChanges, SchemaDifferences } from "./RunDetail.jsx";
 import { outcomeSummary } from "./runDetail.js";
 import RunHistoryList from "./RunHistoryList.jsx";
 import { applySampleValues, bodyInputKey, collectEmptyFields, fillHint, parameterInputKey } from "./sampleFill.js";
@@ -141,6 +142,20 @@ function App() {
   const [runHistory, setRunHistory] = useState(() => readStoredJson(STORAGE_KEYS.runHistory, []));
   const apiLifecycle = useMemo(() => flowCoverage(overview, apiFlows, flowRunsForApi(runHistory, activeApiId, savedApis)), [overview, apiFlows, runHistory, activeApiId, savedApis]);
   const apiTrendRuns = useMemo(() => [...runsForApi(runHistory, activeApiId, savedApis), ...flowRunsForApi(runHistory, activeApiId, savedApis)], [runHistory, activeApiId, savedApis]);
+  // A check just run in the overview against the last pass of the same check: its run, once saved,
+  // or a stand-in for the run in progress.
+  const overviewComparison = (index, result) => {
+    if (!result || !operation || !overview) return null;
+    const run = runHistory.find((item) => item.id === lastRunId)
+      ?? { id: null, apiId: activeApiId, api: overview.title, endpoint: `${operation.method} ${operation.path}`, createdAt: new Date().toISOString() };
+    const check = { ...result, title: availableScenarios[index]?.title };
+    return responseChanges(runHistory, run, check, responseSchema(overview, run, check));
+  };
+  // A run's checks against the last pass of the same check, with the contract's response schema.
+  const responseChangesFor = (run, result) => {
+    const api = savedApis.find((item) => item.id === run.apiId) ?? savedApis.find((item) => item.title === run.api);
+    return responseChanges(runHistory, run, result, responseSchema(api?.overview, run, result));
+  };
   const [selectedRunId, setSelectedRunId] = useState(null);
   const [pendingDeleteApiId, setPendingDeleteApiId] = useState(null);
   const [aiStatus, setAiStatus] = useState({ loading: true });
@@ -1305,7 +1320,7 @@ function App() {
             onGoToSpecs={openSpecsPage}
           />
         ) : page === "history" && selectedRun ? (
-          <RunDetail run={selectedRun} analysisState={analysisState} onAnalyze={analyzeFailure} onBack={() => openRunHistory()} onRerun={() => (isFlowRun(selectedRun) ? openSavedFlows(selectedRun) : rerunInOverview(selectedRun))} canRerun={!["newman", "junit"].includes(selectedRun.source) && savedApis.some((api) => api.id === selectedRun.apiId || api.title === selectedRun.api)} />
+          <RunDetail run={selectedRun} responseChangesFor={responseChangesFor} analysisState={analysisState} onAnalyze={analyzeFailure} onBack={() => openRunHistory()} onRerun={() => (isFlowRun(selectedRun) ? openSavedFlows(selectedRun) : rerunInOverview(selectedRun))} canRerun={!["newman", "junit"].includes(selectedRun.source) && savedApis.some((api) => api.id === selectedRun.apiId || api.title === selectedRun.api)} />
         ) : page === "history" ? (
           <RunHistoryList
             runs={runHistory}
@@ -1472,7 +1487,7 @@ function App() {
                         {isEditedScenario(scenario) && staleCheckReasons(scenario, operation).length > 0 && <div className="stale-check" role="note"><strong>Review against the current contract</strong><ul>{staleCheckReasons(scenario, operation).map((reason) => <li key={reason}>{reason}</li>)}</ul></div>}
                         {isEditedScenario(scenario) && editingDraft?.scenarioIndex !== scenario.scenarioIndex && <div className="card-actions"><button className="text-button" type="button" disabled={running} onClick={() => openDraftEditor(scenario.scenarioIndex)}>{draftStash[draftKey(scenario)] ? "Continue editing" : "Edit"}</button><button className="text-button danger" type="button" disabled={running} onClick={() => removeEditedCheck(scenario.scenarioIndex)}>Remove</button></div>}
                         {editingDraft?.scenarioIndex === scenario.scenarioIndex && draftEditor}
-                        {result && <div className={`result-box result-${result.result.toLowerCase()}`}><div className="result-heading"><strong>{result.result}</strong>{result.response_status && <span>HTTP {result.response_status}</span>}<small>{result.duration_ms} ms</small></div>{result.result === "FAIL" && (result.too_slow || result.schema_check?.status !== "failed") && <p className="result-reason">{outcomeSummary(result)}</p>}{result.schema_check?.status === "passed" && <p className="schema-note">Body matches the documented schema.</p>}<SchemaDifferences check={result.schema_check} />{result.error && <p>{result.error}</p>}{result.response_body && <details><summary>Response details</summary><pre>{result.response_body}</pre></details>}</div>}</div>
+                        {result && <div className={`result-box result-${result.result.toLowerCase()}`}><div className="result-heading"><strong>{result.result}</strong>{result.response_status && <span>HTTP {result.response_status}</span>}<small>{result.duration_ms} ms</small></div>{result.result === "FAIL" && (result.too_slow || result.schema_check?.status !== "failed") && <p className="result-reason">{outcomeSummary(result)}</p>}{result.schema_check?.status === "passed" && <p className="schema-note">Body matches the documented schema.</p>}<SchemaDifferences check={result.schema_check} /><ResponseChanges comparison={overviewComparison(index, result)} />{result.error && <p>{result.error}</p>}{result.response_body && <details><summary>Response details</summary><pre>{result.response_body}</pre></details>}</div>}</div>
                       </article>
                     );
                   })}

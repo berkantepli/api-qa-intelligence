@@ -10,6 +10,7 @@ import { RISK_LEVELS, RISK_RULES } from "./riskScore.js";
 import Sparkline from "./Sparkline.jsx";
 import TrendsPanel from "./TrendsPanel.jsx";
 import { recentRunsByEndpoint, trendSamples } from "./trends.js";
+import { changeText, responseChanges, responseSchema } from "./responseChanges.js";
 
 const statusLabels = { failing: "Failing", untested: "Not tested", passing: "Passing" };
 const filters = [
@@ -153,6 +154,13 @@ export default function CoveragePage({
 
   const { endpoints, totals } = computeCoverage(overview, apiRuns, Date.now(), contractChanges, lifecycle, criticality);
   const recentRuns = recentRunsByEndpoint(trendSamples(overview, trendRuns));
+  // Per endpoint, the structure changes in its latest run against the last pass of each check.
+  const changedResponses = {};
+  for (const run of [...apiRuns].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))) {
+    if (run.endpoint in changedResponses) continue;
+    changedResponses[run.endpoint] = (run.results ?? []).flatMap((result) => (responseChanges(trendRuns, run, result, responseSchema(overview, run, result))?.changes ?? [])
+      .map((change) => `${result.title}: ${changeText(change)}`));
+  }
   const flowTotals = lifecycle?.totals;
   // The advanced view adds the risk score, criticality, trends, and imported test results.
   const shownFilters = filters.filter((item) => advanced || item.id !== "high");
@@ -231,7 +239,7 @@ export default function CoveragePage({
       {visible.length ? <ul className="history-runs">{visible.map((endpoint) => <li key={endpoint.key}>
         <button className="coverage-row" type="button" onClick={() => onOpenEndpoint(endpoint.operationIndex)}>
           <span className={`method-tag method-${endpoint.method.toLowerCase()}`}>{endpoint.method}</span>
-          <span className="coverage-endpoint"><strong>{endpoint.path}</strong><small>{endpoint.summary || "API endpoint"}</small></span>
+          <span className="coverage-endpoint"><strong>{endpoint.path}</strong><small>{endpoint.summary || "API endpoint"}</small>{changedResponses[endpoint.key]?.length > 0 && <span className="response-change-pill" title={`In its latest run, against the last pass:\n${changedResponses[endpoint.key].join("\n")}`}>Response changed</span>}</span>
           <span className={`coverage-status coverage-status-${endpoint.status}`} title={endpoint.statusSource === "flow" ? `From the latest ${endpoint.flowTitle || "flow"} run` : undefined}>{statusLabels[endpoint.status]}{endpoint.statusSource === "flow" && <small>via flow</small>}</span>
           <span className="coverage-checks">{endpoint.coveredChecks}/{endpoint.runnableChecks} checks{endpoint.importedTests > 0 && <small>+ {endpoint.importedTests} imported {endpoint.importedTests === 1 ? "test" : "tests"}</small>}<small>{endpoint.lastRunAt ? `last run ${new Date(endpoint.lastRunAt).toLocaleString()}` : "never run"}</small><Sparkline runs={recentRuns[endpoint.key]} /></span>
           <span className="coverage-risks">

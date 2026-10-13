@@ -117,6 +117,21 @@ test("passes a correct endpoint and checks its body", async ({ page }) => {
   await expect(endpoint(page, "GET", "/pets").locator(".endpoint-status-passing")).toBeVisible();
 });
 
+test("compares a check's response with its last pass", async ({ page }) => {
+  await importPets(page);
+  await endpoint(page, "GET", "/pets").click();
+  await runAll(page);
+  const valid = check(page, "Valid request");
+  await expect(valid.locator(".result-box")).toContainText("PASS");
+  await expect(valid.locator(".response-changes-none")).toHaveCount(0);
+
+  // The checks are still selected; run them again.
+  const again = saved(page, "runs");
+  await page.getByRole("button", { name: /Run selected/ }).click();
+  await again;
+  await expect(valid.locator(".response-changes-none")).toContainText("Same response structure as the last pass");
+});
+
 test("explains a body that breaks the contract", async ({ page }) => {
   await importPets(page);
   await endpoint(page, "GET", "/pets/{id}").click();
