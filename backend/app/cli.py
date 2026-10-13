@@ -256,7 +256,7 @@ async def run_checks(args: argparse.Namespace) -> RunReport:
             print(f"  {result.result:<5} {key} · {scenario.title}", file=sys.stderr)
     if args.flows:
         for flow in overview.flows:
-            report.flows.append(await run_flow(flow, args, target, headers, inputs_file))
+            report.flows.append(await run_flow(flow, args, target, headers, inputs_file, credential_names(overview)))
     return report
 
 
@@ -278,7 +278,17 @@ def flow_path_values(flow: ApiFlow, params: list[str], inputs_file: dict[str, An
     return values
 
 
-async def run_flow(flow: ApiFlow, args: argparse.Namespace, target: str, headers: dict[str, str], inputs_file: dict[str, Any]) -> FlowOutcome:
+def credential_names(overview: ApiOverview) -> list[str]:
+    """Query and header parameters the contract marks as credentials, masked in the evidence."""
+    return sorted({
+        parameter.name for operation in overview.operations for parameter in operation.parameters
+        if parameter.credential and parameter.location in {"query", "header"}
+    })
+
+
+async def run_flow(
+    flow: ApiFlow, args: argparse.Namespace, target: str, headers: dict[str, str], inputs_file: dict[str, Any], secret_names: list[str]
+) -> FlowOutcome:
     titles = [step.title for step in flow.steps]
     if not args.include_writes:
         return FlowOutcome(id=flow.id, title=flow.title, skipped_reason="Creates and deletes data; pass --include-writes to run it.", skipped_steps=titles)
@@ -291,7 +301,9 @@ async def run_flow(flow: ApiFlow, args: argparse.Namespace, target: str, headers
         for step in flow.steps
     ]
     try:
-        payload = FlowExecutionRequest(base_url=target, headers=headers, max_duration_ms=args.max_duration_ms, steps=steps)
+        payload = FlowExecutionRequest(
+            base_url=target, headers=headers, max_duration_ms=args.max_duration_ms, secret_names=secret_names, steps=steps
+        )
         result = await execute_flow(payload, allow_private_network=args.allow_private_network)
     except (HTTPException, ValidationError) as error:
         detail = error.detail if isinstance(error, HTTPException) else error.errors()[0]["msg"]

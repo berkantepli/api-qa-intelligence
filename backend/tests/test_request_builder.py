@@ -77,6 +77,7 @@ def test_request_matches_the_web_app():
         "form_body": False,
         "form_fields": {},
         "json_body": {"name": "Max", "age": 3},
+        "secret_names": ["Authorization"],
         "expected_status_codes": [201],
         "response_schemas": {"201": {"type": "object"}},
     }

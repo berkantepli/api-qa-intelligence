@@ -34,7 +34,7 @@ jobs:
             type=raw,value=latest
           labels: |
             org.opencontainers.image.title=API QA Intelligence
-            org.opencontainers.image.description=Turn an OpenAPI contract into risk-aware QA checks, run them, and explain failures.
+            org.opencontainers.image.description=Reads an OpenAPI or Swagger contract, writes and runs the API checks for you, and shows what failed and what was never tested.
       - uses: docker/build-push-action@v6
         with:
           context: .

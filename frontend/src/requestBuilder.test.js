@@ -43,6 +43,7 @@ describe("buildCheckRequest", () => {
       path: "/pets/p%201",
       query_params: { limit: "10" },
       headers: { Authorization: "Bearer t", Cookie: "session=a%20b" },
+      secret_names: ["Authorization"],
       form_body: undefined,
       form_fields: {},
       file_uploads: {},

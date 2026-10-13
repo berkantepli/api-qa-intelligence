@@ -98,6 +98,8 @@ class FlowExecutionRequest(BaseModel):
     # Sent with every step (for example credentials); a step's own header of the same name wins.
     headers: dict[str, str] = Field(default_factory=dict)
     max_duration_ms: int | None = Field(default=None, ge=1, le=120_000)
+    # Credential parameter names from the contract; their values are masked in each step's evidence.
+    secret_names: list[str] = Field(default_factory=list, max_length=50)
     steps: list[FlowStep] = Field(min_length=1, max_length=MAX_FLOW_STEPS)
 
     @field_validator("steps")
@@ -512,6 +514,7 @@ def _concrete_request(payload: FlowExecutionRequest, step: FlowStep, values: Map
         "expected_status_codes": step.expected_status_codes,
         "response_schemas": step.response_schemas,
         "max_duration_ms": payload.max_duration_ms,
+        "secret_names": payload.secret_names,
     })
 
 
