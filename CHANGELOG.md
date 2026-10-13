@@ -2,7 +2,6 @@
 
 The version lives in the [`VERSION`](VERSION) file and follows [Semantic Versioning](https://semver.org/). Before 1.0.0, a new feature raises the minor number (0.**x**.0) and a fix or visual change raises the patch number (0.x.**y**).
 
-
 ## Unreleased
 
 ### Demo API
@@ -12,6 +11,7 @@ The version lives in the [`VERSION`](VERSION) file and follows [Semantic Version
 ### Fixes
 - Bulk runs on Coverage & Risk and flows now send the API-wide credentials from **Target & auth**. Since 1.17.0 only checks run from the overview sent them, so protected endpoints answered 401 in bulk runs and flows.
 - A path parameter with a documented example is sent with that example when nothing was entered. The check was offered as ready, but the request went to an empty path segment (for example `/books/`).
+
 ## 1.18.3 — 2026-10-14
 
 ### Security
