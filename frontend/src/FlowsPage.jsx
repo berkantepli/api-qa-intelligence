@@ -17,7 +17,8 @@ function StepResult({ result }) {
     {check?.response_status != null && <span>HTTP {check.response_status} · {check.duration_ms} ms</span>}
     {Object.entries(result.saved_values ?? {}).map(([name, value]) => <code key={name} className="flow-saved">{name} = {String(value)}</code>)}
     {/* A schema difference is listed below; the summary sentence would only repeat it. */}
-    {outcome !== "PASS" && (result.reason || (check && check.schema_check?.status !== "failed")) && <p>{result.reason || outcomeSummary(check)}</p>}
+    {/* A connection error already says why there is no response; the summary would only repeat it. */}
+    {outcome !== "PASS" && (result.reason || (check && !check.error && check.schema_check?.status !== "failed")) && <p>{result.reason || outcomeSummary(check)}</p>}
     {outcome !== "PASS" && check?.error && <p>{check.error}</p>}
     {check && <SchemaDifferences check={check.schema_check} />}
   </div>;

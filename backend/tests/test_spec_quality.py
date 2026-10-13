@@ -149,3 +149,23 @@ def test_cli_lint_fails_below_the_minimum_score(tmp_path, capsys):
     assert json.loads((tmp_path / "q.json").read_text())["score"] == 89
     assert main(["lint", str(path), "--min-score", "90"]) == 1
     assert main(["lint", str(tmp_path / "missing.json")]) == 2
+
+
+def test_a_contract_without_endpoints_says_so_instead_of_blaming_the_server():
+    quality = report({"openapi": "3.0.3", "info": {"title": "Empty", "version": "1"}, "paths": {}})
+
+    assert (quality.score, quality.grade) == (0, "F")
+    assert [fix.advice for fix in quality.top_fixes] == ["Document the API's endpoints under paths"]
+    assert [finding.message for finding in quality.findings] == [
+        "The contract documents no endpoints (its paths object is empty), so there is nothing to test."
+    ]
+
+
+def test_cli_explains_a_report_that_cannot_be_written(tmp_path, capsys):
+    path = tmp_path / "openapi.json"
+    path.write_text(json.dumps(GOOD))
+
+    assert main(["lint", str(path), "--json", str(tmp_path / "missing" / "q.json")]) == 2
+    err = capsys.readouterr().err
+    assert "the report could not be written to " in err
+    assert "no such file or directory. Check that the folder exists and can be written to." in err

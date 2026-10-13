@@ -216,6 +216,8 @@ SERVER_RULE = ("server", "A server is declared", "testability", 2,
 
 
 def assess_quality(operations: Sequence["ApiOperation"], servers: Sequence[str]) -> QualityReport:
+    if not operations:
+        return _no_endpoints(servers)
     ids = [operation.operation_id for operation in operations if operation.operation_id]
     context = Context(duplicate_ids=frozenset(item for item in ids if ids.count(item) > 1))
     rules: list[QualityRule] = []
@@ -264,6 +266,26 @@ def assess_quality(operations: Sequence["ApiOperation"], servers: Sequence[str])
     ]
     fixes.sort(key=lambda fix: (-fix.points, fix.rule))
     report = QualityReport(score=score, grade=grade(score), rules=rules, top_fixes=fixes[:5], findings=findings)
+    report.markdown = quality_markdown(report)
+    return report
+
+
+def _no_endpoints(servers: Sequence[str]) -> QualityReport:
+    """Nothing can be tested without endpoints; scoring only the server rule would point at the wrong fix."""
+    rule_id, label, category, weight, description, _ = SERVER_RULE
+    has_server = any(server.strip() for server in servers)
+    rules = [
+        QualityRule(id=check.id, label=check.label, category=check.category, weight=check.weight, description=check.description, applicable=0)
+        for check in CHECKS
+    ] + [QualityRule(id=rule_id, label=label, category=category, weight=weight, description=description, applicable=1, score=100 if has_server else 0)]
+    report = QualityReport(
+        score=0,
+        grade="F",
+        rules=rules,
+        top_fixes=[QualityFix(rule="endpoints", label="The contract documents endpoints", points=100, endpoints=0,
+                              advice="Document the API's endpoints under paths")],
+        findings=[QualityFinding(rule="endpoints", message="The contract documents no endpoints (its paths object is empty), so there is nothing to test.")],
+    )
     report.markdown = quality_markdown(report)
     return report
 

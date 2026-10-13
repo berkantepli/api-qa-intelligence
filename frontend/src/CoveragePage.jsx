@@ -260,7 +260,7 @@ export default function CoveragePage({
             </select>
           </label>}
         </div>
-      </li>)}</ul> : <p className="coverage-empty">No endpoints match this filter.</p>}
+      </li>)}</ul> : <p className="coverage-empty">{endpoints.length ? "No endpoints match this filter." : "This contract documents no endpoints, so there is nothing to cover yet."}</p>}
     </section>
   </section>;
 }
