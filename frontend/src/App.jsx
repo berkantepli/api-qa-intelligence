@@ -8,6 +8,7 @@ import CoveragePage from "./CoveragePage.jsx";
 import DuplicateNotice from "./DuplicateNotice.jsx";
 import { duplicatePairKey, filterNewIdeas, findDuplicateScenarios, findSameRequest } from "./duplicates.js";
 import { computeCoverage, flowCoverage, flowRunsForApi, runsForApi } from "./coverage.js";
+import { responseChanges, responseSchema } from "./responseChanges.js";
 import CoverageRing from "./CoverageRing.jsx";
 import { connectionLabel, targetUrlProblem } from "./targetConnection.js";
 import { postJson, requestJson } from "./apiClient.js";
@@ -141,6 +142,11 @@ function App() {
   const [runHistory, setRunHistory] = useState(() => readStoredJson(STORAGE_KEYS.runHistory, []));
   const apiLifecycle = useMemo(() => flowCoverage(overview, apiFlows, flowRunsForApi(runHistory, activeApiId, savedApis)), [overview, apiFlows, runHistory, activeApiId, savedApis]);
   const apiTrendRuns = useMemo(() => [...runsForApi(runHistory, activeApiId, savedApis), ...flowRunsForApi(runHistory, activeApiId, savedApis)], [runHistory, activeApiId, savedApis]);
+  // A run's checks against the last pass of the same check, with the contract's response schema.
+  const responseChangesFor = (run, result) => {
+    const api = savedApis.find((item) => item.id === run.apiId) ?? savedApis.find((item) => item.title === run.api);
+    return responseChanges(runHistory, run, result, responseSchema(api?.overview, run, result));
+  };
   const [selectedRunId, setSelectedRunId] = useState(null);
   const [pendingDeleteApiId, setPendingDeleteApiId] = useState(null);
   const [aiStatus, setAiStatus] = useState({ loading: true });
@@ -1308,7 +1314,7 @@ function App() {
             onGoToSpecs={openSpecsPage}
           />
         ) : page === "history" && selectedRun ? (
-          <RunDetail run={selectedRun} analysisState={analysisState} onAnalyze={analyzeFailure} onBack={() => openRunHistory()} onRerun={() => (isFlowRun(selectedRun) ? openSavedFlows(selectedRun) : rerunInOverview(selectedRun))} canRerun={!["newman", "junit"].includes(selectedRun.source) && savedApis.some((api) => api.id === selectedRun.apiId || api.title === selectedRun.api)} />
+          <RunDetail run={selectedRun} responseChangesFor={responseChangesFor} analysisState={analysisState} onAnalyze={analyzeFailure} onBack={() => openRunHistory()} onRerun={() => (isFlowRun(selectedRun) ? openSavedFlows(selectedRun) : rerunInOverview(selectedRun))} canRerun={!["newman", "junit"].includes(selectedRun.source) && savedApis.some((api) => api.id === selectedRun.apiId || api.title === selectedRun.api)} />
         ) : page === "history" ? (
           <RunHistoryList
             runs={runHistory}
