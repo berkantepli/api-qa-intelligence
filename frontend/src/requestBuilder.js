@@ -145,7 +145,7 @@ export function buildCheckRequest(described, inputs, scenario, { targetUrl, file
     query_params: queryParams,
     headers,
     // The contract's credential parameters, masked in the evidence whatever they are called.
-    secret_names: [...new Set(operationParameters.filter((parameter) => parameter.credential && ["query", "header"].includes(parameter.location)).map((parameter) => parameter.name))],
+    secret_names: credentialNames(operationParameters),
     form_body: example.form_body,
     form_fields: formFields,
     file_uploads: fileUploads,
@@ -156,6 +156,12 @@ export function buildCheckRequest(described, inputs, scenario, { targetUrl, file
     max_duration_ms: maxDurationMs,
     base_url: targetUrl,
   };
+}
+
+// Names of the query and header parameters the contract marks as credentials; their values are masked in
+// the evidence whatever they are called. The backend's secret_parameter_names has the same rule.
+export function credentialNames(parameters = []) {
+  return [...new Set(parameters.filter((parameter) => parameter.credential && ["query", "header"].includes(parameter.location)).map((parameter) => parameter.name))].sort();
 }
 
 // Reads the chosen files for each file field as base64 uploads.

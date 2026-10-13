@@ -7,6 +7,7 @@ and from the CLI. Request inputs use the web app's keys:
 
 import json
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from typing import Any
 from urllib.parse import quote
@@ -201,7 +202,13 @@ def build_check_request(
         "form_fields": form_fields,
         "json_body": json_body,
         # The contract's credential parameters, masked in the evidence whatever they are called.
-        "secret_names": sorted({p.name for p in described.parameters if p.credential and p.location in {"query", "header"}}),
+        "secret_names": secret_parameter_names(described.parameters),
         "expected_status_codes": example.expected_status_codes,
         "response_schemas": operation.response_schemas,
     }
+
+
+def secret_parameter_names(parameters: Iterable[Any]) -> list[str]:
+    """Names of the query and header parameters the contract marks as credentials; their values are
+    masked in the evidence whatever they are called. The web app's requestBuilder.js has the same rule."""
+    return sorted({parameter.name for parameter in parameters if parameter.credential and parameter.location in {"query", "header"}})

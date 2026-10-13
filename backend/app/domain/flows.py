@@ -14,7 +14,7 @@ from urllib.parse import quote, unquote, urlsplit
 from fastapi import HTTPException
 from pydantic import AnyHttpUrl, BaseModel, Field, ValidationError, field_validator
 
-from app.domain.evidence import SENSITIVE_KEY
+from app.domain.evidence import SENSITIVE_KEY, hide_secret_values
 from app.domain.execution import ScenarioExecutionRequest, ScenarioExecutionResult, send_check
 from app.domain.network import parse_target_base_url
 
@@ -589,14 +589,11 @@ def _scrub(check: ScenarioExecutionResult, values: Mapping[str, Any]) -> Scenari
     """Evidence redaction goes by field names; a saved token sent under another name (for example
     an X-Session header or a path segment) is hidden here by its value."""
     secrets = [_as_text(value, False) for name, value in values.items() if SENSITIVE_KEY.search(name)]
-    secrets = [secret for secret in secrets if len(secret) >= 4]
     if not secrets:
         return check
 
     def hide(text: str) -> str:
-        for secret in secrets:
-            text = text.replace(secret, "[REDACTED]").replace(quote(secret, safe=""), "[REDACTED]")
-        return text
+        return hide_secret_values(text, secrets)
 
     return check.model_copy(update={
         "request_url": hide(check.request_url),

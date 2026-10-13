@@ -13,6 +13,7 @@ from fastapi import HTTPException
 from pydantic import AnyHttpUrl, BaseModel, Field, field_validator
 
 from app.domain.evidence import (
+    hide_named_fields,
     hide_secret_values,
     redact_headers,
     redact_text,
@@ -129,17 +130,16 @@ async def send_check(
     """Like execute_scenario, but also returns the raw response body (unredacted, None when no
     complete body was received) so a flow can read values such as a created record's id."""
     result, raw_body = await _send(payload, allow_private_network=allow_private_network)
-    return _hide_named_secrets(result, payload), raw_body
+    result = _hide_named_secrets(result, payload)
+    # Cut the body for display only after masking, so a secret across the cut is still masked whole.
+    return result.model_copy(update={"response_body": result.response_body[:MAX_DISPLAY_BODY_CHARS]}), raw_body
 
 
 def _hide_named_secrets(result: ScenarioExecutionResult, payload: ScenarioExecutionRequest) -> ScenarioExecutionResult:
     names = {name.lower() for name in payload.secret_names}
     if not names:
         return result
-    values = [
-        value for name, value in [*payload.query_params.items(), *payload.headers.items()]
-        if name.lower() in names and len(value.strip()) >= 4
-    ]
+    values = [value for name, value in [*payload.query_params.items(), *payload.headers.items()] if name.lower() in names]
 
     def hide(text: str) -> str:
         return hide_secret_values(text, values)
@@ -147,13 +147,23 @@ def _hide_named_secrets(result: ScenarioExecutionResult, payload: ScenarioExecut
     def hide_headers(headers: dict[str, str]) -> dict[str, str]:
         return {name: "[REDACTED]" if name.lower() in names else hide(value) for name, value in headers.items()}
 
+    def hide_schema_error(error: str) -> str:
+        # "$.data.appid: 'x' is not one of [...]" names the field before the first ": ".
+        field = error.split(": ", 1)[0].rsplit(".", 1)[-1].split("[", 1)[0]
+        return f"{error.split(': ', 1)[0]}: [REDACTED] does not match the documented schema" if field.lower() in names else hide(error)
+
+    check = result.schema_check
     return result.model_copy(update={
         "request_url": hide(sanitize_url(result.request_url, names)) if result.request_url else "",
         "request_headers": hide_headers(result.request_headers),
-        "request_body": hide(result.request_body),
-        "response_body": hide(result.response_body),
+        "request_body": hide(hide_named_fields(result.request_body, names)),
+        "response_body": hide(hide_named_fields(result.response_body, names)),
         "response_headers": hide_headers(result.response_headers),
         "error": hide(result.error) if result.error else result.error,
+        # Schema differences quote the values they found, which can be an echoed credential.
+        "schema_check": check.model_copy(update={
+            "detail": hide(check.detail), "errors": [hide_schema_error(error) for error in check.errors],
+        }) if check else None,
     })
 
 
@@ -227,7 +237,8 @@ async def _send(
                     response_status=response.status_code,
                     expected_status_codes=payload.expected_status_codes,
                     duration_ms=duration_ms,
-                    response_body=redact_text(body)[:MAX_DISPLAY_BODY_CHARS],
+                    # send_check() cuts this to MAX_DISPLAY_BODY_CHARS after masking named secrets.
+                    response_body=redact_text(body),
                     response_truncated=truncated or len(body) > MAX_DISPLAY_BODY_CHARS,
                     request_url=request_url,
                     request_headers=request_headers,

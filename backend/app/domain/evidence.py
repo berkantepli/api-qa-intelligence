@@ -72,13 +72,41 @@ def sanitize_url(url: str, secret_names: set[str] | None = None) -> str:
     return urlunsplit((parts.scheme, netloc, parts.path, urlencode(query), ""))
 
 
+# Shorter values would match too much ordinary text even as whole tokens ("1", "ok").
+MIN_SECRET_CHARS = 3
+
+
 def hide_secret_values(text: str, values: list[str]) -> str:
-    """Masks known secret values wherever they appear, as typed or URL-encoded (for example an API
-    key that the target API echoes back in its response)."""
-    for value in sorted(values, key=len, reverse=True):
-        for form in {value, quote(value, safe=""), quote_plus(value)}:
-            text = text.replace(form, "[REDACTED]")
+    """Masks known secret values wherever they appear as a value of their own: as typed, URL-encoded,
+    or JSON-escaped (for example an API key that the target API echoes back in its response).
+    A value inside a longer word or number is left alone, so a key such as "test" does not turn
+    "latest" into "la[REDACTED]"."""
+    secrets = {value for value in values if len(value.strip()) >= MIN_SECRET_CHARS}
+    for value in sorted(secrets, key=len, reverse=True):
+        for form in {value, quote(value, safe=""), quote_plus(value), json.dumps(value)[1:-1]}:
+            text = re.sub(rf"(?<![A-Za-z0-9]){re.escape(form)}(?![A-Za-z0-9])", "[REDACTED]", text)
     return text
+
+
+def hide_named_fields(text: str, names: set[str]) -> str:
+    """Masks the values of JSON fields named like a credential (case-insensitive), whatever their
+    length, for example an echoed {"pin": "12"}. Text that is not JSON is returned as it is."""
+    if not names:
+        return text
+    try:
+        document = json.loads(text)
+    except json.JSONDecodeError:
+        return text
+
+    def walk(value: Any) -> Any:
+        if isinstance(value, dict):
+            return {key: "[REDACTED]" if str(key).lower() in names else walk(item) for key, item in value.items()}
+        if isinstance(value, list):
+            return [walk(item) for item in value]
+        return value
+
+    masked = walk(document)
+    return text if masked == document else json.dumps(masked, ensure_ascii=False, indent=2)
 
 
 def redact_text(value: str) -> str:
