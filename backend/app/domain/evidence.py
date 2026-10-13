@@ -1,7 +1,7 @@
 import json
 import re
 from typing import Any
-from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+from urllib.parse import parse_qsl, quote, quote_plus, urlencode, urlsplit, urlunsplit
 
 SENSITIVE_KEY = re.compile(
     r"authorization|authentication|(?:^|[^a-z])auth(?:$|[^a-z])|cookie|token|secret|"
@@ -55,7 +55,7 @@ def redact_headers(headers: dict[str, Any]) -> dict[str, str]:
     }
 
 
-def sanitize_url(url: str) -> str:
+def sanitize_url(url: str, secret_names: set[str] | None = None) -> str:
     parts = urlsplit(url)
     host = parts.hostname or ""
     try:
@@ -66,10 +66,19 @@ def sanitize_url(url: str) -> str:
         host = f"[{host}]"
     netloc = f"{host}:{port}" if port else host
     query = [
-        (key, "[REDACTED]" if SENSITIVE_KEY.search(key) else value)
+        (key, "[REDACTED]" if SENSITIVE_KEY.search(key) or key.lower() in (secret_names or set()) else value)
         for key, value in parse_qsl(parts.query, keep_blank_values=True)
     ]
     return urlunsplit((parts.scheme, netloc, parts.path, urlencode(query), ""))
+
+
+def hide_secret_values(text: str, values: list[str]) -> str:
+    """Masks known secret values wherever they appear, as typed or URL-encoded (for example an API
+    key that the target API echoes back in its response)."""
+    for value in sorted(values, key=len, reverse=True):
+        for form in {value, quote(value, safe=""), quote_plus(value)}:
+            text = text.replace(form, "[REDACTED]")
+    return text
 
 
 def redact_text(value: str) -> str:

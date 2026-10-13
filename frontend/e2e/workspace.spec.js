@@ -157,6 +157,17 @@ test("flags an endpoint that does not ask for its documented key", async ({ page
   await expect(endpoint(page, "GET", "/orders").locator(".endpoint-status-failing")).toBeVisible();
 });
 
+test("tells the backend which parameters are credentials, so it masks them", async ({ page }) => {
+  const bodies = [];
+  page.on("request", (request) => { if (request.url().endsWith("/api/v1/runs/execute")) bodies.push(request.postDataJSON()); });
+  await importPets(page);
+  await endpoint(page, "GET", "/orders").click();
+  await runAll(page);
+
+  expect(bodies.length).toBeGreaterThan(0);
+  for (const body of bodies) expect(body.secret_names).toEqual(["X-Key"]);
+});
+
 test("does not run checks without a usable target", async ({ page }) => {
   await importPets(page);
   await endpoint(page, "GET", "/pets").click();

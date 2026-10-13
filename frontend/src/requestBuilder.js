@@ -142,6 +142,8 @@ export function buildCheckRequest(described, inputs, scenario, { targetUrl, file
     path,
     query_params: queryParams,
     headers,
+    // The contract's credential parameters, masked in the evidence whatever they are called.
+    secret_names: [...new Set(operationParameters.filter((parameter) => parameter.credential && ["query", "header"].includes(parameter.location)).map((parameter) => parameter.name))],
     form_body: example.form_body,
     form_fields: formFields,
     file_uploads: fileUploads,

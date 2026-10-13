@@ -198,6 +198,8 @@ def build_check_request(
         "form_body": example.form_body,
         "form_fields": form_fields,
         "json_body": json_body,
+        # The contract's credential parameters, masked in the evidence whatever they are called.
+        "secret_names": sorted({p.name for p in described.parameters if p.credential and p.location in {"query", "header"}}),
         "expected_status_codes": example.expected_status_codes,
         "response_schemas": operation.response_schemas,
     }
