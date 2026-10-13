@@ -53,7 +53,7 @@ The quickest way to try it is the Docker image, with nothing else to install:
 docker run -p 8001:8001 -v api-qa-data:/data ghcr.io/berkantepli/api-qa-intelligence
 ```
 
-Open http://localhost:8001 and import a contract, or pick one of the public sample APIs on the import page. Everything except the optional AI features works without further setup; see [Running with Docker](#running-with-docker) for testing an API on your own machine, and [Optional AI features](#optional-ai-features) for Ollama.
+Open http://localhost:8001 and import a contract, or choose **Try the demo API** on the import page (see [Demo API](#demo-api)). Everything except the optional AI features works without further setup; see [Running with Docker](#running-with-docker) for testing an API on your own machine, and [Optional AI features](#optional-ai-features) for Ollama.
 
 To run from source instead, from the repository root:
 
@@ -101,6 +101,19 @@ Only call APIs you own or are authorized to test. Execution does not happen duri
 For a selected set of checks, use `POST /api/v1/runs/execute-batch` with a `scenarios` array containing the same fields as the single-check request. The response includes a PASS/FAIL/ERROR summary and per-check request/response evidence. Sensitive header and body values are redacted, and uploaded file contents are not included in the evidence. Request inputs are prefilled from the contract’s `example`, `default`, or first `enum` value. **Fill with AI** fills the remaining empty body fields and query parameters on request (`POST /api/v1/specs/sample-values`): the model receives only field names, locations, descriptions, and schemas — never entered values, credentials, or the target URL — and every answer is checked against the field’s schema. AI-filled values are marked for review; if Ollama is unavailable, schema-based samples are used and labelled as such. Path parameters, headers, cookies, files, and credential-like fields are never generated; required ones are marked *Fill this in yourself* with the reason. Clearing an optional field leaves it out of the request. Credentials derived from an operation’s security requirement (for example an `Authorization` header or an API key) are shown as optional *credential* fields: fill them to call the API authenticated, or leave them empty to send the request without credentials. The *Call without authentication* check always leaves the documented credentials out, sends the otherwise valid request, and expects 401 or 403 (or the auth error codes the contract documents); when authentication is optional for an operation it stays a review idea. JSON examples are only generated when the contract provides enough information; path parameters and non-JSON request bodies still need a manual example.
 
 Saved APIs can be deleted from the API specs page (trash icon, then confirm). Deleting removes the API’s contract, scenarios, edited AI checks, and saved request details; its Run history is kept.
+
+### Demo API
+
+**Try the demo API** (on the import page and the empty API list) imports *Demo Bookstore*, a small API the backend serves itself under `/demo`, so it works offline and in Docker. Its contract is `/demo/openapi.json`; `GET /api/v1/demo` says where the backend reaches it. Sign in with `demo@example.com` / `demo-password` (the sign-in request in **Target & auth** is prefilled).
+
+It has deliberate problems, and a **Demo tour** on its overview links each one to where it shows up:
+
+- `GET /books` lists a book whose price is text, so the schema check fails.
+- `GET /orders` documents a bearer token but answers without one, so *Call without authentication* fails.
+- `POST` and `PUT /books/{bookId}` accept a year that is not a number and a field the schema forbids, and reject 1450, the documented minimum.
+- `GET /reports/sales` takes about 1.5 seconds, so a response time limit of 1000 ms fails it.
+
+Everything else behaves as documented, including the *Book lifecycle* flow. Its data lives in memory; **Reset demo data** in the tour (or `POST /demo/__reset`) brings back the three sample books. From the command line, with the app running: `api-qa run --spec http://127.0.0.1:8001/demo/openapi.json --include-writes --header "Authorization: Bearer <token>"`.
 
 ### Target and authentication
 
@@ -257,7 +270,7 @@ Every feature of the web app goes through a documented HTTP API under `/api/v1`,
 
 ## Roadmap
 
-[docs/MVP_ROADMAP.md](MVP_ROADMAP.md) records how the project was planned up to 1.0. Ideas after 1.0 include a built-in demo API and a hosted demo.
+[docs/MVP_ROADMAP.md](MVP_ROADMAP.md) records how the project was planned up to 1.0. Ideas after 1.0 include a hosted demo.
 
 ## Security and responsible use
 

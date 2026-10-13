@@ -18,7 +18,7 @@ The easiest way is Docker, with nothing else to install:
 docker run -p 8001:8001 -v api-qa-data:/data ghcr.io/berkantepli/api-qa-intelligence
 ```
 
-Open <http://localhost:8001>. On the import page, pick one of the sample APIs (such as **Swagger Petstore**) to try it without a contract of your own.
+Open <http://localhost:8001>. To try it without a contract of your own, choose **Try the demo API** on the import page: a small bookstore API built into the app, with deliberate problems to find and a short tour. It needs no internet.
 
 <details>
 <summary>Run from source instead</summary>
@@ -43,7 +43,7 @@ Open <http://127.0.0.1:8001>.
 
 ## How to use it
 
-1. **Import a contract.** Upload an OpenAPI 3.x or Swagger 2.0 file (JSON or YAML), paste its URL, or pick a sample API.
+1. **Import a contract.** Upload an OpenAPI 3.x or Swagger 2.0 file (JSON or YAML), paste its URL, or try the built-in demo API.
 2. **Set the target.** Under **Target & auth** at the top, check the address your requests go to and enter a token if the API needs one.
 3. **Run checks.** In the **Overview**, pick an endpoint, fill in any required values (such as an id), select checks, and click **Run selected**.
 4. **Read the results.** Each check shows **PASS**, **FAIL**, or **ERROR** with the reason. **Run history** keeps every run with the full request and response.
