@@ -8,6 +8,8 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from app.api.ai_scenarios import router as ai_scenarios_router
 from app.api.ai_status import router as ai_status_router
 from app.api.auth import router as auth_router
+from app.api.demo import info_router as demo_info_router
+from app.api.demo import router as demo_router
 from app.api.failure_analysis import router as failure_analysis_router
 from app.api.flows import router as flows_router
 from app.api.request_import import router as request_import_router
@@ -52,6 +54,8 @@ app.include_router(ai_scenarios_router)
 app.include_router(ai_status_router)
 app.include_router(targets_router)
 app.include_router(auth_router)
+app.include_router(demo_info_router)
+app.include_router(demo_router)
 app.include_router(sample_values_router)
 app.include_router(workspace_router)
 
