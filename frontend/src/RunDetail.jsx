@@ -48,7 +48,7 @@ export function SchemaDifferences({ check }) {
 
 // How the response's structure differs from the last time the same check passed. It never fails
 // the check: a change can be intended.
-function ResponseChanges({ comparison }) {
+export function ResponseChanges({ comparison }) {
   if (!comparison) return null;
   const since = new Date(comparison.previousAt).toLocaleString();
   if (!comparison.changes.length) return <p className="response-changes-none">Same response structure as the last pass ({since}).</p>;
