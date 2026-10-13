@@ -171,7 +171,7 @@ export default function CoveragePage({
       <p className="page-lede">{overview.title} · based on {totals.checksExecuted} {totals.checksExecuted === 1 ? "check" : "checks"} in Run history.</p>
       <div className="coverage-export">
         <label className="advanced-toggle" title="Show the risk score, criticality, trends, and test results imported from CI or other tools"><input type="checkbox" checked={advanced} onChange={(event) => onAdvancedChange(event.target.checked)} /> Advanced view</label>
-        {advanced && <button className="secondary-button" type="button" onClick={() => reportInput.current?.click()} title="Add test results: an api-qa run --json report, a Newman JSON report, or JUnit XML"><Icon name="upload" size={14} /> Import test results</button>}
+        {advanced && <button className="secondary-button" type="button" onClick={() => reportInput.current?.click()} title="Add results from CI or another test tool to this API: an api-qa run --json report, a Newman JSON report, or JUnit XML. It does not add an API."><Icon name="upload" size={14} /> Add CI test results</button>}
         <input ref={reportInput} type="file" accept="application/json,.json,application/xml,text/xml,.xml" hidden onChange={importTestResults} />
         <button className="secondary-button" type="button" onClick={() => exportReport("md")}><Icon name="arrow" size={14} /> Export Markdown</button>
         <button className="secondary-button" type="button" onClick={() => exportReport("json")}><Icon name="arrow" size={14} /> Export JSON</button>

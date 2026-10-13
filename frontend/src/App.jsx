@@ -1200,9 +1200,6 @@ function App() {
           <button className={`sidebar-status connection-${serviceStatus.tone}`} type="button" onClick={() => { openSettingsPage(); runAiDiagnosis(); }} title={`Intelligence service: ${serviceStatus.detail}\nClick to run a diagnosis.`} aria-label={`Service status: ${serviceStatus.text}. Run a diagnosis.`}>
             <span className="connection-dot" aria-hidden="true" /><span>Service status</span>
           </button>
-          <a className="nav-link" href="/docs" target="_blank" rel="noreferrer">
-            <Icon name="link" /><span>Backend API docs</span>
-          </a>
           <button className={`nav-link ${page === "settings" ? "active" : ""}`} onClick={openSettingsPage}>
             <Icon name="settings" /><span>Settings</span>
           </button>
@@ -1381,7 +1378,10 @@ function App() {
           <section className="overview-page">
             <div className="overview-heading">
               <div><div className="page-eyebrow">API OVERVIEW</div><h1>{overview.title}</h1><p className="page-lede">Version {overview.version} <span className="dot-sep">·</span> OpenAPI {overview.openapi_version}</p></div>
-              <button className="secondary-button" type="button" disabled={requestImport?.loading} onClick={() => requestFileInput.current?.click()} title="Compare a Postman collection or HAR file with this contract and reuse its values">{requestImport?.loading ? <><span className="spinner" /> Reading…</> : <><Icon name="upload" size={14} /> Import Postman or HAR</>}</button>
+              <div className="overview-tool">
+                <button className="secondary-button" type="button" disabled={requestImport?.loading} onClick={() => requestFileInput.current?.click()} title="Compare a Postman collection or HAR file with this contract and reuse its values">{requestImport?.loading ? <><span className="spinner" /> Reading…</> : <><Icon name="upload" size={14} /> Fill from Postman or HAR</>}</button>
+                <small>Compares requests you already send with this API and fills in their values. It does not add an API.</small>
+              </div>
               <input ref={requestFileInput} type="file" accept="application/json,.json,.har" hidden onChange={readRequestFile} />
             </div>
             {requestImport?.apiId === activeApiId && requestImport.error && <ErrorAlert message={requestImport.error} />}
@@ -1479,13 +1479,13 @@ function App() {
                   {!inputsReady ? <div className="empty-state">Complete the required request details above to prepare these checks.</div> : availableScenarios.length === 0 && <div className="empty-state">No executable checks are available for this endpoint yet. Choose another endpoint with a complete request example.</div>}
                 </div>
                 {hasInputsToVary ? <section className="ai-suggestions">
-                  <div className="ai-suggestions-heading"><div><div className="panel-kicker"><Icon name="spark" size={14} /> AI SUGGESTIONS</div><p>Ideas based on this endpoint’s contract. Review them before turning them into checks.</p></div><button className="secondary-button" type="button" disabled={scenarioIdeaStatus.loading} onClick={generateScenarioIdeas}>{scenarioIdeaStatus.loading ? <><span className="spinner" /> Thinking…</> : <><Icon name="spark" size={14} /> {aiScenarioIdeas.length ? "Refresh suggestions" : "Suggest scenarios"}</>}</button></div>
+                  <div className="ai-suggestions-heading"><div><div className="panel-kicker"><Icon name="spark" size={14} /> AI SUGGESTIONS</div><p>Ideas based on this endpoint’s contract. An idea does not run: choose <strong>Convert to check</strong>, review its request, and save it to add it to Runnable checks.</p></div><button className="secondary-button" type="button" disabled={scenarioIdeaStatus.loading} onClick={generateScenarioIdeas}>{scenarioIdeaStatus.loading ? <><span className="spinner" /> Thinking…</> : <><Icon name="spark" size={14} /> {aiScenarioIdeas.length ? "Refresh suggestions" : "Suggest scenarios"}</>}</button></div>
                   <ErrorAlert message={scenarioIdeaStatus.error} />
                   <small className="ai-suggestions-note">Sends endpoint details to your configured AI model. No credentials or API requests are sent.</small>
                   {savedCheck?.operationKey === operationKey && <div className="alert success-alert saved-check-notice" role="status"><Icon name="check" size={16} /><span>“{savedCheck.title}” was saved as a check under Runnable checks{inputsReady ? "." : "; complete the request details above to run it."}</span>{inputsReady && <button className="text-button" type="button" onClick={() => setHighlightedCheck(savedCheck.scenarioIndex)}>Show it</button>}</div>}
                   {scenarioIdeaStatus.skipped > 0 && <small className="ai-suggestions-note">Skipped {scenarioIdeaStatus.skipped} {scenarioIdeaStatus.skipped === 1 ? "idea that repeats" : "ideas that repeat"} an existing check.</small>}
                   {aiScenarioIdeas.length ? <div className="ai-suggestions-list">{aiScenarioIdeas.map(({ scenario, scenarioIndex }) => <article className="ai-suggestion-card" key={`${scenario.title}-${scenarioIndex}`}>
-                    <div className="scenario-title-row"><span className={`category-pill category-${scenario.category}`}>{categoryLabels[scenario.category] || scenario.category}</span><span className="review-pill">Review · not runnable</span>{advancedView && duplicateIndexes.has(scenarioIndex) && <span className="duplicate-pill">Possible duplicate</span>}{draftStash[draftKey(scenario)] && editingDraft?.scenarioIndex !== scenarioIndex && <span className="edited-pill">Draft in progress</span>}</div>
+                    <div className="scenario-title-row"><span className={`category-pill category-${scenario.category}`}>{categoryLabels[scenario.category] || scenario.category}</span><span className="review-pill">Idea · convert to run</span>{advancedView && duplicateIndexes.has(scenarioIndex) && <span className="duplicate-pill">Possible duplicate</span>}{draftStash[draftKey(scenario)] && editingDraft?.scenarioIndex !== scenarioIndex && <span className="edited-pill">Draft in progress</span>}</div>
                     <h3>{scenario.title}</h3><p>{scenario.rationale}</p>
                     {editingDraft?.scenarioIndex === scenarioIndex
                       ? draftEditor

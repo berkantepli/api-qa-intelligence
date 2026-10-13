@@ -1108,3 +1108,10 @@ h1, h2, h3, p { margin-top: 0; }
   .connection-settings span, .connection-settings small { display: none; }
 }
 .advanced-toggle { display: inline-flex; align-items: center; gap: 7px; color: var(--text); font-size: 12px; font-weight: 600; white-space: nowrap; cursor: pointer; }
+.overview-tool { display: grid; justify-items: end; gap: 5px; max-width: 280px; }
+.overview-tool small { color: var(--muted); font-size: 11px; line-height: 1.4; text-align: right; }
+.settings-link { flex: 0 0 auto; text-decoration: none; }
+@media (max-width: 900px) {
+  .overview-tool { justify-items: start; max-width: none; }
+  .overview-tool small { text-align: left; }
+}

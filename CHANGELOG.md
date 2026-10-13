@@ -2,6 +2,12 @@
 
 The version lives in the [`VERSION`](VERSION) file and follows [Semantic Versioning](https://semver.org/). Before 1.0.0, a new feature raises the minor number (0.**x**.0) and a fix or visual change raises the patch number (0.x.**y**).
 
+## Unreleased
+
+- Clearer names for buttons that read a file into the active API, so they are not mistaken for adding an API: **Import Postman or HAR** is now **Fill from Postman or HAR**, with a short note under it, and **Import test results** on Coverage & Risk is now **Add CI test results**.
+- AI ideas say how they become runnable: the pill reads **Idea · convert to run**, and the heading explains Convert to check.
+- **Backend API docs** moved from the sidebar to a **Backend API** card in Settings.
+
 ## 1.17.0 — 2026-10-12
 
 ### Target and authentication

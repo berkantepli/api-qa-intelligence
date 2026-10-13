@@ -117,6 +117,13 @@ export default function SettingsPage({ aiStatus, onRefreshAiStatus, aiDiagnosis,
       {importMessage && <div className={`alert ${importMessage.tone === "success" ? "success-alert" : "error-alert"}`} role="status"><Icon name={importMessage.tone === "success" ? "check" : "close"} size={16} />{importMessage.text}</div>}
     </section>
 
+    <section className="settings-card">
+      <div className="settings-card-heading">
+        <div><h2>Backend API</h2><p>Every feature of the app goes through a documented HTTP API under <code>/api/v1</code>, for scripts and other tools.</p></div>
+        <a className="secondary-button settings-link" href="/docs" target="_blank" rel="noreferrer"><Icon name="link" size={15} /> Open API docs</a>
+      </div>
+    </section>
+
     <section className="settings-card settings-danger">
       <div className="settings-card-heading">
         <div><h2>Delete all saved data</h2><p>Removes every saved API, edited AI check, run, and saved request detail from the workspace database and this browser. Export first if you may need them again.</p></div>
