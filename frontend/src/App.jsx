@@ -21,7 +21,7 @@ import { qualityTone } from "./quality.js";
 import { draftToFlow, effectiveFlows, withoutFlowChanges, withSavedFlow } from "./flowEditor.js";
 import { buildFlowRequest, flowRunEntry, isFlowRun } from "./flows.js";
 import Icon from "./Icon.jsx";
-import { SAMPLE_APIS } from "./sampleApis.js";
+import DemoGuide, { isDemoApi } from "./DemoGuide.jsx";
 import RunDetail, { ResponseChanges, SchemaDifferences } from "./RunDetail.jsx";
 import { outcomeSummary } from "./runDetail.js";
 import RunHistoryList from "./RunHistoryList.jsx";
@@ -565,6 +565,19 @@ function App() {
     setSourceMode(mode);
     // A message about the other source (for example "choose a file") no longer applies.
     setError("");
+  }
+
+  // The demo API is served by this backend; it says at which address it reaches itself.
+  async function tryDemoApi() {
+    // Import errors are shown on the import page, so start there.
+    setPage("import");
+    setError("");
+    try {
+      const demo = await requestJson("/api/v1/demo", undefined, "The demo API could not be found.");
+      await importSpec(null, demo.spec_url);
+    } catch (caught) {
+      setError(caught.message);
+    }
   }
 
   async function importSpec(event, sampleUrl) {
@@ -1345,7 +1358,7 @@ function App() {
                   <button className="danger-button" type="button" onClick={() => deleteSavedApi(api.id)}>Delete</button>
                 </div>
                 : <button className="icon-button" type="button" aria-label={`Delete ${api.title}`} title="Delete API" onClick={() => setPendingDeleteApiId(api.id)}><Icon name="trash" size={16} /></button>}
-            </article>)}</div> : <div className="history-empty"><Icon name="file" size={25} /><strong>No API specs yet</strong><span>Import an OpenAPI specification and it will be saved here.</span><button className="primary-button" onClick={openImportPage}><Icon name="upload" size={15} /> Import API</button></div>}
+            </article>)}</div> : <div className="history-empty"><Icon name="file" size={25} /><strong>No API specs yet</strong><span>Import an OpenAPI specification and it will be saved here, or try the built-in demo API.</span><div className="history-empty-actions"><button className="primary-button" onClick={openImportPage}><Icon name="upload" size={15} /> Import API</button><button className="secondary-button" type="button" disabled={loading} onClick={tryDemoApi}><Icon name="spark" size={15} /> Try the demo API</button></div></div>}
           </section>
         ) : page === "import" || !overview ? (
           <section className="setup-page">
@@ -1363,12 +1376,6 @@ function App() {
               </div>
               {sourceMode === "url" ? (<>
                 <label className="field-wrap"><span className="field-label">OpenAPI URL</span><span className="input-with-icon"><Icon name="link" size={17} /><input autoComplete="url" type="url" value={specUrl} onChange={(event) => setSpecUrl(event.target.value)} placeholder="https://api.example.com/openapi.json" /></span></label>
-                  <div className="sample-apis">
-                    <span className="sample-apis-label">No spec at hand? Try a public API:</span>
-                    <div className="sample-api-grid">{SAMPLE_APIS.map((sample) => <button key={sample.id} className="sample-api" type="button" disabled={loading} onClick={() => { setSpecUrl(sample.url); importSpec(null, sample.url); }}>
-                      <strong>{sample.name}</strong><small>{sample.note}</small>
-                    </button>)}</div>
-                  </div>
               </>) : (
                 <label className={`upload-box ${file ? "has-file" : ""}`}>
                   <span className="upload-icon"><Icon name={file ? "check" : "upload"} size={21} /></span>
@@ -1379,6 +1386,10 @@ function App() {
                   <input className="visually-hidden" type="file" accept=".json,.yaml,.yml,application/json,text/yaml" onChange={(event) => setFile(event.target.files?.[0] || null)} />
                 </label>
               )}
+              <div className="demo-offer">
+                <div><strong>No contract at hand? Try the built-in demo API.</strong><small>A small bookstore API that runs inside this app, needs no internet, and has deliberate problems for the checks to find.</small></div>
+                <button className="secondary-button" type="button" disabled={loading} onClick={tryDemoApi}><Icon name="spark" size={14} /> Try the demo API</button>
+              </div>
               {error && <div className="alert error-alert" role="alert"><Icon name="close" size={17} />{error}</div>}
               {notice && <div className="alert success-alert" role="status"><Icon name="check" size={17} />{notice}</div>}
               <div className="card-footer"><span className="privacy-note"><Icon name="shield" size={16} /> Import only reads the API contract</span><button className="primary-button" type="submit" disabled={loading}>{loading ? <><span className="spinner" /> Importing…</> : <>Import API <Icon name="arrow" size={16} /></>}</button></div>
@@ -1430,6 +1441,12 @@ function App() {
                 onClose={() => setRequestImport(null)}
               />;
             })()}
+            {isDemoApi(activeApi) && <DemoGuide
+              onOpenAuth={() => setShowConnection(true)}
+              onOpenEndpoint={openOperation}
+              onOpenFlows={openFlowsPage}
+              onOpenCoverage={openCoveragePage}
+            />}
             {showQuality && overview.quality && <QualityPanel quality={overview.quality} operations={overview.operations} onOpenEndpoint={(index) => { selectOperation(index); setShowQuality(false); }} onClose={() => setShowQuality(false)} />}
             {overview.operations.length === 0 ? <div className="history-empty"><Icon name="file" size={25} /><strong>This contract documents no endpoints</strong><span>Its paths object is empty, so there are no checks to run. Import the full contract, for example from the API's /openapi.json, or check that this is the right file.</span><button className="secondary-button" type="button" onClick={openImportPage}>Import API</button></div> : <div className="workspace-grid">
               <section className="panel endpoints-panel">
