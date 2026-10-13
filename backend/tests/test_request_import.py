@@ -108,3 +108,55 @@ def test_parse_route(client):
 
     assert response.status_code == 200 and response.json()["requests"][0]["path"] == "/pets"
     assert refused.status_code == 422
+
+
+def _collection(items, variables=None):
+    return {
+        "info": {"name": "C", "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"},
+        "item": items, "variable": variables or [],
+    }
+
+
+def test_a_long_variable_cannot_blow_up_the_result(client):
+    items = [{"name": f"r{i}", "request": {"method": "GET", "url": f"{{{{base}}}}/p{i}/{{{{v}}}}"}} for i in range(500)]
+    body = json.dumps(_collection(items, [{"key": "v", "value": "A" * 1_000_000}])).encode()
+
+    response = client.post("/api/v1/requests/parse", files={"file": ("c.json", body)})
+
+    assert response.status_code == 200
+    assert len(response.content) < 200_000
+    assert response.json()["requests"] == []
+
+
+def test_a_variable_repeated_in_a_body_is_left_out(client):
+    raw = "[" + ",".join(['"{{v}}"'] * 1000) + "]"
+    items = [{"name": "r", "request": {"method": "POST", "url": "{{base}}/x", "body": {"mode": "raw", "raw": raw}}}]
+    body = json.dumps(_collection(items, [{"key": "v", "value": "A" * 10_000}])).encode()
+
+    result = client.post("/api/v1/requests/parse", files={"file": ("c.json", body)}).json()
+
+    assert result["requests"][0]["json_body"] is None
+
+
+def test_deeply_nested_bodies_do_not_break_the_import(client):
+    deep = "[" * 50_000 + "]" * 50_000
+    postman = _collection([{"name": "deep", "request": {"method": "POST", "url": "{{base}}/x", "body": {"mode": "raw", "raw": deep}}}])
+    har = {"log": {"entries": [{"_resourceType": "fetch", "request": {
+        "method": "POST", "url": "https://api.example.com/x", "postData": {"mimeType": "application/json", "text": deep},
+    }}]}}
+
+    for document in (postman, har):
+        response = client.post("/api/v1/requests/parse", files={"file": ("c.json", json.dumps(document).encode())})
+        assert response.status_code == 200
+        assert response.json()["requests"][0]["json_body"] is None
+
+
+def test_secrets_in_a_path_are_left_out(client):
+    har = {"log": {"entries": [{"_resourceType": "xhr", "request": {
+        "method": "GET", "url": "https://api.example.com/v1/eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.abcDEFghi/items",
+    }}]}}
+
+    result = client.post("/api/v1/requests/parse", files={"file": ("h.har", json.dumps(har).encode())}).json()
+
+    assert result["requests"][0]["path"] == "/v1/{value}/items"
+    assert result["left_out_secrets"] == 1

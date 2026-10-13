@@ -21,6 +21,11 @@ METHODS = {"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"}
 VARIABLE = re.compile(r"\{\{([^{}]+)\}\}")
 STATIC_FILE = re.compile(r"\.(js|mjs|css|map|png|jpe?g|gif|svg|webp|ico|woff2?|ttf|html?)$", re.IGNORECASE)
 MAX_REQUESTS = 2_000
+# A collection variable is copied into every request that uses it, so a small file could expand to
+# gigabytes; anything longer than these limits is left out.
+MAX_PATH_CHARS = 2_000
+MAX_VALUE_CHARS = 2_000
+MAX_BODY_CHARS = 200_000
 
 
 class RequestFileError(ValueError):
@@ -81,6 +86,30 @@ class _Reader:
             return False
         return True
 
+    def json_body(self, text: str | None) -> Any:
+        """A JSON body, or None when it is not JSON, too long, or nested too deeply to read."""
+        if text is None or len(text) > MAX_BODY_CHARS:
+            return None
+        try:
+            document = json.loads(text)
+            check_document_size(document)
+        except (json.JSONDecodeError, RecursionError, DocumentTooComplexError):
+            return None
+        return self.clean_body(document)
+
+    def clean_path(self, path: str | None) -> str | None:
+        """None for a path that is too long; a segment that looks like a secret (a JWT, a bearer token,
+        a card number) becomes {value} and is counted as left out."""
+        if path is None or len(path) > MAX_PATH_CHARS:
+            return None
+        segments = []
+        for segment in path.split("/"):
+            if segment and scrub_text(segment) != segment:
+                self.left_out += 1
+                segment = "{value}"
+            segments.append(segment)
+        return "/".join(segments)
+
     def clean_body(self, value: Any) -> Any:
         if isinstance(value, dict):
             return {key: self.clean_body(item) for key, item in value.items() if self.keep(key, item)}
@@ -129,13 +158,23 @@ class _Reader:
         method = str(request.get("method") or "GET").upper()
         url = request.get("url")
         path, query = self.postman_url(url, variables)
+        path = self.clean_path(path)
         if method not in METHODS or path is None:
             self.skipped += 1
             return
         json_body, form = self.postman_body(request.get("body"), variables)
         self.add(ImportedRequest(name=name or f"{method} {path}", method=method, path=path, query=query, json_body=json_body, form_fields=form))
 
-    def substitute(self, text: str, variables: dict[str, str]) -> str:
+    def substitute(self, text: str, variables: dict[str, str], limit: int = MAX_VALUE_CHARS) -> str | None:
+        """The text with {{variables}} filled in, or None when the result would be longer than `limit`
+        (checked before building it)."""
+        length = len(text)
+        for match in VARIABLE.finditer(text):
+            value = variables.get(match.group(1).strip())
+            if value is not None:
+                length += len(value) - len(match.group(0))
+        if length > limit:
+            return None
         return VARIABLE.sub(lambda match: variables.get(match.group(1).strip(), match.group(0)), text)
 
     def postman_url(self, url: Any, variables: dict[str, str]) -> tuple[str | None, dict[str, str]]:
@@ -144,26 +183,36 @@ class _Reader:
         if isinstance(url, dict):
             for item in url.get("variable") or []:
                 if isinstance(item, dict) and item.get("key") and item.get("value") not in (None, "") and self.keep(item["key"], item["value"]):
-                    path_values[str(item["key"])] = self.substitute(str(item["value"]), variables)
+                    value = self.substitute(str(item["value"]), variables)
+                    if value is not None:
+                        path_values[str(item["key"])] = value
             for item in url.get("query") or []:
                 if isinstance(item, dict) and item.get("key") and not item.get("disabled"):
                     value = self.substitute(str(item.get("value") or ""), variables)
-                    if self.keep(item["key"], value) and not VARIABLE.search(value):
+                    if value is not None and self.keep(item["key"], value) and not VARIABLE.search(value):
                         query[str(item["key"])] = value
             segments = url.get("path")
             if isinstance(segments, list):
                 raw_path = "/" + "/".join(str(segment) for segment in segments)
             elif isinstance(url.get("raw"), str):
                 raw_path = self.raw_path(url["raw"], variables, query)
+                if raw_path is None:
+                    return None, {}
             else:
                 return None, {}
         elif isinstance(url, str):
             raw_path = self.raw_path(url, variables, query)
+            if raw_path is None:
+                return None, {}
         else:
             return None, {}
         parts = []
+        if len(raw_path) > MAX_PATH_CHARS:
+            return None, {}
         for segment in raw_path.split("/"):
-            segment = self.substitute(segment, variables)
+            segment = self.substitute(segment, variables, MAX_PATH_CHARS)
+            if segment is None:
+                return None, {}
             if not segment:
                 continue
             if segment.startswith(":"):
@@ -174,9 +223,12 @@ class _Reader:
             parts.append(f"{{{match.group(1).strip()}}}" if match else segment)
         return "/" + "/".join(parts), query
 
-    def raw_path(self, raw: str, variables: dict[str, str], query: dict[str, str]) -> str:
-        """The path of a raw URL such as {{baseUrl}}/pets/1?x=1, filling `query` when it is empty."""
-        resolved = self.substitute(raw.strip(), variables)
+    def raw_path(self, raw: str, variables: dict[str, str], query: dict[str, str]) -> str | None:
+        """The path of a raw URL such as {{baseUrl}}/pets/1?x=1, filling `query` when it is empty;
+        None when the URL is too long once its variables are filled in."""
+        resolved = self.substitute(raw.strip(), variables, MAX_PATH_CHARS + MAX_VALUE_CHARS)
+        if resolved is None:
+            return None
         # A base URL variable that stays unresolved stands in front of the path.
         resolved = re.sub(r"^\{\{[^{}]*\}\}", "", resolved)
         parts = urlsplit(resolved if "://" in resolved else f"http://host{resolved if resolved.startswith('/') else '/' + resolved}")
@@ -191,17 +243,14 @@ class _Reader:
             return None, {}
         mode = body.get("mode")
         if mode == "raw" and isinstance(body.get("raw"), str) and body["raw"].strip():
-            try:
-                return self.clean_body(json.loads(self.substitute(body["raw"], variables))), {}
-            except json.JSONDecodeError:
-                return None, {}
+            return self.json_body(self.substitute(body["raw"], variables, MAX_BODY_CHARS)), {}
         if mode in {"urlencoded", "formdata"}:
             form = {}
             for item in body.get(mode) or []:
                 if not isinstance(item, dict) or item.get("disabled") or item.get("type") == "file" or not item.get("key"):
                     continue
                 value = self.substitute(str(item.get("value") or ""), variables)
-                if self.keep(item["key"], value) and not VARIABLE.search(value):
+                if value is not None and self.keep(item["key"], value) and not VARIABLE.search(value):
                     form[str(item["key"])] = value
             return None, form
         return None, {}
@@ -216,29 +265,28 @@ class _Reader:
                 continue
             # Browsers mark what each request was for; only API calls (fetch, XHR) are kept.
             resource = entry.get("_resourceType")
-            path = unquote(urlsplit(request["url"]).path) or "/"
+            path = self.clean_path(unquote(urlsplit(request["url"]).path) or "/")
             method = str(request.get("method") or "GET").upper()
-            if (isinstance(resource, str) and resource.lower() not in {"xhr", "fetch"}) or STATIC_FILE.search(path) or method not in METHODS:
+            if path is None or (isinstance(resource, str) and resource.lower() not in {"xhr", "fetch"}) or STATIC_FILE.search(path) or method not in METHODS:
                 self.skipped += 1
                 continue
             query = {
                 str(item["name"]): str(item.get("value", ""))
                 for item in request.get("queryString") or []
-                if isinstance(item, dict) and item.get("name") and self.keep(item["name"], str(item.get("value", "")))
+                if isinstance(item, dict) and item.get("name") and len(str(item.get("value", ""))) <= MAX_VALUE_CHARS
+                and self.keep(item["name"], str(item.get("value", "")))
             }
             json_body, form = None, {}
             post = request.get("postData") if isinstance(request.get("postData"), dict) else {}
             mime = str(post.get("mimeType") or "").lower()
             if "json" in mime and isinstance(post.get("text"), str):
-                try:
-                    json_body = self.clean_body(json.loads(post["text"]))
-                except json.JSONDecodeError:
-                    json_body = None
+                json_body = self.json_body(post["text"])
             elif isinstance(post.get("params"), list):
                 form = {
                     str(item["name"]): str(item.get("value", ""))
                     for item in post["params"]
-                    if isinstance(item, dict) and item.get("name") and "fileName" not in item and self.keep(item["name"], str(item.get("value", "")))
+                    if isinstance(item, dict) and item.get("name") and "fileName" not in item
+                    and len(str(item.get("value", ""))) <= MAX_VALUE_CHARS and self.keep(item["name"], str(item.get("value", "")))
                 }
             self.add(ImportedRequest(name=f"{method} {path}", method=method, path=path, query=query, json_body=json_body, form_fields=form))
         creator = log.get("creator") if isinstance(log.get("creator"), dict) else {}
