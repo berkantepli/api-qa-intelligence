@@ -15,7 +15,8 @@ export default function RequestImportPanel({ collection, comparison, onApply, on
         <h2>{collection.name}</h2>
         <p>{SOURCE_LABELS[collection.source]} · {plural(collection.requests.length, "request")}
           {collection.skipped > 0 && ` · ${collection.skipped} entries that are not API requests skipped`}
-          {collection.left_out_secrets > 0 && ` · ${plural(collection.left_out_secrets, "credential-like value")} left out`}.
+          {collection.left_out_secrets > 0 && ` · ${plural(collection.left_out_secrets, "credential-like value")} left out`}
+          {collection.too_long > 0 && ` · ${collection.too_long} too long to read (paths over 2,000 characters, values over 2,000, bodies over 200,000) left out`}.
           Headers, auth settings, and cookies are never read.</p>
       </div>
       <button className="icon-button" type="button" onClick={onClose} aria-label="Close imported requests"><Icon name="close" size={15} /></button>

@@ -160,3 +160,35 @@ def test_secrets_in_a_path_are_left_out(client):
 
     assert result["requests"][0]["path"] == "/v1/{value}/items"
     assert result["left_out_secrets"] == 1
+
+
+def test_too_long_requests_and_values_are_counted_apart_from_other_entries(client):
+    har = {"log": {"entries": [
+        {"_resourceType": "fetch", "request": {"method": "GET", "url": "https://api.example.com/" + "a" * 3_000}},
+        {"_resourceType": "fetch", "request": {"method": "GET", "url": "https://api.example.com/pets", "queryString": [{"name": "ids", "value": "1," * 1_500}, {"name": "page", "value": "2"}]}},
+        {"_resourceType": "script", "request": {"method": "GET", "url": "https://api.example.com/app.js"}},
+    ]}}
+
+    result = client.post("/api/v1/requests/parse", files={"file": ("h.har", json.dumps(har).encode())}).json()
+
+    assert (result["skipped"], result["too_long"]) == (1, 2)
+    assert [(r["path"], r["query"]) for r in result["requests"]] == [("/pets", {"page": "2"})]
+
+
+def test_a_long_query_value_keeps_the_request(client):
+    items = [{"name": "r", "request": {"method": "GET", "url": "{{base}}/pets/7?ids={{many}}&page=2"}}]
+    body = json.dumps(_collection(items, [{"key": "many", "value": "1," * 1_500}])).encode()
+
+    result = client.post("/api/v1/requests/parse", files={"file": ("c.json", body)}).json()
+
+    assert [(r["path"], r["query"]) for r in result["requests"]] == [("/pets/7", {"page": "2"})]
+    assert result["too_long"] == 1
+
+
+def test_a_repeated_request_counts_its_secrets_once(client):
+    entry = {"_resourceType": "xhr", "request": {"method": "GET", "url": "https://api.example.com/v1/eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.abcDEFghi/items"}}
+    har = {"log": {"entries": [entry] * 12}}
+
+    result = client.post("/api/v1/requests/parse", files={"file": ("h.har", json.dumps(har).encode())}).json()
+
+    assert len(result["requests"]) == 1 and result["left_out_secrets"] == 1

@@ -49,6 +49,8 @@ class RequestCollection(BaseModel):
     # Credential-like values that were left out, and entries that are not API requests.
     left_out_secrets: int = 0
     skipped: int = 0
+    # Requests whose path is too long, and query, form, or body values too long to keep.
+    too_long: int = 0
 
 
 def parse_request_file(contents: bytes) -> RequestCollection:
@@ -69,11 +71,16 @@ def parse_request_file(contents: bytes) -> RequestCollection:
     raise RequestFileError("This JSON file is neither a Postman collection (v2.0 or v2.1) nor a HAR file.")
 
 
+class _TooLongError(Exception):
+    """A request's path is too long once its variables are filled in."""
+
+
 class _Reader:
     def __init__(self, source: Literal["postman", "har"]) -> None:
         self.source = source
         self.left_out = 0
         self.skipped = 0
+        self.too_long = 0
         self.requests: list[ImportedRequest] = []
         self.seen: set[str] = set()
 
@@ -88,7 +95,10 @@ class _Reader:
 
     def json_body(self, text: str | None) -> Any:
         """A JSON body, or None when it is not JSON, too long, or nested too deeply to read."""
-        if text is None or len(text) > MAX_BODY_CHARS:
+        if text is None:
+            return None
+        if len(text) > MAX_BODY_CHARS:
+            self.too_long += 1
             return None
         try:
             document = json.loads(text)
@@ -98,10 +108,12 @@ class _Reader:
         return self.clean_body(document)
 
     def clean_path(self, path: str | None) -> str | None:
-        """None for a path that is too long; a segment that looks like a secret (a JWT, a bearer token,
-        a card number) becomes {value} and is counted as left out."""
-        if path is None or len(path) > MAX_PATH_CHARS:
+        """None when there is no path; a path that is too long raises _TooLongError. A segment that looks
+        like a secret (a JWT, a bearer token, a card number) becomes {value} and is counted as left out."""
+        if path is None:
             return None
+        if len(path) > MAX_PATH_CHARS:
+            raise _TooLongError
         segments = []
         for segment in path.split("/"):
             if segment and scrub_text(segment) != segment:
@@ -120,14 +132,29 @@ class _Reader:
             return None
         return value
 
-    def add(self, request: ImportedRequest) -> None:
+    def add(self, request: ImportedRequest, counts: tuple[int, int]) -> None:
+        """Adds a new request. A repeat of one already read is dropped, and so are the values it left
+        out (`counts` are the counters from before it was read), so a request polled twelve times
+        counts its secrets once."""
         key = json.dumps([request.method, request.path, request.query, request.json_body, request.form_fields], sort_keys=True, default=str)
         if key not in self.seen and len(self.requests) < MAX_REQUESTS:
             self.seen.add(key)
             self.requests.append(request)
+        else:
+            self.left_out, self.too_long = counts
+
+    def long_value(self, value: str) -> bool:
+        """True, and counted, for a query or form value longer than MAX_VALUE_CHARS."""
+        if len(value) > MAX_VALUE_CHARS:
+            self.too_long += 1
+            return True
+        return False
 
     def result(self, name: str) -> RequestCollection:
-        return RequestCollection(source=self.source, name=name, requests=self.requests, left_out_secrets=self.left_out, skipped=self.skipped)
+        return RequestCollection(
+            source=self.source, name=name, requests=self.requests,
+            left_out_secrets=self.left_out, skipped=self.skipped, too_long=self.too_long,
+        )
 
     # --- Postman --------------------------------------------------------------------------------
 
@@ -156,14 +183,18 @@ class _Reader:
             self.skipped += 1
             return
         method = str(request.get("method") or "GET").upper()
-        url = request.get("url")
-        path, query = self.postman_url(url, variables)
-        path = self.clean_path(path)
+        counts = (self.left_out, self.too_long)
+        try:
+            path, query = self.postman_url(request.get("url"), variables)
+            path = self.clean_path(path)
+        except _TooLongError:
+            self.left_out, self.too_long = counts[0], counts[1] + 1
+            return
         if method not in METHODS or path is None:
             self.skipped += 1
             return
         json_body, form = self.postman_body(request.get("body"), variables)
-        self.add(ImportedRequest(name=name or f"{method} {path}", method=method, path=path, query=query, json_body=json_body, form_fields=form))
+        self.add(ImportedRequest(name=name or f"{method} {path}", method=method, path=path, query=query, json_body=json_body, form_fields=form), counts)
 
     def substitute(self, text: str, variables: dict[str, str], limit: int = MAX_VALUE_CHARS) -> str | None:
         """The text with {{variables}} filled in, or None when the result would be longer than `limit`
@@ -189,30 +220,28 @@ class _Reader:
             for item in url.get("query") or []:
                 if isinstance(item, dict) and item.get("key") and not item.get("disabled"):
                     value = self.substitute(str(item.get("value") or ""), variables)
-                    if value is not None and self.keep(item["key"], value) and not VARIABLE.search(value):
+                    if value is None:
+                        self.too_long += 1
+                    elif self.keep(item["key"], value) and not VARIABLE.search(value):
                         query[str(item["key"])] = value
             segments = url.get("path")
             if isinstance(segments, list):
                 raw_path = "/" + "/".join(str(segment) for segment in segments)
             elif isinstance(url.get("raw"), str):
                 raw_path = self.raw_path(url["raw"], variables, query)
-                if raw_path is None:
-                    return None, {}
             else:
                 return None, {}
         elif isinstance(url, str):
             raw_path = self.raw_path(url, variables, query)
-            if raw_path is None:
-                return None, {}
         else:
             return None, {}
         parts = []
         if len(raw_path) > MAX_PATH_CHARS:
-            return None, {}
+            raise _TooLongError
         for segment in raw_path.split("/"):
             segment = self.substitute(segment, variables, MAX_PATH_CHARS)
             if segment is None:
-                return None, {}
+                raise _TooLongError
             if not segment:
                 continue
             if segment.startswith(":"):
@@ -223,18 +252,24 @@ class _Reader:
             parts.append(f"{{{match.group(1).strip()}}}" if match else segment)
         return "/" + "/".join(parts), query
 
-    def raw_path(self, raw: str, variables: dict[str, str], query: dict[str, str]) -> str | None:
-        """The path of a raw URL such as {{baseUrl}}/pets/1?x=1, filling `query` when it is empty;
-        None when the URL is too long once its variables are filled in."""
-        resolved = self.substitute(raw.strip(), variables, MAX_PATH_CHARS + MAX_VALUE_CHARS)
+    def raw_path(self, raw: str, variables: dict[str, str], query: dict[str, str]) -> str:
+        """The path of a raw URL such as {{baseUrl}}/pets/1?x=1, filling `query` when it is empty.
+        The query is read value by value, so one long value is left out rather than the request;
+        a path that is too long once its variables are filled in raises _TooLongError."""
+        path_part, _, query_part = raw.strip().partition("?")
+        resolved = self.substitute(path_part, variables, MAX_PATH_CHARS + MAX_VALUE_CHARS)
         if resolved is None:
-            return None
+            raise _TooLongError
         # A base URL variable that stays unresolved stands in front of the path.
         resolved = re.sub(r"^\{\{[^{}]*\}\}", "", resolved)
         parts = urlsplit(resolved if "://" in resolved else f"http://host{resolved if resolved.startswith('/') else '/' + resolved}")
         if not query:
-            for key, value in parse_qsl(parts.query, keep_blank_values=True):
-                if self.keep(key, value) and not VARIABLE.search(value):
+            for key, raw_value in parse_qsl(query_part, keep_blank_values=True):
+                # substitute() returns None for a value longer than MAX_VALUE_CHARS.
+                value = self.substitute(raw_value, variables)
+                if value is None:
+                    self.too_long += 1
+                elif self.keep(key, value) and not VARIABLE.search(value):
                     query[key] = value
         return unquote(parts.path)
 
@@ -243,14 +278,19 @@ class _Reader:
             return None, {}
         mode = body.get("mode")
         if mode == "raw" and isinstance(body.get("raw"), str) and body["raw"].strip():
-            return self.json_body(self.substitute(body["raw"], variables, MAX_BODY_CHARS)), {}
+            raw = self.substitute(body["raw"], variables, MAX_BODY_CHARS)
+            if raw is None:
+                self.too_long += 1
+            return self.json_body(raw), {}
         if mode in {"urlencoded", "formdata"}:
             form = {}
             for item in body.get(mode) or []:
                 if not isinstance(item, dict) or item.get("disabled") or item.get("type") == "file" or not item.get("key"):
                     continue
                 value = self.substitute(str(item.get("value") or ""), variables)
-                if value is not None and self.keep(item["key"], value) and not VARIABLE.search(value):
+                if value is None:
+                    self.too_long += 1
+                elif self.keep(item["key"], value) and not VARIABLE.search(value):
                     form[str(item["key"])] = value
             return None, form
         return None, {}
@@ -265,15 +305,21 @@ class _Reader:
                 continue
             # Browsers mark what each request was for; only API calls (fetch, XHR) are kept.
             resource = entry.get("_resourceType")
-            path = self.clean_path(unquote(urlsplit(request["url"]).path) or "/")
             method = str(request.get("method") or "GET").upper()
-            if path is None or (isinstance(resource, str) and resource.lower() not in {"xhr", "fetch"}) or STATIC_FILE.search(path) or method not in METHODS:
+            raw_path = unquote(urlsplit(request["url"]).path) or "/"
+            if (isinstance(resource, str) and resource.lower() not in {"xhr", "fetch"}) or STATIC_FILE.search(raw_path) or method not in METHODS:
                 self.skipped += 1
+                continue
+            counts = (self.left_out, self.too_long)
+            try:
+                path = self.clean_path(raw_path)
+            except _TooLongError:
+                self.left_out, self.too_long = counts[0], counts[1] + 1
                 continue
             query = {
                 str(item["name"]): str(item.get("value", ""))
                 for item in request.get("queryString") or []
-                if isinstance(item, dict) and item.get("name") and len(str(item.get("value", ""))) <= MAX_VALUE_CHARS
+                if isinstance(item, dict) and item.get("name") and not self.long_value(str(item.get("value", "")))
                 and self.keep(item["name"], str(item.get("value", "")))
             }
             json_body, form = None, {}
@@ -286,8 +332,8 @@ class _Reader:
                     str(item["name"]): str(item.get("value", ""))
                     for item in post["params"]
                     if isinstance(item, dict) and item.get("name") and "fileName" not in item
-                    and len(str(item.get("value", ""))) <= MAX_VALUE_CHARS and self.keep(item["name"], str(item.get("value", "")))
+                    and not self.long_value(str(item.get("value", ""))) and self.keep(item["name"], str(item.get("value", "")))
                 }
-            self.add(ImportedRequest(name=f"{method} {path}", method=method, path=path, query=query, json_body=json_body, form_fields=form))
+            self.add(ImportedRequest(name=f"{method} {path}", method=method, path=path, query=query, json_body=json_body, form_fields=form), counts)
         creator = log.get("creator") if isinstance(log.get("creator"), dict) else {}
         return self.result(f"HAR from {creator.get('name')}" if creator.get("name") else "HAR file")
