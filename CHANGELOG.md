@@ -5,6 +5,7 @@ The version lives in the [`VERSION`](VERSION) file and follows [Semantic Version
 ## 1.18.1 — 2026-10-13
 
 - In the overview, "Same response structure as the last pass" under a passing check is gray instead of the red used for failure explanations.
+- The README is a short introduction: what the app does, a quick start, how to use it, and where to go next. The full documentation moved to [docs/GUIDE.md](docs/GUIDE.md).
 
 ## 1.18.0 — 2026-10-13
 

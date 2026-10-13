@@ -81,4 +81,4 @@ Each record must be smaller than 5 MB. The database records its schema version a
 
 ## Command line
 
-`api-qa run` (see the README) uses the same check engine without the HTTP API. Its options, exit codes (`0` all passed, `1` a check failed, `2` usage problem), and report formats (JUnit XML, JSON) follow the same stability promise.
+`api-qa run` (see the [guide](GUIDE.md#running-checks-in-ci)) uses the same check engine without the HTTP API. Its options, exit codes (`0` all passed, `1` a check failed, `2` usage problem), and report formats (JUnit XML, JSON) follow the same stability promise.
