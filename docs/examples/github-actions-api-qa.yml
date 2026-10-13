@@ -24,7 +24,7 @@ jobs:
           --inputs api-qa-inputs.json
           --junit api-qa-report.xml
           --json api-qa-report.json
-      # Download api-qa-report.json from the run's artifacts and choose Import test results on the
+      # Download api-qa-report.json from the run's artifacts and choose Add CI test results on the
       # Coverage page to count these checks there.
       - name: Keep the reports
         if: always()
