@@ -604,7 +604,9 @@ function App() {
       setPage("overview");
       setSelectedOperation(firstRunnableOperationIndex(savedApi.overview));
       resetRunState();
-      setNotice(existing ? reimportNotice(savedApi, existing.title) : `Imported ${payload.operation_count} operations. Review the suggested scenarios below.`);
+      setNotice(existing ? reimportNotice(savedApi, existing.title) : (payload.operation_count
+        ? `Imported ${payload.operation_count} operations. Review the suggested scenarios below.`
+        : `Imported ${payload.title || "the API"}, but its contract documents no endpoints (its paths object is empty), so there is nothing to test yet. Check that this is the right file or URL.`));
       if (existing) classifyChanges(savedApi, existing.overview);
     } catch (caught) {
       setError(caught.message || "Something went wrong while importing the specification.");
@@ -1400,7 +1402,7 @@ function App() {
               <input ref={requestFileInput} type="file" accept="application/json,.json,.har" hidden onChange={readRequestFile} />
             </div>
             {requestImport?.apiId === activeApiId && requestImport.error && <ErrorAlert message={requestImport.error} />}
-            {notice && <div className="alert success-alert import-notice" role="status"><Icon name="check" size={17} /><span>{notice}</span><button className="text-button" type="button" onClick={() => setNotice("")}>Dismiss</button></div>}
+            {notice && <div className={`alert ${overview.operation_count === 0 ? "error-alert" : "success-alert"} import-notice`} role="status"><Icon name={overview.operation_count === 0 ? "close" : "check"} size={17} /><span>{notice}</span><button className="text-button" type="button" onClick={() => setNotice("")}>Dismiss</button></div>}
             {mergeOffer?.newId === activeApiId && <div className="alert merge-offer" role="status">
               <Icon name="link" size={17} />
               <span>Another saved API is also called “{overview.title}”, imported from <code>{mergeOffer.oldSource}</code>. If this is a new version of it, merge them: the contracts are compared, and its runs, saved checks, target URL, and time limit are kept.</span>
@@ -1410,8 +1412,8 @@ function App() {
             <div className={`stats-row ${overview.quality ? "stats-row-4" : ""}`}>
               <div className="stat-card"><span className="stat-label">Endpoints</span><strong>{overview.operation_count}</strong><span className="stat-note">available to review</span></div>
               <button className="stat-card stat-card-link" type="button" onClick={openCoveragePage} title="Open Coverage & Risk"><span className="stat-label">Endpoints tested</span><strong>{apiCoverage.totals.tested} / {apiCoverage.totals.endpoints}</strong><span className="stat-note">{apiCoverage.totals.tested ? (apiCoverage.totals.failing ? <span className="history-fail">{apiCoverage.totals.failing} failing in latest run</span> : "all passing in latest run") : "run checks to start"}</span></button>
-              <div className="stat-card"><span className="stat-label">Runnable checks</span><strong>{checkReadiness.total}</strong><span className="stat-note">{checkReadiness.needDetails ? `${checkReadiness.total - checkReadiness.needDetails} ready now · ${checkReadiness.needDetails} need request details` : "all ready to run"}</span></div>
-              {overview.quality && <button className={`stat-card stat-card-link ${showQuality ? "stat-card-active" : ""}`} type="button" onClick={() => setShowQuality((current) => !current)} aria-expanded={showQuality} title="How testable this contract is"><span className="stat-label">Contract quality</span><strong>{overview.quality.score} / 100 <span className={`quality-grade quality-${qualityTone(overview.quality.score)}`}>{overview.quality.grade}</span></strong><span className="stat-note">{overview.quality.top_fixes[0] ? `Top fix: +${overview.quality.top_fixes[0].points} ${overview.quality.top_fixes[0].advice.toLowerCase()}` : "nothing to fix"}</span></button>}
+              <div className="stat-card"><span className="stat-label">Runnable checks</span><strong>{checkReadiness.total}</strong><span className="stat-note">{checkReadiness.needDetails ? `${checkReadiness.total - checkReadiness.needDetails} ready now · ${checkReadiness.needDetails} need request details` : checkReadiness.total ? "all ready to run" : "nothing to run yet"}</span></div>
+              {overview.quality && <button className={`stat-card stat-card-link ${showQuality ? "stat-card-active" : ""}`} type="button" onClick={() => setShowQuality((current) => !current)} aria-expanded={showQuality} title="How testable this contract is"><span className="stat-label">Contract quality</span><strong>{overview.quality.score} / 100 <span className={`quality-grade quality-${qualityTone(overview.quality.score)}`}>{overview.quality.grade}</span></strong><span className="stat-note">{overview.quality.top_fixes[0] ? `Top fix: +${overview.quality.top_fixes[0].points} ${overview.quality.top_fixes[0].advice.replace(/^./, (letter) => letter.toLowerCase())}` : "nothing to fix"}</span></button>}
             </div>
             {requestImport?.apiId === activeApiId && requestImport.collection && (() => {
               const comparison = compareRequests(overview, requestImport.collection);
@@ -1429,7 +1431,7 @@ function App() {
               />;
             })()}
             {showQuality && overview.quality && <QualityPanel quality={overview.quality} operations={overview.operations} onOpenEndpoint={(index) => { selectOperation(index); setShowQuality(false); }} onClose={() => setShowQuality(false)} />}
-            <div className="workspace-grid">
+            {overview.operations.length === 0 ? <div className="history-empty"><Icon name="file" size={25} /><strong>This contract documents no endpoints</strong><span>Its paths object is empty, so there are no checks to run. Import the full contract, for example from the API's /openapi.json, or check that this is the right file.</span><button className="secondary-button" type="button" onClick={openImportPage}>Import API</button></div> : <div className="workspace-grid">
               <section className="panel endpoints-panel">
                 <div className="panel-header"><div><h2>Endpoints</h2><p>Select an endpoint to review its scenarios.</p></div><span className="count-pill">{overview.operation_count}</span></div>
                 <div className="endpoint-list" ref={endpointList}>
@@ -1517,7 +1519,7 @@ function App() {
                 <ErrorAlert message={error} className="run-error" />
                 <div className="run-footer">{inputsReady && availableScenarios.length > 0 && <button className="text-button" type="button" disabled={running} onClick={toggleAllScenarios}>{allSelected ? "Clear selection" : "Select all"}</button>}{lastRunId && !running && <button className="text-button" type="button" onClick={() => openRunHistory(lastRunId)}>View run details</button>}{inputsReady && targetProblem ? <span className="run-footer-warning" role="status">{targetProblem}</span> : <span>{inputsReady ? `${availableScenarios.length} ${availableScenarios.length === 1 ? "check" : "checks"} ready to run` : "Complete required request details first"}</span>}<button className="primary-button" disabled={!inputsReady || selectedCount === 0 || running || Boolean(targetProblem)} onClick={requestRun}>{running ? <><span className="spinner" /> Running…</> : <><Icon name="run" size={15} /> Run selected{selectedCount ? ` (${selectedCount})` : ""}</>}</button></div>
               </section>
-            </div>
+            </div>}
           </section>
         )}
       </main>
