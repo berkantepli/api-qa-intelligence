@@ -5,13 +5,6 @@ The version lives in the [`VERSION`](VERSION) file and follows [Semantic Version
 
 ## Unreleased
 
-- A contract without endpoints says so: the import notice is a warning, the overview explains that its paths object is empty instead of asking you to choose an endpoint, Runnable checks says "nothing to run yet", Coverage says there is nothing to cover, and the contract quality report points at the missing endpoints instead of the server URL (also in `api-qa lint`).
-- A Postman collection or HAR file without API requests says so, instead of showing an empty comparison.
-- A flow step with an unknown method or a malformed path is refused before anything is sent, with a plain message; it used to fail mid-run with a misleading one.
-- A flow step that cannot reach the target shows the connection problem once, not twice.
-- The quality card's top fix keeps capitals such as API and URL.
-- `api-qa run`, `diff`, and `lint` say which report file could not be written and why, instead of a raw error.
-
 ### Demo API
 - **Try the demo API** on the import page (and on the empty API list) replaces the four public sample APIs. *Demo Bookstore* is served by the app itself under `/demo`, so it needs no internet and gives the same results every time. It has sign-in, books with full create-read-update-delete, orders, and a slow report, with deliberate problems for the checks to find: a schema break, an endpoint that skips authentication, validation gaps, and a slow response.
 - A **Demo tour** on its overview links each problem to where it shows up; **Reset demo data** brings back the sample books. New route: `GET /api/v1/demo`.
@@ -19,11 +12,24 @@ The version lives in the [`VERSION`](VERSION) file and follows [Semantic Version
 ### Fixes
 - Bulk runs on Coverage & Risk and flows now send the API-wide credentials from **Target & auth**. Since 1.17.0 only checks run from the overview sent them, so protected endpoints answered 401 in bulk runs and flows.
 - A path parameter with a documented example is sent with that example when nothing was entered. The check was offered as ready, but the request went to an empty path segment (for example `/books/`).
+## 1.18.3 — 2026-10-14
+
+### Security
+- Credentials the contract documents under an ordinary name (for example an API key called `appid`, or an `X-Client` header) are now masked in evidence, Run history, exports, the evidence sent to Analyze with AI, and CLI reports, also when the API echoes them back. Checks and flows send the contract's credential names as `secret_names`.
+- Postman and HAR imports: a collection variable repeated across requests can no longer expand a small file into gigabytes; long paths, values, and bodies are left out. A deeply nested JSON body no longer returns an error, and a JWT, bearer token, or card number inside a path is replaced with `{value}`.
+
+### Other changes
+- In the overview, "Same response structure as the last pass" under a passing check is gray instead of the red used for failure explanations.
+- The README is a short introduction: what the app does, a quick start, how to use it, and where to go next. The full documentation moved to [docs/GUIDE.md](docs/GUIDE.md).
 
 ## 1.18.2 — 2026-10-13
 
-- In the overview, "Same response structure as the last pass" under a passing check is gray instead of the red used for failure explanations.
-- The README is a short introduction: what the app does, a quick start, how to use it, and where to go next. The full documentation moved to [docs/GUIDE.md](docs/GUIDE.md).
+- A contract without endpoints says so: the import notice is a warning, the overview explains that its paths object is empty instead of asking you to choose an endpoint, Runnable checks says "nothing to run yet", Coverage says there is nothing to cover, and the contract quality report points at the missing endpoints instead of the server URL (also in `api-qa lint`).
+- A Postman collection or HAR file without API requests says so, instead of showing an empty comparison.
+- A flow step with an unknown method or a malformed path is refused before anything is sent, with a plain message; it used to fail mid-run with a misleading one.
+- A flow step that cannot reach the target shows the connection problem once, not twice.
+- The quality card's top fix keeps capitals such as API and URL.
+- `api-qa run`, `diff`, and `lint` say which report file could not be written and why, instead of a raw error.
 
 ## 1.18.1 — 2026-10-13
 
