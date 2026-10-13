@@ -2,6 +2,21 @@
 
 The version lives in the [`VERSION`](VERSION) file and follows [Semantic Versioning](https://semver.org/). Before 1.0.0, a new feature raises the minor number (0.**x**.0) and a fix or visual change raises the patch number (0.x.**y**).
 
+## Unreleased
+
+### Masked evidence
+- Schema differences no longer quote a contract credential that the API echoed back in its response; a field named like a credential reads "[REDACTED] does not match the documented schema".
+- A credential value is masked only where it appears as a value of its own, so a key such as `test` no longer turns "latest" into "la[REDACTED]" or cuts into ids; its JSON-escaped form is masked too.
+- The response is masked before it is cut to 10,000 characters for display, so a credential across the cut is no longer partly visible.
+- Short credentials (three characters or more) are masked where they are echoed, and a JSON field with a credential's name is masked whatever its length.
+- Checks, flows, and the CLI's reports use one masking rule.
+
+### Postman and HAR import
+- Requests and values that are too long to read are counted on their own ("too long to read … left out") instead of as entries that are not API requests.
+- A long query value is left out on its own; the request is kept.
+- A request repeated in a HAR file counts its credential-like values once.
+- `POST /api/v1/requests/parse` returns `too_long`.
+
 ## 1.19.0 — 2026-10-14
 
 ### Demo API
