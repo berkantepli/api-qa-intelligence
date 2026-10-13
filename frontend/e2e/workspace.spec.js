@@ -206,6 +206,25 @@ test("keeps the workspace after the browser is cleared", async ({ page }) => {
   await expect(page.getByPlaceholder("Enter id")).toHaveValue("7");
 });
 
+test("explains a contract without endpoints and a collection without requests", async ({ page }) => {
+  await importPets(page);
+  await page.locator(".overview-heading input[type=file]").setInputFiles({ name: "empty.postman_collection.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify({ info: { name: "Empty", schema: "https://schema.getpostman.com/json/collection/v2.1.0/collection.json" }, item: [] })) });
+  await expect(page.locator(".request-import-panel .alert")).toHaveText("The file has no API requests, so there is nothing to compare. Choose a collection that contains requests.");
+
+  await nav(page, "API specs");
+  await page.getByRole("button", { name: "Import API" }).first().click();
+  await page.getByRole("tab", { name: "Upload file" }).click();
+  await page.locator(".import-card input[type=file]").setInputFiles({ name: "empty-api.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify({ openapi: "3.0.3", info: { title: "Empty API", version: "1" }, paths: {} })) });
+  await page.locator(".import-card").getByRole("button", { name: /Import API/ }).click();
+
+  await expect(page.locator(".import-notice.error-alert")).toContainText("its contract documents no endpoints");
+  await expect(page.locator(".overview-page .history-empty")).toContainText("This contract documents no endpoints");
+  await expect(page.locator(".stat-card").filter({ hasText: "Runnable checks" })).toContainText("nothing to run yet");
+  await expect(page.locator(".stat-card").filter({ hasText: "Contract quality" })).toContainText("document the API's endpoints under paths");
+  await nav(page, "Coverage");
+  await expect(page.locator(".coverage-empty")).toHaveText("This contract documents no endpoints, so there is nothing to cover yet.");
+});
+
 test("compares a Postman collection with the contract and reuses its values", async ({ page }) => {
   const collection = {
     info: { name: "E2E Postman", schema: "https://schema.getpostman.com/json/collection/v2.1.0/collection.json" },

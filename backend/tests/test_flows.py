@@ -349,3 +349,12 @@ def test_a_flow_with_an_unfilled_path_parameter_is_refused(client, mock_http):
 
     assert response.status_code == 422
     assert "Step 1: fill in the path parameter(s) ownerId." in response.text
+
+
+def test_a_step_with_an_unknown_method_or_a_bad_path_is_refused_up_front(client, mock_http):
+    method = run(client, [{"title": "Read", "method": "FETCH", "path": "/pets"}])
+    path = run(client, [{"title": "Read", "method": "GET", "path": "pets?x=1"}])
+
+    assert method.status_code == 422 and "not 'FETCH'" in method.text
+    assert path.status_code == 422 and "Use an absolute path such as /pets/{{petId}}" in path.text
+    assert mock_http.requests == []

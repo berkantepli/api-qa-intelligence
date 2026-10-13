@@ -2,6 +2,15 @@
 
 The version lives in the [`VERSION`](VERSION) file and follows [Semantic Versioning](https://semver.org/). Before 1.0.0, a new feature raises the minor number (0.**x**.0) and a fix or visual change raises the patch number (0.x.**y**).
 
+## Unreleased
+
+- A contract without endpoints says so: the import notice is a warning, the overview explains that its paths object is empty instead of asking you to choose an endpoint, Runnable checks says "nothing to run yet", Coverage says there is nothing to cover, and the contract quality report points at the missing endpoints instead of the server URL (also in `api-qa lint`).
+- A Postman collection or HAR file without API requests says so, instead of showing an empty comparison.
+- A flow step with an unknown method or a malformed path is refused before anything is sent, with a plain message; it used to fail mid-run with a misleading one.
+- A flow step that cannot reach the target shows the connection problem once, not twice.
+- The quality card's top fix keeps capitals such as API and URL.
+- `api-qa run`, `diff`, and `lint` say which report file could not be written and why, instead of a raw error.
+
 ## 1.18.2 — 2026-10-13
 
 - In the overview, "Same response structure as the last pass" under a passing check is gray instead of the red used for failure explanations.

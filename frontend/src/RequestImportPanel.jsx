@@ -21,6 +21,7 @@ export default function RequestImportPanel({ collection, comparison, onApply, on
       <button className="icon-button" type="button" onClick={onClose} aria-label="Close imported requests"><Icon name="close" size={15} /></button>
     </div>
 
+    {collection.requests.length === 0 && <div className="alert error-alert" role="status"><Icon name="close" size={16} /><span>The file has no API requests{collection.source === "har" ? " (only fetch and XHR calls count; scripts, styles, and images are skipped)" : ""}, so there is nothing to compare. {collection.source === "har" ? "Record the HAR while using the app, with the Network tab open." : "Choose a collection that contains requests."}</span></div>}
     <div className="stats-row request-import-stats">
       <div className="stat-card"><span className="stat-label">Endpoints it calls</span><strong>{matched.length} / {total}</strong><span className="stat-note">{total ? Math.round((matched.length / total) * 100) : 0}% of the contract</span></div>
       <div className="stat-card"><span className="stat-label">Never called</span><strong className={uncovered.length ? "coverage-warning" : undefined}>{uncovered.length}</strong><span className="stat-note">endpoints in the contract</span></div>
