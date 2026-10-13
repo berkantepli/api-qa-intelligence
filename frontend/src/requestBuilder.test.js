@@ -54,6 +54,12 @@ describe("buildCheckRequest", () => {
     });
   });
 
+  it("sends a path parameter's documented example when nothing was entered", () => {
+    const withExample = describeOperation({ ...operation, parameters: [...operation.parameters, { name: "id", location: "path", required: true, example: 7 }] });
+    expect(buildCheckRequest(withExample, { "body:name": "Max" }, valid, options).path).toBe("/pets/7");
+    expect(buildCheckRequest(withExample, { "body:name": "Max", "parameter:path:id": "9" }, valid, options).path).toBe("/pets/9");
+  });
+
   it("keeps a scenario's deliberate test value instead of the input", () => {
     expect(buildCheckRequest(described, inputs, invalidAge, options).json_body).toEqual({ name: "Max", age: -1 });
   });
