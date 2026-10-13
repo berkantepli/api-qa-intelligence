@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildCheckRequest, describeOperation, requestReadiness } from "./requestBuilder.js";
+import { buildCheckRequest, credentialNames, describeOperation, requestReadiness } from "./requestBuilder.js";
 
 const valid = { category: "happy_path", title: "Valid request", request_example: { method: "POST", path: "/pets/{id}", json_body: { name: "Rex", age: 2 }, expected_status_codes: [201] } };
 const invalidAge = { category: "invalid_value", title: "Send invalid age", request_example: { method: "POST", path: "/pets/{id}", json_body: { name: "Rex", age: -1 }, expected_status_codes: [422] } };
@@ -82,5 +82,18 @@ describe("buildCheckRequest", () => {
     expect(request.headers).toEqual({ Cookie: "session=a%20b" });
     expect(request.query_params).toEqual({ limit: "" });
     expect(request.json_body).toEqual({ name: 1 });
+  });
+});
+
+describe("credentialNames", () => {
+  it("lists the contract's query and header credentials once, sorted", () => {
+    const parameters = [
+      { name: "X-Key", location: "header", credential: true },
+      { name: "appid", location: "query", credential: true },
+      { name: "X-Key", location: "header", credential: true },
+      { name: "session", location: "cookie", credential: true },
+      { name: "limit", location: "query" },
+    ];
+    expect(credentialNames(parameters)).toEqual(["X-Key", "appid"]);
   });
 });
