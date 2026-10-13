@@ -23,6 +23,7 @@ from pydantic import ValidationError
 
 from app.domain.contract_diff import SEVERITY_ORDER, diff_contracts, diff_markdown
 from app.domain.documents import UNEXPECTED_SHAPE, DocumentTooComplexError, parse_document
+from app.domain.evidence import hide_secret_values
 from app.domain.execution import ScenarioExecutionRequest, execute_scenario
 from app.domain.flows import UNFILLED_PATH_PARAMETER, ApiFlow, FlowExecutionRequest, execute_flow
 from app.domain.network import request_error_reason
@@ -33,6 +34,7 @@ from app.domain.request_builder import (
     build_check_request,
     describe_operation,
     request_readiness,
+    secret_parameter_names,
 )
 from app.version import APP_VERSION
 
@@ -280,10 +282,7 @@ def flow_path_values(flow: ApiFlow, params: list[str], inputs_file: dict[str, An
 
 def credential_names(overview: ApiOverview) -> list[str]:
     """Query and header parameters the contract marks as credentials, masked in the evidence."""
-    return sorted({
-        parameter.name for operation in overview.operations for parameter in operation.parameters
-        if parameter.credential and parameter.location in {"query", "header"}
-    })
+    return secret_parameter_names(parameter for operation in overview.operations for parameter in operation.parameters)
 
 
 async def run_flow(
@@ -346,9 +345,7 @@ def print_summary(report: RunReport) -> None:
 
 def redact_secrets(text: str, secrets: list[str]) -> str:
     """Hides --header values wherever they appear, even where the API echoed them back."""
-    for secret in sorted(secrets, key=len, reverse=True):
-        text = text.replace(secret, "[REDACTED]")
-    return text
+    return hide_secret_values(text, secrets)
 
 
 def compare_contracts(args: argparse.Namespace) -> int:
