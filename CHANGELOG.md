@@ -2,8 +2,13 @@
 
 The version lives in the [`VERSION`](VERSION) file and follows [Semantic Versioning](https://semver.org/). Before 1.0.0, a new feature raises the minor number (0.**x**.0) and a fix or visual change raises the patch number (0.x.**y**).
 
-## Unreleased
+## 1.18.3 — 2026-10-14
 
+### Security
+- Credentials the contract documents under an ordinary name (for example an API key called `appid`, or an `X-Client` header) are now masked in evidence, Run history, exports, the evidence sent to Analyze with AI, and CLI reports, also when the API echoes them back. Checks and flows send the contract's credential names as `secret_names`.
+- Postman and HAR imports: a collection variable repeated across requests can no longer expand a small file into gigabytes; long paths, values, and bodies are left out. A deeply nested JSON body no longer returns an error, and a JWT, bearer token, or card number inside a path is replaced with `{value}`.
+
+### Other changes
 - In the overview, "Same response structure as the last pass" under a passing check is gray instead of the red used for failure explanations.
 - The README is a short introduction: what the app does, a quick start, how to use it, and where to go next. The full documentation moved to [docs/GUIDE.md](docs/GUIDE.md).
 
