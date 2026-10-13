@@ -12,7 +12,13 @@ import httpx
 from fastapi import HTTPException
 from pydantic import AnyHttpUrl, BaseModel, Field, field_validator
 
-from app.domain.evidence import redact_headers, redact_text, redact_value, sanitize_url
+from app.domain.evidence import (
+    hide_secret_values,
+    redact_headers,
+    redact_text,
+    redact_value,
+    sanitize_url,
+)
 from app.domain.network import parse_target_base_url, request_error_reason, target_client
 from app.domain.schema_check import SchemaCheck, check_response
 
@@ -46,6 +52,9 @@ class ScenarioExecutionRequest(BaseModel):
     response_schemas: dict[str, Any] = Field(default_factory=dict, max_length=40)
     # A response slower than this fails the check; None means no limit.
     max_duration_ms: int | None = Field(default=None, ge=1, le=120_000)
+    # Names of query parameters and headers that carry credentials according to the contract, such as
+    # an API key called appid. Their values are masked in the evidence even when the name looks ordinary.
+    secret_names: list[str] = Field(default_factory=list, max_length=50)
 
     @field_validator("method")
     @classmethod
@@ -119,6 +128,38 @@ async def send_check(
 ) -> tuple[ScenarioExecutionResult, bytes | None]:
     """Like execute_scenario, but also returns the raw response body (unredacted, None when no
     complete body was received) so a flow can read values such as a created record's id."""
+    result, raw_body = await _send(payload, allow_private_network=allow_private_network)
+    return _hide_named_secrets(result, payload), raw_body
+
+
+def _hide_named_secrets(result: ScenarioExecutionResult, payload: ScenarioExecutionRequest) -> ScenarioExecutionResult:
+    names = {name.lower() for name in payload.secret_names}
+    if not names:
+        return result
+    values = [
+        value for name, value in [*payload.query_params.items(), *payload.headers.items()]
+        if name.lower() in names and len(value.strip()) >= 4
+    ]
+
+    def hide(text: str) -> str:
+        return hide_secret_values(text, values)
+
+    def hide_headers(headers: dict[str, str]) -> dict[str, str]:
+        return {name: "[REDACTED]" if name.lower() in names else hide(value) for name, value in headers.items()}
+
+    return result.model_copy(update={
+        "request_url": hide(sanitize_url(result.request_url, names)) if result.request_url else "",
+        "request_headers": hide_headers(result.request_headers),
+        "request_body": hide(result.request_body),
+        "response_body": hide(result.response_body),
+        "response_headers": hide_headers(result.response_headers),
+        "error": hide(result.error) if result.error else result.error,
+    })
+
+
+async def _send(
+    payload: ScenarioExecutionRequest, *, allow_private_network: bool
+) -> tuple[ScenarioExecutionResult, bytes | None]:
     base = parse_target_base_url(str(payload.base_url), allow_private_network=allow_private_network)
 
     # OpenAPI servers often carry a base path (e.g. /api/v3); operation paths are relative to it.

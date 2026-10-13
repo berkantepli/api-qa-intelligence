@@ -61,6 +61,7 @@ export function buildFlowRequest(overview, flow, { targetUrl, maxDurationMs = nu
     base_url: targetUrl,
     headers,
     max_duration_ms: maxDurationMs,
+    secret_names: [...new Set(flowCredentials(overview, flow).map((credential) => credential.name))],
     steps: flow.steps.map((step) => {
       const operation = stepOperation(overview, step);
       const operationKey = operation ? `${operation.method} ${operation.path}` : "";

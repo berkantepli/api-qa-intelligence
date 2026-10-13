@@ -52,7 +52,7 @@ A flow is a multi-step check that follows one record through its lifecycle: crea
 | Method | Path | Purpose |
 |---|---|---|
 | POST | `/api/v1/flows/suggest` | Suggest flows for a list of operations from an API overview. Imports already return them as the overview's `flows`; this route serves APIs saved before 1.1. |
-| POST | `/api/v1/flows/execute` | Run up to 10 steps in order against `base_url`, with shared `headers` and an optional `max_duration_ms`. Each step is judged like a single check. After a step fails, later steps are `SKIPPED`, except cleanup steps (`always_run`) whose values were saved. Returns PASS / FAIL / ERROR with per-step evidence. |
+| POST | `/api/v1/flows/execute` | Run up to 10 steps in order against `base_url`, with shared `headers`, an optional `max_duration_ms`, and `secret_names` as for a single check. Each step is judged like a single check. After a step fails, later steps are `SKIPPED`, except cleanup steps (`always_run`) whose values were saved. Returns PASS / FAIL / ERROR with per-step evidence. |
 
 A step's `extract` rule may set `"fallback": "location_header"`: when the response body has no value at its pointer, the last path segment of the `Location` header is saved instead. Suggestions come from the contract: an OpenAPI `link` from a collection's POST response to the item path's GET or DELETE names the value to pass on; without one, the item path's parameter (`{petId}`) is matched to a field of the create response (`petId`, or `id` for an id-like parameter) or of the request body. Values saved under sensitive names (such as `token`) are redacted in `saved_values` and wherever they appear in later steps' evidence.
 
