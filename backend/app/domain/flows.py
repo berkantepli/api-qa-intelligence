@@ -27,6 +27,7 @@ PLACEHOLDER = re.compile(r"\{\{(" + VARIABLE_NAME + r")\}\}")
 UNFILLED_PATH_PARAMETER = re.compile(r"(?<!\{)\{([^{}]+)\}(?!\})")
 ID_SUFFIX = re.compile(r"(?:_id|Id|ID)$")
 MAX_FLOW_STEPS = 10
+STEP_METHODS = {"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"}
 GONE_STATUS_CODES = [404, 410]
 
 StepRole = Literal["create", "read", "update", "delete", "verify_deleted", "custom"]
@@ -61,6 +62,23 @@ class FlowStep(BaseModel):
     extract: list[FlowExtract] = Field(default_factory=list, max_length=10)
     # Cleanup steps (such as deleting the created record) also run after an earlier step failed.
     always_run: bool = False
+
+    @field_validator("method")
+    @classmethod
+    def known_method(cls, value: str) -> str:
+        method = value.upper()
+        if method not in STEP_METHODS:
+            raise ValueError(f"Use one of {', '.join(sorted(STEP_METHODS))} as the method, not {value!r}.")
+        return method
+
+    @field_validator("path")
+    @classmethod
+    def absolute_path(cls, value: str) -> str:
+        if not value.startswith("/") or value.startswith("//") or "?" in value or "#" in value:
+            raise ValueError(f"Use an absolute path such as /pets/{{{{petId}}}}, without a query string, not {value!r}.")
+        if any(segment == ".." for segment in value.split("/")):
+            raise ValueError("A path cannot contain '..' segments.")
+        return value
 
 
 class ApiFlow(BaseModel):

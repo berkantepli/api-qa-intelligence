@@ -301,6 +301,11 @@ async def run_flow(flow: ApiFlow, args: argparse.Namespace, target: str, headers
     return FlowOutcome(id=flow.id, title=flow.title, result=result)
 
 
+def report_write_problem(error: OSError) -> str:
+    where = f" to {error.filename}" if error.filename else ""
+    return f"the report could not be written{where}: {(error.strerror or str(error)).lower()}. Check that the folder exists and can be written to."
+
+
 def plural(count: int, noun: str) -> str:
     return f"{count} {noun}" if count == 1 else f"{count} {noun}s"
 
@@ -360,7 +365,7 @@ def compare_contracts(args: argparse.Namespace) -> int:
         if args.json:
             args.json.write_text(diff.model_dump_json(indent=2), encoding="utf-8")
     except OSError as error:
-        print(f"api-qa: the report could not be written: {error}", file=sys.stderr)
+        print(f"api-qa: {report_write_problem(error)}", file=sys.stderr)
         return EXIT_USAGE
     if args.fail_on == "never" or diff.severity is None:
         return EXIT_OK
@@ -386,7 +391,7 @@ def lint_contract(args: argparse.Namespace) -> int:
         if args.json:
             args.json.write_text(report.model_dump_json(indent=2), encoding="utf-8")
     except OSError as error:
-        print(f"api-qa: the report could not be written: {error}", file=sys.stderr)
+        print(f"api-qa: {report_write_problem(error)}", file=sys.stderr)
         return EXIT_USAGE
     if report.score < args.min_score:
         print(f"api-qa: the score {report.score} is below --min-score {args.min_score}.", file=sys.stderr)
@@ -413,7 +418,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.json:
             args.json.write_text(redact_secrets(report.model_dump_json(indent=2), secrets), encoding="utf-8")
     except OSError as error:
-        print(f"api-qa: the report could not be written: {error}", file=sys.stderr)
+        print(f"api-qa: {report_write_problem(error)}", file=sys.stderr)
         return EXIT_USAGE
     totals = report.totals
     failed = totals["failed"] + totals["errors"] + totals["flows_failed"] > 0
