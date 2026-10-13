@@ -2,6 +2,10 @@
 
 The version lives in the [`VERSION`](VERSION) file and follows [Semantic Versioning](https://semver.org/). Before 1.0.0, a new feature raises the minor number (0.**x**.0) and a fix or visual change raises the patch number (0.x.**y**).
 
+## 1.18.1 — 2026-10-13
+
+- In the overview, "Same response structure as the last pass" under a passing check is gray instead of the red used for failure explanations.
+
 ## 1.18.0 — 2026-10-13
 
 - **Response changed since the last pass**: each check and flow step with a JSON response is compared with the last pass of the same check and status code. Run details list fields that disappeared or are new, fields whose type changed (such as number to string, or a value to `null`), and lists that became empty. Values are not compared, and the keys of documented maps (`additionalProperties`) are ignored, so changing ids and timestamps raise nothing. It never fails a check.
