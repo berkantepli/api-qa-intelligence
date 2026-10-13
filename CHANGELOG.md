@@ -2,6 +2,11 @@
 
 The version lives in the [`VERSION`](VERSION) file and follows [Semantic Versioning](https://semver.org/). Before 1.0.0, a new feature raises the minor number (0.**x**.0) and a fix or visual change raises the patch number (0.x.**y**).
 
+## 1.18.0 — 2026-10-13
+
+- **Response changed since the last pass**: each check and flow step with a JSON response is compared with the last pass of the same check and status code. Run details list fields that disappeared or are new, fields whose type changed (such as number to string, or a value to `null`), and lists that became empty. Values are not compared, and the keys of documented maps (`additionalProperties`) are ignored, so changing ids and timestamps raise nothing. It never fails a check.
+- The overview shows the changes under a check right after it runs. Run details tag such checks *Response changed*, and Coverage & Risk tags an endpoint whose latest run changed, with the changes on hover.
+
 ## 1.17.0 — 2026-10-12
 
 ### Target and authentication

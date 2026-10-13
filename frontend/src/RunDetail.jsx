@@ -11,6 +11,7 @@ import {
   summarizeResults,
 } from "./runDetail.js";
 import { ROLE_LABELS } from "./flows.js";
+import { changeText } from "./responseChanges.js";
 import { isEditedScenario } from "./scenarioDraft.js";
 
 function HeaderTable({ headers }) {
@@ -45,7 +46,20 @@ export function SchemaDifferences({ check }) {
   </div>;
 }
 
-function CheckDetail({ result, index, analysisStatus, onAnalyze }) {
+// How the response's structure differs from the last time the same check passed. It never fails
+// the check: a change can be intended.
+export function ResponseChanges({ comparison }) {
+  if (!comparison) return null;
+  const since = new Date(comparison.previousAt).toLocaleString();
+  if (!comparison.changes.length) return <p className="response-changes-none">Same response structure as the last pass ({since}).</p>;
+  return <div className="response-changes">
+    <strong>Response changed since the last pass</strong>
+    <small>Compared with {since}. Values are not compared, only fields, their types, and lists that became empty.</small>
+    <ul>{comparison.changes.map((change) => <li key={`${change.kind}-${change.path}`}><code>{change.path}</code> {changeText(change).slice(change.path.length + 1)}</li>)}</ul>
+  </div>;
+}
+
+function CheckDetail({ result, index, analysisStatus, onAnalyze, comparison = null }) {
   const outcome = result.result || "ERROR";
   if (outcome === "SKIPPED") {
     return <div className="run-check run-check-skipped">
@@ -66,6 +80,7 @@ function CheckDetail({ result, index, analysisStatus, onAnalyze }) {
           {result.category && <span className={`category-pill category-${result.category}`}>{result.category === "imported" ? "Imported test" : categoryLabels[result.category] || result.category}</span>}
           {isEditedScenario(result) && <span className="edited-pill">AI idea · edited</span>}
           {result.role && <span className="review-pill">{ROLE_LABELS[result.role] ?? result.role}</span>}
+          {comparison?.changes.length > 0 && <span className="response-change-pill">Response changed</span>}
         </span>
       </span>
       <span className="run-check-meta">{result.response_status != null ? `HTTP ${result.response_status}` : "No response"}{result.duration_ms != null && ` · ${result.duration_ms} ms`}</span>
@@ -83,6 +98,7 @@ function CheckDetail({ result, index, analysisStatus, onAnalyze }) {
       {result.error && <p className="history-error">{result.error}</p>}
       {savedValues.length > 0 && <p className="flow-saved-values">Saved for later steps: {savedValues.map(([name, value]) => <code key={name} className="flow-saved">{name} = {String(value)}</code>)}</p>}
       <SchemaDifferences check={result.schema_check} />
+      <ResponseChanges comparison={comparison} />
 
       <div className="evidence-grid">
         <section className="evidence-panel" aria-label="Request evidence">
@@ -117,7 +133,7 @@ function CheckDetail({ result, index, analysisStatus, onAnalyze }) {
   </details>;
 }
 
-export default function RunDetail({ run, analysisState, onAnalyze, onBack, onRerun, canRerun }) {
+export default function RunDetail({ run, analysisState, onAnalyze, onBack, onRerun, canRerun, responseChangesFor = () => null }) {
   const summary = summarizeResults(run.results);
   const flow = run.kind === "flow";
   return <section className="history-page run-detail">
@@ -148,6 +164,7 @@ export default function RunDetail({ run, analysisState, onAnalyze, onBack, onRer
         index={index}
         analysisStatus={analysisState[`${run.id}:${index}`] ?? {}}
         onAnalyze={() => onAnalyze(run.id, index, result)}
+        comparison={responseChangesFor(run, result)}
       />)}
     </div>
   </section>;
