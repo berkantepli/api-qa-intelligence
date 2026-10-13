@@ -11,6 +11,7 @@ import { python, TARGET_URL } from "../playwright.config.js";
 test.beforeEach(async ({ request }) => {
   expect((await request.delete("/api/v1/workspace")).status()).toBe(204);
   expect((await request.post(`${TARGET_URL}/__reset`)).status()).toBe(204);
+  expect((await request.post("/demo/__reset")).status()).toBe(204);
 });
 
 const endpoint = (page, method, path) => page.locator(".endpoint-row").filter({ has: page.locator(".method-tag", { hasText: method }) }).filter({ has: page.getByText(path, { exact: true }) });
@@ -78,7 +79,7 @@ async function importFile(page, name, document) {
 test("imports a contract from a URL", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "Start with an API contract" })).toBeVisible();
-  await expect(page.locator(".sample-api")).toHaveCount(4);
+  await expect(page.locator(".demo-offer")).toContainText("Try the built-in demo API");
   await page.getByPlaceholder("https://api.example.com/openapi.json").fill(`${TARGET_URL}/openapi.json`);
   await page.getByRole("button", { name: "Import API" }).click();
 
@@ -611,6 +612,67 @@ test("signs in once and sends the token to every endpoint that needs it", async 
   await runAll(page);
   // The valid request carries the token; "Call without authentication" still leaves it out.
   expect(await (await request.get(`${TARGET_URL}/__order-keys`)).json()).toEqual(["e2e-token", null]);
+});
+
+test("tours the built-in demo API and finds its deliberate problems", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Try the demo API" }).click();
+  await expect(page.getByRole("heading", { name: "Demo Bookstore" })).toBeVisible();
+  const guide = page.locator(".demo-guide");
+  await expect(guide.locator("li")).toHaveCount(7);
+
+  // Sign in once with the prefilled demo credentials.
+  await guide.getByRole("button", { name: "Open Target & auth" }).click();
+  const panel = page.locator(".connection-panel");
+  await panel.getByRole("button", { name: "Get a token from a sign-in request instead" }).click();
+  await expect(panel.getByLabel("Sign-in endpoint")).toHaveValue("POST /auth/login");
+  await panel.getByRole("button", { name: "Sign in", exact: true }).click();
+  await expect(panel.locator(".success-alert")).toContainText("Authorization is set for");
+  await panel.getByRole("button", { name: "Close target and authentication" }).click();
+
+  // A price that is text breaks the schema.
+  await guide.getByRole("button", { name: "Open GET /books" }).click();
+  await runAll(page);
+  await expect(check(page, "Valid request").locator(".result-box")).toContainText("FAIL");
+  await expect(check(page, "Valid request")).toContainText("price");
+  await expect(check(page, "Send the wrong type for limit").locator(".result-box")).toContainText("PASS");
+
+  // An endpoint that documents a token but never asks for one.
+  await guide.getByRole("button", { name: "Open GET /orders" }).click();
+  await runAll(page);
+  await expect(check(page, "Valid request").locator(".result-box")).toContainText("PASS");
+  await expect(check(page, "Call without authentication").locator(".result-box")).toContainText("FAIL");
+
+  // Validation gaps on a data-changing endpoint, after a confirmation.
+  await guide.getByRole("button", { name: "Open POST /books" }).click();
+  await page.getByRole("button", { name: "Select all" }).click();
+  await page.getByRole("button", { name: /Run selected/ }).click();
+  const run = saved(page, "runs");
+  await page.getByRole("button", { name: "Confirm and run" }).click();
+  await run;
+  await expect(check(page, "Valid request").locator(".result-box")).toContainText("PASS");
+  await expect(check(page, "Send the wrong type for year").locator(".result-box")).toContainText("FAIL");
+  await expect(check(page, "Send an undocumented request field").locator(".result-box")).toContainText("FAIL");
+  await expect(check(page, "Call without authentication").locator(".result-box")).toContainText("PASS");
+
+  // The lifecycle flow works end to end with the same token.
+  await guide.getByRole("button", { name: "Open Flows" }).click();
+  const flow = page.locator(".flow-card").filter({ has: page.getByRole("heading", { name: "Book lifecycle" }) });
+  await flow.getByRole("button", { name: "Run flow" }).click();
+  await flow.getByRole("button", { name: "Confirm and run" }).click();
+  await expect(flow.locator(".flow-card-pills .history-status")).toHaveText("PASS");
+
+  // A bulk run sends the same token: GET /me only passes when signed in.
+  await nav(page, "Coverage");
+  await page.locator(".coverage-run-button").click();
+  const bulk = page.locator(".bulk-run");
+  await bulk.getByRole("button", { name: /^Run \d+ checks/ }).click();
+  await expect(bulk).toContainText("Bulk run finished");
+  await expect(page.locator(".coverage-row").filter({ has: page.getByText("/me", { exact: true }) }).locator(".coverage-status")).toHaveText("Passing");
+
+  await nav(page, "Overview");
+  await page.locator(".demo-guide").getByRole("button", { name: "Reset demo data" }).click();
+  await expect(page.locator(".demo-guide-note")).toHaveText("The three sample books are back.");
 });
 
 test("deletes all saved data", async ({ page }) => {

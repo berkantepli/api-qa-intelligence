@@ -860,6 +860,8 @@ function App() {
     if (!overview || bulkRun?.status === "running" || !plan.checkCount) return;
     bulkStopRequested.current = false;
     const apiId = activeApiId;
+    // Request details with the API-wide credentials, as the overview sends them.
+    const inputsByOperation = apiInputs;
     const counts = { PASS: 0, FAIL: 0, ERROR: 0 };
     let done = 0;
     let status = "done";
@@ -868,7 +870,7 @@ function App() {
     for (const item of plan.ready) {
       const itemOperation = overview.operations[item.operationIndex];
       const described = describeOperation(itemOperation);
-      const inputs = requestInputs[apiId]?.[item.key] ?? {};
+      const inputs = inputsByOperation[item.key] ?? {};
       const completed = [];
       try {
         const fileUploads = await readFileUploads(described.fileFields, requestFiles[item.key]);
@@ -956,7 +958,7 @@ function App() {
     updateFlowState(apiId, flow.id, { running: true, outcome: null, error: "", runId: null });
     try {
       const outcome = await postJson("/api/v1/flows/execute", buildFlowRequest(overview, flow, {
-        targetUrl, maxDurationMs, pathValues: flowPathValues[apiId]?.[flow.id], inputsByOperation: requestInputs[apiId],
+        targetUrl, maxDurationMs, pathValues: flowPathValues[apiId]?.[flow.id], inputsByOperation: withApiCredentials(overview, requestInputs[apiId], apiCredentials[apiId]),
       }), "The flow could not be run.");
       noteTargetAnswer(outcome.steps?.find((step) => step.check?.response_status != null)?.check);
       const entry = flowRunEntry(flow, outcome, { apiId, api: overview.title, target: targetUrl });
