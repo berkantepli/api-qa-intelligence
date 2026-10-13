@@ -2,7 +2,7 @@
 
 The version lives in the [`VERSION`](VERSION) file and follows [Semantic Versioning](https://semver.org/). Before 1.0.0, a new feature raises the minor number (0.**x**.0) and a fix or visual change raises the patch number (0.x.**y**).
 
-## Unreleased
+## 1.19.0 — 2026-10-14
 
 ### Demo API
 - **Try the demo API** on the import page (and on the empty API list) replaces the four public sample APIs. *Demo Bookstore* is served by the app itself under `/demo`, so it needs no internet and gives the same results every time. It has sign-in, books with full create-read-update-delete, orders, and a slow report, with deliberate problems for the checks to find: a schema break, an endpoint that skips authentication, validation gaps, and a slow response.
