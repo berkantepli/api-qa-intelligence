@@ -860,6 +860,8 @@ function App() {
     if (!overview || bulkRun?.status === "running" || !plan.checkCount) return;
     bulkStopRequested.current = false;
     const apiId = activeApiId;
+    // One id for every entry of this bulk run, so a comparison can treat it as one run.
+    const batchId = `bulk-${Date.now()}`;
     // Request details with the API-wide credentials, as the overview sends them.
     const inputsByOperation = apiInputs;
     const counts = { PASS: 0, FAIL: 0, ERROR: 0 };
@@ -893,7 +895,7 @@ function App() {
         message = `${item.key}: ${caught.message || "The check could not be executed."}`;
       }
       if (completed.length) {
-        const entry = { id: Date.now() + done, apiId, api: overview.title, endpoint: item.key, target: targetUrl, createdAt: new Date().toISOString(), results: completed };
+        const entry = { id: Date.now() + done, batchId, apiId, api: overview.title, endpoint: item.key, target: targetUrl, createdAt: new Date().toISOString(), results: completed };
         setRunHistory((current) => [entry, ...current]);
       }
       if (status === "error") break;
@@ -1294,6 +1296,7 @@ function App() {
         ) : page === "coverage" ? (
           <CoveragePage
             overview={overview}
+            onOpenRun={(runId) => openRunHistory(runHistory.find((run) => String(run.id) === runId)?.id ?? null)}
             apiRuns={runsForApi(runHistory, activeApiId, savedApis)}
             onOpenEndpoint={openEndpointFromCoverage}
             onGoToSpecs={openSpecsPage}
@@ -1337,7 +1340,7 @@ function App() {
             onGoToSpecs={openSpecsPage}
           />
         ) : page === "history" && selectedRun ? (
-          <RunDetail run={selectedRun} responseChangesFor={responseChangesFor} analysisState={analysisState} onAnalyze={analyzeFailure} onBack={() => openRunHistory()} onRerun={() => (isFlowRun(selectedRun) ? openSavedFlows(selectedRun) : rerunInOverview(selectedRun))} canRerun={!["newman", "junit"].includes(selectedRun.source) && savedApis.some((api) => api.id === selectedRun.apiId || api.title === selectedRun.api)} />
+          <RunDetail run={selectedRun} runs={runHistory} onOpenRun={(runId) => openRunHistory(runHistory.find((run) => String(run.id) === runId)?.id ?? null)} responseChangesFor={responseChangesFor} analysisState={analysisState} onAnalyze={analyzeFailure} onBack={() => openRunHistory()} onRerun={() => (isFlowRun(selectedRun) ? openSavedFlows(selectedRun) : rerunInOverview(selectedRun))} canRerun={!["newman", "junit"].includes(selectedRun.source) && savedApis.some((api) => api.id === selectedRun.apiId || api.title === selectedRun.api)} />
         ) : page === "history" ? (
           <RunHistoryList
             runs={runHistory}

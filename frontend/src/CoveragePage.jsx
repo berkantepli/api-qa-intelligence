@@ -2,6 +2,8 @@ import { useRef, useState } from "react";
 import { classifiedEndpoint, SEVERITY_LABELS, severitySummary } from "./contractSeverity.js";
 import { computeCoverage, coverageReportFileName, coverageReportJson, coverageReportMarkdown } from "./coverage.js";
 import BulkRunPanel from "./BulkRunPanel.jsx";
+import ComparePanel from "./Comparison.jsx";
+import { downloadHtmlReport, latestReportChecks, reportFileName } from "./runCompare.js";
 import { staleChecks } from "./contractDiff.js";
 import { GAP_KINDS } from "./coverageGaps.js";
 import ErrorAlert from "./ErrorAlert.jsx";
@@ -126,7 +128,7 @@ export default function CoveragePage({
   overview, apiRuns, onOpenEndpoint, onGoToSpecs,
   inputsByOperation, filesByOperation, targetUrl, targetProblem, bulkRun, onBulkRun, onStopBulkRun, onDismissBulkRun, onImportTestResults, contractChanges,
   lifecycle = null, onOpenFlows, trendRuns = [], timeLimitMs = null, criticality = {}, onSetCriticality,
-  advanced = false, onAdvancedChange,
+  advanced = false, onAdvancedChange, onOpenRun,
 }) {
   const [filterId, setFilterId] = useState("all");
   const [importMessage, setImportMessage] = useState(null);
@@ -144,6 +146,10 @@ export default function CoveragePage({
     }
   }
   const [planning, setPlanning] = useState(false);
+  const [comparing, setComparing] = useState(false);
+  // The comparison shown in the panel, so the HTML report can include it: { comparison, label }.
+  const [comparison, setComparison] = useState(null);
+  const [htmlExport, setHtmlExport] = useState({ loading: false, error: "" });
   if (!overview) {
     return <section className="history-page coverage-page">
       <div className="page-eyebrow">TEST COVERAGE</div>
@@ -161,6 +167,32 @@ export default function CoveragePage({
   const shownFilters = filters.filter((item) => advanced || item.id !== "high");
   const filter = shownFilters.find((item) => item.id === filterId) ?? shownFilters[0];
   const visible = endpoints.filter(filter.matches);
+  async function exportHtml() {
+    setHtmlExport({ loading: true, error: "" });
+    try {
+      await downloadHtmlReport({
+        title: "Coverage",
+        api: overview.title,
+        api_version: overview.version ?? "",
+        target: targetUrl ?? "",
+        checks: latestReportChecks(trendRuns),
+        coverage: {
+          tested: totals.tested, endpoints: totals.endpoints, failing: totals.failing,
+          untested_writes: totals.untestedWrites, coverage_percent: totals.coveragePercent,
+          quality_score: overview.quality?.score ?? null, quality_grade: overview.quality?.grade ?? null,
+          flows_passing: flowTotals?.flows ? flowTotals.passing : null, flows_total: flowTotals?.flows || null,
+          items: endpoints.map((endpoint) => ({
+            key: endpoint.key, status: endpoint.status, covered: endpoint.coveredChecks, runnable: endpoint.runnableChecks,
+            last_run_at: endpoint.lastRunAt ?? null, risks: endpoint.risks.map((risk) => risk.label),
+          })),
+        },
+        ...(comparing && comparison ? { comparison: comparison.comparison, comparison_label: comparison.label } : {}),
+      }, reportFileName(overview.title, "coverage"));
+      setHtmlExport({ loading: false, error: "" });
+    } catch (caught) {
+      setHtmlExport({ loading: false, error: caught.message });
+    }
+  }
   const exportReport = (format) => {
     const coverage = { endpoints, totals, contractChanges };
     if (format === "md") download(coverageReportMarkdown(overview, coverage), coverageReportFileName(overview.title, "md"), "text/markdown");
@@ -176,6 +208,8 @@ export default function CoveragePage({
         <label className="advanced-toggle" title="Show the risk score, criticality, trends, and test results imported from CI or other tools"><input type="checkbox" checked={advanced} onChange={(event) => onAdvancedChange(event.target.checked)} /> Advanced view</label>
         {advanced && <button className="secondary-button" type="button" onClick={() => reportInput.current?.click()} title="Add results from CI or another test tool to this API: an api-qa run --json report, a Newman JSON report, or JUnit XML. It does not add an API."><Icon name="upload" size={14} /> Add CI test results</button>}
         <input ref={reportInput} type="file" accept="application/json,.json,application/xml,text/xml,.xml" hidden onChange={importTestResults} />
+        <button className={`secondary-button ${comparing ? "active" : ""}`} type="button" disabled={!trendRuns.length} onClick={() => setComparing((current) => !current)} aria-expanded={comparing} title={trendRuns.length ? "What changed since an earlier moment" : "Run checks first"}><Icon name="clock" size={14} /> Compare with…</button>
+        <button className="secondary-button" type="button" disabled={htmlExport.loading} onClick={exportHtml} title="A report to share: one HTML file that opens anywhere, with the comparison when it is open">{htmlExport.loading ? <><span className="spinner" /> Creating…</> : <><Icon name="arrow" size={14} /> Export HTML</>}</button>
         <button className="secondary-button" type="button" onClick={() => exportReport("md")}><Icon name="arrow" size={14} /> Export Markdown</button>
         <button className="secondary-button" type="button" onClick={() => exportReport("json")}><Icon name="arrow" size={14} /> Export JSON</button>
       </div>
@@ -191,6 +225,9 @@ export default function CoveragePage({
       {advanced && <button className="stat-card stat-card-link" type="button" onClick={() => setFilterId("high")} title="Show high-risk endpoints"><span className="stat-label">High-risk endpoints</span><strong className={totals.highRisk ? "history-fail" : undefined}>{totals.highRisk}</strong><span className="stat-note">risk score {RISK_LEVELS[0].min} or more</span></button>}
       {flowTotals?.flows > 0 && <button className="stat-card stat-card-link" type="button" onClick={onOpenFlows} title="Open Flows"><span className="stat-label">Lifecycle flows passing</span><strong className={flowTotals.failing ? "history-fail" : undefined}>{flowTotals.passing} / {flowTotals.flows}</strong><span className="stat-note">{[flowTotals.failing && `${flowTotals.failing} failing`, flowTotals.untested && `${flowTotals.untested} never run`].filter(Boolean).join(" · ") || "all passing in their latest run"}</span></button>}
     </div>
+
+    <ErrorAlert message={htmlExport.error} />
+    {comparing && <ComparePanel runs={trendRuns} onOpenRun={onOpenRun} onClose={() => { setComparing(false); setComparison(null); }} onComparison={setComparison} />}
 
     <ContractChanges changes={contractChanges} endpoints={endpoints} overview={overview} />
 

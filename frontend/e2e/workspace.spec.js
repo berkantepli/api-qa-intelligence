@@ -1,7 +1,7 @@
 // The main flows of the app against e2e/target_api.py. Each test starts from an empty workspace and a
 // reset target API and sets up what it needs, so a test can run alone, in any order, or be retried.
 import { spawnSync } from "node:child_process";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { expect, test } from "@playwright/test";
@@ -684,6 +684,63 @@ test("tours the built-in demo API and finds its deliberate problems", async ({ p
   await nav(page, "Overview");
   await page.locator(".demo-guide").getByRole("button", { name: "Reset demo data" }).click();
   await expect(page.locator(".demo-guide-note")).toHaveText("The three sample books are back.");
+});
+
+test("compares a run with the one before it and downloads an HTML report", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Try the demo API" }).click();
+  await expect(page.getByRole("heading", { name: "Demo Bookstore" })).toBeVisible();
+  await page.locator(".demo-guide").getByRole("button", { name: "Open Target & auth" }).click();
+  const panel = page.locator(".connection-panel");
+  await panel.getByRole("button", { name: "Get a token from a sign-in request instead" }).click();
+  await panel.getByRole("button", { name: "Sign in", exact: true }).click();
+  await expect(panel.locator(".success-alert")).toBeVisible();
+  await panel.getByRole("button", { name: "Close target and authentication" }).click();
+
+  // DELETE /books/2 passes once; the second time the book is gone, so the valid request newly fails.
+  const deleteBook = async () => {
+    await endpoint(page, "DELETE", "/books/{bookId}").click();
+    await check(page, "Valid request").locator(".scenario-select").click();
+    await page.getByRole("button", { name: /Run selected/ }).click();
+    const run = saved(page, "runs");
+    await page.getByRole("button", { name: "Confirm and run" }).click();
+    await run;
+  };
+  await deleteBook();
+  await expect(check(page, "Valid request").locator(".result-box")).toContainText("PASS");
+  await deleteBook();
+  await expect(check(page, "Valid request").locator(".result-box")).toContainText("FAIL");
+
+  // The run details compare with the previous run of the endpoint.
+  await page.getByRole("button", { name: "View run details" }).click();
+  await page.getByRole("button", { name: "Compare with the previous run" }).click();
+  const newly = page.locator(".run-comparison .comparison-group").filter({ hasText: "Newly failing" });
+  await expect(newly).toContainText("Valid request");
+  await expect(newly).toContainText("PASS → FAIL");
+
+  const runDownload = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Download HTML report" }).click();
+  const runReport = await (await runDownload).path().then((path) => readFileSync(path, "utf-8"));
+  expect(runReport).toContain("<!doctype html>");
+  expect(runReport).toContain("Changes since the previous run of");
+  expect(runReport).toContain("Expected HTTP 204, received HTTP 404.");
+  expect(runReport).not.toContain("<script");
+
+  // Coverage compares the API's results now with before the latest run, and exports them.
+  await nav(page, "Coverage");
+  await page.getByRole("button", { name: "Compare with…" }).click();
+  const compare = page.locator(".compare-panel");
+  await expect(compare.locator(".comparison-group").filter({ hasText: "Newly failing" })).toContainText("DELETE /books/{bookId}");
+  const coverageDownload = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Export HTML" }).click();
+  const coverageReport = await (await coverageDownload).path().then((path) => readFileSync(path, "utf-8"));
+  expect(coverageReport).toContain("<h1>Coverage</h1>");
+  expect(coverageReport).toContain("Newly failing");
+  expect(coverageReport).toContain("Endpoints tested");
+
+  // A row opens the run its latest result came from.
+  await compare.getByRole("button", { name: /DELETE \/books\/\{bookId\} · Valid request/ }).first().click();
+  await expect(page.locator(".run-detail h1")).toHaveText("DELETE /books/{bookId}");
 });
 
 test("deletes all saved data", async ({ page }) => {
