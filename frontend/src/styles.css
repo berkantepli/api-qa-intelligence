@@ -745,6 +745,7 @@ h1, h2, h3, p { margin-top: 0; }
 :root[data-theme="dark"] .error-alert { border-color: #593139; background: #281a1e; color: #f08e97; }
 :root[data-theme="dark"] .workflow-step > span { color: #bac2ce; }
 :root[data-theme="dark"] .workflow-line { background: #323944; }
+:root[data-theme="dark"] .workflow-strip { border-top-color: #323944; }
 
 @media (max-width: 1020px) {
   .evidence-grid { grid-template-columns: 1fr; }

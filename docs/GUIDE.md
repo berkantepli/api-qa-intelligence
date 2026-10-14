@@ -9,7 +9,7 @@ This project is **not a Postman replacement**. Its focus is helping teams decide
 ## Product flow
 
 ```text
-OpenAPI / Swagger → API understanding → QA scenarios → selected test execution → failure analysis
+OpenAPI / Swagger → API understanding → checks → selected test execution → failure analysis
 ```
 
 ## MVP scope

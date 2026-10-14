@@ -1379,7 +1379,7 @@ function App() {
           <section className="setup-page">
             <div className="page-eyebrow">YOUR API QA WORKSPACE</div>
             <h1>Start with an API contract</h1>
-            <p className="page-lede">Import an OpenAPI spec to understand your endpoints and get a first set of QA scenarios.</p>
+            <p className="page-lede">Import an OpenAPI spec to understand your endpoints and get a first set of checks.</p>
             <form className="import-card" onSubmit={importSpec} noValidate>
               <div className="card-heading">
                 <span className="card-icon"><Icon name="file" size={20} /></span>
@@ -1412,7 +1412,7 @@ function App() {
             <div className="workflow-strip">
               <div className="workflow-step"><span>1</span><div><strong>Understand the API</strong><small>Inspect endpoints and schemas</small></div></div>
               <div className="workflow-line" />
-              <div className="workflow-step"><span>2</span><div><strong>Review QA scenarios</strong><small>See what is worth testing</small></div></div>
+              <div className="workflow-step"><span>2</span><div><strong>Review checks</strong><small>See what is worth testing</small></div></div>
               <div className="workflow-line" />
               <div className="workflow-step"><span>3</span><div><strong>Run selected checks</strong><small>Choose a target and review results</small></div></div>
             </div>

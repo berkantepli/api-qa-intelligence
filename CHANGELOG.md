@@ -2,6 +2,10 @@
 
 The version lives in the [`VERSION`](VERSION) file and follows [Semantic Versioning](https://semver.org/). Before 1.0.0, a new feature raises the minor number (0.**x**.0) and a fix or visual change raises the patch number (0.x.**y**).
 
+## Unreleased
+
+- The steps under the import form use the app's current wording (*Review checks*), and their top line no longer shows as a bright line in the dark theme.
+
 ## 1.22.0 — 2026-10-14
 
 ### What changed
