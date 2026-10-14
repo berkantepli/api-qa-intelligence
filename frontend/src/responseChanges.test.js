@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bodyShape, changeText, responseChanges, responseSchema, shapeChanges } from "./responseChanges.js";
+import { bodyShape, changeText, latestChangesByEndpoint, responseChanges, responseSchema, shapeChanges } from "./responseChanges.js";
 
 const diff = (before, after, schema = null) => shapeChanges(bodyShape(before, schema), bodyShape(after, schema)).map(changeText);
 
@@ -88,5 +88,26 @@ describe("response changes in Run history", () => {
     expect(responseChanges(runs, runs[2], runs[2].results[0]).changes.map(changeText)).toEqual(["$.name is gone (was string)"]);
     expect(responseSchema(overview, runs[2], runs[2].results[0])).toEqual({ type: "object" });
     expect(responseSchema(overview, run(4, "x", []), { response_status: 200 })).toEqual({ type: "object" });
+  });
+});
+
+describe("latest changes per endpoint", () => {
+  const body = (value) => JSON.stringify(value);
+  const overview = { operations: [{ method: "GET", path: "/pets/{id}", response_schemas: {} }, { method: "GET", path: "/pets", response_schemas: {} }] };
+  const check = (title, response) => ({ title, result: "PASS", response_status: 200, response_body: body(response) });
+  const step = (response) => ({ ...check("Read the new pet", response), method: "GET", path: "/pets/9", step_path: "/pets/{{petId}}" });
+
+  it("uses the latest run that called each endpoint, a flow step included", () => {
+    const runs = [
+      { id: 1, apiId: "pets", endpoint: "GET /pets", createdAt: "2026-10-10T10:00:00Z", results: [check("Valid request", [{ id: 1, tag: "a" }])] },
+      { id: 2, apiId: "pets", endpoint: "GET /pets", createdAt: "2026-10-11T10:00:00Z", results: [check("Valid request", [{ id: 1 }])] },
+      { id: 3, apiId: "pets", kind: "flow", flowId: "f1", endpoint: "Flow: Pets", createdAt: "2026-10-10T10:00:00Z", results: [step({ id: 9, name: "Rex" })] },
+      { id: 4, apiId: "pets", kind: "flow", flowId: "f1", endpoint: "Flow: Pets", createdAt: "2026-10-12T10:00:00Z", results: [step({ id: 9 })] },
+    ];
+
+    expect(latestChangesByEndpoint(overview, runs)).toEqual({
+      "GET /pets/{id}": ["Read the new pet: $.name is gone (was string)"],
+      "GET /pets": ["Valid request: $[*].tag is gone (was string)"],
+    });
   });
 });

@@ -128,3 +128,27 @@ export function responseSchema(overview, run, result) {
     : operations.find((item) => `${item.method} ${item.path}` === run.endpoint);
   return operation?.response_schemas?.[result.response_status] ?? null;
 }
+
+const endpointOf = (overview, run, result) => {
+  if (run.kind !== "flow") return run.endpoint;
+  const operation = stepOperation(overview, { method: result.method, path: result.step_path ?? result.path ?? "" });
+  return operation ? `${operation.method} ${operation.path}` : null;
+};
+
+// Per endpoint, the structure changes in the latest run that called it, an endpoint run or a flow
+// step, each as "Check title: change", against the last pass of the same check.
+export function latestChangesByEndpoint(overview, runs = []) {
+  const byEndpoint = {};
+  for (const run of [...runs].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))) {
+    const results = {};
+    for (const result of run.results ?? []) {
+      const key = endpointOf(overview, run, result);
+      if (key && !(key in byEndpoint)) (results[key] ??= []).push(result);
+    }
+    for (const [key, items] of Object.entries(results)) {
+      byEndpoint[key] = items.flatMap((result) => (responseChanges(runs, run, result, responseSchema(overview, run, result))?.changes ?? [])
+        .map((change) => `${result.title}: ${changeText(change)}`));
+    }
+  }
+  return byEndpoint;
+}
