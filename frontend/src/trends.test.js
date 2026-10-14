@@ -89,6 +89,19 @@ describe("slowdowns", () => {
     expect(result.items).toEqual([{ key: "POST /pets", beforeMs: 110, afterMs: 320, ratio: 320 / 110 }]);
   });
 
+  it("still lists a slowdown that started before the range and has not recovered", () => {
+    // Fast until 12 days ago, slow since: the 7 days before the range were slow too.
+    const runs = [];
+    for (let day = 1; day <= 30; day += 1) {
+      const date = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 30 + day, 12);
+      const slow = day > 30 - 12;
+      runs.push({ id: `r${day}`, endpoint: "POST /pets", createdAt: date.toISOString(), results: [check("PASS", slow ? 380 : 120)] });
+    }
+    const result = slowdowns(trendSamples(overview, runs), { days: 7, now });
+
+    expect(result.items).toEqual([{ key: "POST /pets", beforeMs: 120, afterMs: 380, ratio: 380 / 120 }]);
+  });
+
   it("needs enough timed checks in both ranges", () => {
     const samples = trendSamples(overview, [timedRun("POST /pets", 1, [100]), timedRun("POST /pets", 10, [900, 900, 900])]);
     expect(slowdowns(samples, { days: 7, now })).toEqual({ items: [], compared: 0 });

@@ -151,7 +151,7 @@ export default function TrendsPanel({ overview, runs, timeLimitMs = null }) {
       </div>
       {slower && slower.compared > 0 && <div className="trend-slowdowns">
         <strong>Slowed down</strong>
-        <small>Median response time against the {days} days before, for endpoints with 3 or more timed checks in both.</small>
+        <small>Median response time in the last {days} days against the 90 days before, for endpoints with 3 or more timed checks in both.</small>
         {slower.items.length ? <ul>{slower.items.map((item) => <li key={item.key}>
           <button type="button" className="text-button" onClick={() => setEndpoint(item.key)} title="Show this endpoint's trend"><code>{item.key}</code></button>
           <span>{formatMs(item.beforeMs)} → {formatMs(item.afterMs)}</span>

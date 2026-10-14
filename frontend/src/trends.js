@@ -93,26 +93,28 @@ const median = (values) => {
 };
 const rangeStart = (now, daysBack) => new Date(now.getFullYear(), now.getMonth(), now.getDate() - daysBack + 1);
 
-// Endpoints whose median response time grew the most against the range before. Both ranges need
-// `minSamples` timed checks, and the median must grow by `minRatio` and `minIncreaseMs`, so a
-// single slow call or a few milliseconds of noise are not reported. `compared` counts endpoints
-// that had enough data in both ranges.
-export function slowdowns(samples, { days = 30, now = new Date(), minSamples = 3, minRatio = 1.5, minIncreaseMs = 50, limit = 5 } = {}) {
+// Endpoints whose median response time in the range grew the most against their usual speed: the
+// median of the `baselineDays` before the range. Comparing with a long stretch instead of the range
+// just before it keeps a slowdown visible when it started before the range and has not recovered.
+// Both need `minSamples` timed checks, and the median must grow by `minRatio` and `minIncreaseMs`,
+// so a single slow call or a few milliseconds of noise are not reported. `compared` counts the
+// endpoints that had enough data in both.
+export function slowdowns(samples, { days = 30, now = new Date(), baselineDays = 90, minSamples = 3, minRatio = 1.5, minIncreaseMs = 50, limit = 5 } = {}) {
   const end = rangeStart(now, 0); // the start of tomorrow
   const start = rangeStart(now, days);
-  const previousStart = rangeStart(now, 2 * days);
+  const baselineStart = rangeStart(now, days + baselineDays);
   const byEndpoint = new Map();
   for (const sample of samples) {
-    if (!sample.key || sample.durationMs == null || sample.at < previousStart || sample.at >= end) continue;
-    if (!byEndpoint.has(sample.key)) byEndpoint.set(sample.key, { current: [], previous: [] });
-    byEndpoint.get(sample.key)[sample.at >= start ? "current" : "previous"].push(sample.durationMs);
+    if (!sample.key || sample.durationMs == null || sample.at < baselineStart || sample.at >= end) continue;
+    if (!byEndpoint.has(sample.key)) byEndpoint.set(sample.key, { current: [], baseline: [] });
+    byEndpoint.get(sample.key)[sample.at >= start ? "current" : "baseline"].push(sample.durationMs);
   }
   let compared = 0;
   const items = [];
-  for (const [key, { current, previous }] of byEndpoint) {
-    if (current.length < minSamples || previous.length < minSamples) continue;
+  for (const [key, { current, baseline }] of byEndpoint) {
+    if (current.length < minSamples || baseline.length < minSamples) continue;
     compared += 1;
-    const before = median(previous);
+    const before = median(baseline);
     const after = median(current);
     const ratio = before > 0 ? after / before : Infinity;
     if (ratio >= minRatio && after - before >= minIncreaseMs) items.push({ key, beforeMs: before, afterMs: after, ratio });
