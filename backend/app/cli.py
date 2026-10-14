@@ -1,4 +1,5 @@
-"""Command-line tools for CI pipelines: ``api-qa run --spec openapi.json --junit report.xml`` and
+"""Command-line tools for CI pipelines: ``api-qa run --spec openapi.json --junit report.xml`` (or
+``--workspace export.json`` for the checks and flows saved in the app), and
 ``api-qa diff old.yaml new.yaml`` (see compare_contracts), and ``api-qa lint openapi.yaml`` (lint_contract).
 
 It runs an OpenAPI contract's runnable checks against a target API without the web app and
@@ -36,9 +37,12 @@ from app.domain.request_builder import (
     request_readiness,
     secret_parameter_names,
 )
+from app.domain.workspace_file import WorkspaceFileError, load_workspace_api
 from app.version import APP_VERSION
 
 MAX_SPEC_SIZE_BYTES = 2_000_000
+# A workspace export also carries Run history, so it may be much larger than one contract.
+MAX_WORKSPACE_SIZE_BYTES = 50_000_000
 CONTRACT_FETCH_SECONDS = 15
 EXIT_OK, EXIT_FAILED, EXIT_USAGE = 0, 1, 2
 
@@ -52,8 +56,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--version", action="version", version=f"api-qa {APP_VERSION}")
     commands = parser.add_subparsers(dest="command", required=True)
     run = commands.add_parser("run", help="Run the runnable checks and write reports.")
-    run.add_argument("--spec", required=True, help="OpenAPI 3.x document: a file path or an http(s) URL.")
-    run.add_argument("--target", help="Target API base URL. Defaults to the contract's first server.")
+    source = run.add_mutually_exclusive_group(required=True)
+    source.add_argument("--spec", help="OpenAPI 3.x document: a file path or an http(s) URL.")
+    source.add_argument("--workspace", type=Path, metavar="FILE",
+                        help="Workspace exported from the app's Settings page: runs the checks and flows saved there, "
+                             "including edited AI checks and flows you built.")
+    run.add_argument("--api", metavar="NAME_OR_ID", help="With --workspace: the saved API to run, when it holds more than one.")
+    run.add_argument("--target", help="Target API base URL. Defaults to the target saved in the workspace, then the contract's first server.")
     run.add_argument("--param", action="append", default=[], metavar="NAME=VALUE",
                      help="Value for every parameter with this name; use location:name=value to be specific. Repeatable.")
     run.add_argument("--header", action="append", default=[], metavar="'NAME: VALUE'",
@@ -136,6 +145,21 @@ def load_contract(spec: str) -> ApiOverview:
         raise UsageError(UNEXPECTED_SHAPE) from error
 
 
+def load_workspace(path: Path, choice: str | None):
+    try:
+        if path.stat().st_size > MAX_WORKSPACE_SIZE_BYTES:
+            raise UsageError("The workspace file must be smaller than 50 MB.")
+        text = path.read_text(encoding="utf-8-sig")
+    except OSError as error:
+        raise UsageError(f"The workspace could not be read from {path}: {error.strerror or error}.") from error
+    except UnicodeDecodeError as error:
+        raise UsageError("The workspace file is not valid JSON.") from error
+    try:
+        return load_workspace_api(text, choice)
+    except WorkspaceFileError as error:
+        raise UsageError(str(error)) from error
+
+
 def fetch_contract(url: str) -> bytes:
     """Downloads a contract with an overall deadline, so a server that trickles bytes cannot hang a CI job."""
     deadline = time.monotonic() + CONTRACT_FETCH_SECONDS
@@ -158,6 +182,15 @@ def validate_target(target: str | None) -> None:
     parsed = httpx.URL(target) if "://" in target else None
     if parsed is None or parsed.scheme not in {"http", "https"} or not parsed.host:
         raise UsageError(f"--target {target!r} must be an http:// or https:// URL, for example https://api.example.com/v1.")
+
+
+def usable_target(target: str | None) -> str | None:
+    """The target saved in the app, unless it is not a plain http(s) URL; then the contract's server applies."""
+    try:
+        validate_target(target)
+    except UsageError:
+        return None
+    return target
 
 
 def resolve_target(target: str | None, overview: ApiOverview, spec: str) -> str:
@@ -206,8 +239,16 @@ async def run_checks(args: argparse.Namespace) -> RunReport:
     # Arguments are checked before the contract is downloaded.
     validate_target(args.target)
     headers = parse_headers(args.header)
-    overview = load_contract(args.spec)
-    target = resolve_target(args.target, overview, args.spec)
+    if args.api and not args.workspace:
+        raise UsageError("--api chooses a saved API from --workspace; it cannot be used with --spec.")
+    if args.workspace:
+        saved = load_workspace(args.workspace, args.api)
+        overview, flows, unreadable_flows = saved.overview, saved.flows, saved.unreadable_flows
+        target = resolve_target(args.target or usable_target(saved.target), overview, "")
+    else:
+        overview = load_contract(args.spec)
+        flows, unreadable_flows = overview.flows, []
+        target = resolve_target(args.target, overview, args.spec)
     try:
         inputs_file = json.loads(args.inputs.read_text(encoding="utf-8")) if args.inputs else {}
     except (OSError, ValueError) as error:
@@ -257,8 +298,10 @@ async def run_checks(args: argparse.Namespace) -> RunReport:
             endpoint.checks.append(CheckOutcome(title=scenario.title, category=scenario.category, result=result))
             print(f"  {result.result:<5} {key} · {scenario.title}", file=sys.stderr)
     if args.flows:
-        for flow in overview.flows:
+        for flow in flows:
             report.flows.append(await run_flow(flow, args, target, headers, inputs_file, credential_names(overview)))
+        for title in unreadable_flows:
+            report.flows.append(FlowOutcome(id=title, title=title, skipped_reason="Could not be read from the workspace file; open and save it in the app again."))
     return report
 
 
