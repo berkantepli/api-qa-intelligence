@@ -11,6 +11,24 @@ You give it a contract; it gives you a test plan, results with the full request 
 
 > **Note:** Built as a portfolio project. Only test APIs you own or are allowed to test.
 
+## Screenshots
+
+### Overview
+
+![The overview of the built-in demo API: every endpoint with its latest result, and a failed check that explains how the response body differs from the contract](docs/images/overview.png)
+
+### Run details
+
+![Run details of a failed check: expected and received status, the schema differences, and the full request and response](docs/images/run-detail.png)
+
+### Coverage & Risk
+
+![Coverage & Risk: endpoints tested, failing endpoints, untested write endpoints, and which kinds of checks each endpoint has passed or failed](docs/images/coverage.png)
+
+### Flows
+
+![A lifecycle flow that creates a book, reads it, updates it, deletes it, and confirms it is gone, passing the new id from step to step](docs/images/flows.png)
+
 ---
 
 ## Quick start
