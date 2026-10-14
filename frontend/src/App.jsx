@@ -19,7 +19,7 @@ import RequestImportPanel from "./RequestImportPanel.jsx";
 import { compareRequests, mergeInputs, suggestedInputs } from "./requestImport.js";
 import { qualityTone } from "./quality.js";
 import { draftToFlow, effectiveFlows, withoutFlowChanges, withSavedFlow } from "./flowEditor.js";
-import { buildFlowRequest, flowRunEntry, isFlowRun } from "./flows.js";
+import { accessCheckFlow, buildFlowRequest, flowRunEntry, isFlowRun } from "./flows.js";
 import Icon from "./Icon.jsx";
 import DemoGuide, { isDemoApi } from "./DemoGuide.jsx";
 import RunDetail, { ResponseChanges, SchemaDifferences } from "./RunDetail.jsx";
@@ -209,6 +209,9 @@ function App() {
   const bulkStopRequested = useRef(false);
   // Flows per saved API: run state { running, outcome, error, runId } and path values, by flow id.
   const [flowStates, setFlowStates] = useState({});
+  // The second user's credentials for access checks, by API and credential key. Only in this tab's
+  // memory: never saved, not even with "Remember in this tab".
+  const [secondUsers, setSecondUsers] = useState({});
   const [flowPathValues, setFlowPathValues] = useState({});
   // Suggesting flows for an API saved before imports included them: { [apiId]: { loading, error } }.
   const [flowSuggestions, setFlowSuggestions] = useState({});
@@ -952,20 +955,24 @@ function App() {
     setApiCredentials((current) => ({ ...current, [activeApiId]: { ...(current[activeApiId] ?? {}), [key]: value } }));
   }
 
-  async function runFlow(flow) {
+  // `access` runs the flow's access check instead: the second user's steps send their credentials.
+  async function runFlow(flow, { access = false } = {}) {
     if (!overview || targetProblem) return;
     const apiId = activeApiId;
-    updateFlowState(apiId, flow.id, { running: true, outcome: null, error: "", runId: null });
+    const target = access ? accessCheckFlow(flow, overview) : flow;
+    if (!target) return;
+    updateFlowState(apiId, target.id, { running: true, outcome: null, error: "", runId: null });
     try {
-      const outcome = await postJson("/api/v1/flows/execute", buildFlowRequest(overview, flow, {
+      const outcome = await postJson("/api/v1/flows/execute", buildFlowRequest(overview, target, {
         targetUrl, maxDurationMs, pathValues: flowPathValues[apiId]?.[flow.id], inputsByOperation: withApiCredentials(overview, requestInputs[apiId], apiCredentials[apiId]),
+        secondUser: access ? secondUsers[apiId] : {},
       }), "The flow could not be run.");
       noteTargetAnswer(outcome.steps?.find((step) => step.check?.response_status != null)?.check);
-      const entry = flowRunEntry(flow, outcome, { apiId, api: overview.title, target: targetUrl });
+      const entry = flowRunEntry(target, outcome, { apiId, api: overview.title, target: targetUrl });
       setRunHistory((current) => [entry, ...current]);
-      updateFlowState(apiId, flow.id, { running: false, outcome, runId: entry.id });
+      updateFlowState(apiId, target.id, { running: false, outcome, runId: entry.id });
     } catch (caught) {
-      updateFlowState(apiId, flow.id, { running: false, error: caught.message || "The flow could not be run." });
+      updateFlowState(apiId, target.id, { running: false, error: caught.message || "The flow could not be run." });
     }
   }
 
@@ -1333,6 +1340,9 @@ function App() {
             onPathValueChange={updateFlowPathValue}
             onCredentialChange={updateFlowCredential}
             onRun={runFlow}
+            onRunAccess={(flow) => runFlow(flow, { access: true })}
+            secondUser={secondUsers[activeApiId] ?? {}}
+            onSecondUserChange={(key, value) => setSecondUsers((current) => ({ ...current, [activeApiId]: { ...current[activeApiId], [key]: value } }))}
             onOpenRun={openRunHistory}
             onGoToSpecs={openSpecsPage}
           />

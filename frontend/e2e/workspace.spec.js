@@ -630,7 +630,7 @@ test("tours the built-in demo API and finds its deliberate problems", async ({ p
   await page.getByRole("button", { name: "Try the demo API" }).click();
   await expect(page.getByRole("heading", { name: "Demo Bookstore" })).toBeVisible();
   const guide = page.locator(".demo-guide");
-  await expect(guide.locator("li")).toHaveCount(7);
+  await expect(guide.locator("li")).toHaveCount(8);
 
   // Sign in once with the prefilled demo credentials.
   await guide.getByRole("button", { name: "Open Target & auth" }).click();
@@ -672,6 +672,23 @@ test("tours the built-in demo API and finds its deliberate problems", async ({ p
   await flow.getByRole("button", { name: "Run flow" }).click();
   await flow.getByRole("button", { name: "Confirm and run" }).click();
   await expect(flow.locator(".flow-card-pills .history-status")).toHaveText("PASS");
+
+  // The access check: a second reader may replace the first reader's book but not delete it.
+  const access = flow.locator(".access-check");
+  await access.locator(":scope > summary").click();
+  const secondSignIn = access.locator(".access-check-signin");
+  await secondSignIn.locator("summary").click();
+  await secondSignIn.locator("textarea").fill(JSON.stringify({ email: "second@example.com", password: "second-password" }));
+  await secondSignIn.getByRole("button", { name: "Sign in as the second user" }).click();
+  await expect(secondSignIn.locator(".access-check-signed-in")).toContainText("Signed in as the second user");
+  await access.getByRole("button", { name: "Run access check" }).click();
+  await access.getByRole("button", { name: "Confirm and run" }).click();
+  await expect(access.locator(".access-verdict")).toContainText("The second user reached the first user's record");
+  await expect(access.locator(".access-finding-fail")).toHaveText("The second user could change the first user's record (HTTP 200).");
+  await expect(access.locator(".access-finding-pass")).toHaveText("The second user could not delete the record (HTTP 403).");
+  // The second reader's token is never saved with the workspace.
+  const workspace = await (await page.request.get("/api/v1/workspace")).text();
+  expect(workspace).not.toContain("second-password");
 
   // A bulk run sends the same token: GET /me only passes when signed in.
   await nav(page, "Coverage");

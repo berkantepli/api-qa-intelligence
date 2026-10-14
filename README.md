@@ -60,7 +60,7 @@ Open <http://127.0.0.1:8001>.
 |---|---|
 | **Overview** | Every endpoint with ready-made checks: a valid request, a missing required input, values at and past documented limits, wrong types, and a call without credentials. Each response is checked for its status code, the documented schema, and an optional time limit. |
 | **Coverage & Risk** | Which endpoints are tested, failing, or never tested, what each one's checks still miss (inputs and response codes), and a risk score that says where to look first. **Run checks** runs a whole filter at once. |
-| **Flows** | Multi-step tests built from the contract: create a record, read it, update it, delete it, and confirm it is gone, passing the new id from step to step. |
+| **Flows** | Multi-step tests built from the contract: create a record, read it, update it, delete it, and confirm it is gone, passing the new id from step to step. An **access check** then tries the record with a second user's token, which must be refused. |
 | **Run history** | Every run with its request, response, and the reason for each result. Secrets are hidden before anything is saved. |
 | **Trends** *(advanced view)* | Pass rate, response times, and the share of tested endpoints per day, plus the endpoints that got noticeably slower. |
 | **Contract quality** | A 0–100 score for how testable the contract is, with the fixes worth most points. |
@@ -72,6 +72,7 @@ Open <http://127.0.0.1:8001>.
 - **No AI is needed for testing.** Checks come from fixed rules, so the same contract always gives the same checks and results. The optional AI (a local [Ollama](https://ollama.com) model) suggests extra test ideas, fills in sample values, and explains failures; its output is a suggestion and never changes a result.
 - **A response can pass and still be worth a look.** When a check's response loses a field, gets a new one, changes a type, or returns an empty list compared with its last pass, the result says so. This does not fail the check.
 - **Data-changing requests ask first.** POST, PUT, PATCH, and DELETE checks and flows run only after you confirm, and flows clean up the records they create.
+- **One user should not reach another's data.** The access check (OWASP API1) creates a record as you and tries to read, change, and delete it as a second test account; it reports each attempt that got through.
 - **Credentials are never saved.** Tokens stay in the open browser tab and are hidden in run history, exports, and reports.
 - **Your work is kept.** Contracts, checks, and runs are saved in a local database and survive closing the browser. **Settings** exports and imports the whole workspace.
 - **Importing a new version** of a contract shows what changed and which changes break existing clients.
