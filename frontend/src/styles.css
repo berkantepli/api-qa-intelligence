@@ -1141,6 +1141,30 @@ h1, h2, h3, p { margin-top: 0; }
   .demo-offer, .demo-guide-footer { align-items: stretch; flex-direction: column; }
 }
 
+/* Access check (OWASP API1) under a flow card. */
+.access-check { margin-top: 14px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 9px; }
+.access-check > summary { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; font-weight: 600; cursor: pointer; }
+.access-check > summary small { color: var(--muted); font-size: 12px; font-weight: 400; }
+.access-check-lede { margin: 10px 0; color: var(--muted); font-size: 13px; }
+.access-check-inputs { margin: 0 0 10px; }
+.access-verdict { display: grid; gap: 6px; margin: 10px 0; padding: 10px 12px; border-radius: 7px; font-size: 13px; }
+.access-verdict ul { display: grid; gap: 3px; margin: 0; padding-left: 18px; }
+.access-verdict-fail { border: 1px solid var(--red-soft); background: var(--red-soft); color: var(--red); }
+.access-verdict-pass { border: 1px solid var(--green-soft); background: var(--green-soft); color: var(--green); }
+.access-verdict-unknown { border: 1px solid var(--line); background: var(--surface-soft); color: var(--text); }
+.access-verdict li { color: var(--text); }
+.access-finding { margin: 6px 0 0; font-size: 13px; }
+.access-finding-fail { color: var(--red); font-weight: 600; }
+.access-finding-pass { color: var(--green); }
+.access-finding-unknown { color: var(--muted); }
+.actor-pill { padding: 2px 7px; border-radius: 999px; background: var(--accent-soft); color: var(--accent-dark); font-size: 11px; font-weight: 600; white-space: nowrap; }
+.access-check-signin { margin-top: 8px; font-size: 13px; }
+.access-check-signin > summary { display: flex; flex-wrap: wrap; gap: 4px 8px; color: var(--accent-dark); cursor: pointer; }
+.access-check-signin > summary small { color: var(--muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.access-check-signin textarea { width: 100%; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+.access-check-signin .secondary-button { margin-top: 6px; }
+.access-check-signed-in { margin: 6px 0 0; color: var(--green); font-size: 12px; }
+
 /* Comparing results with an earlier moment, and the HTML report tools. */
 .compare-panel { display: grid; gap: 10px; margin: 18px 0 0; padding: 14px 16px; border: 1px solid var(--line); border-radius: 11px; background: var(--surface); box-shadow: var(--shadow); }
 .compare-panel-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }

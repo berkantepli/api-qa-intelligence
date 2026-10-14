@@ -7,13 +7,15 @@ Deliberate problems (each one is found by a contract check, a flow, or a time li
 - POST and PUT /books accept a year that is not a number and fields the schema forbids, and
   reject the lowest documented year (1450) as if the minimum were exclusive.
 - GET /reports/sales takes about 1.5 seconds, so a response time limit of 1000 ms fails it.
+- PUT /books/{bookId} lets any signed-in reader replace a book another reader added (DELETE checks
+  the owner), so the access check of the book flow finds it with the second demo account.
 Everything else behaves as documented, so most checks pass.
 """
 
 import asyncio
 import secrets
 import threading
-from collections import deque
+from collections import OrderedDict
 from copy import deepcopy
 from typing import Any
 
@@ -24,6 +26,10 @@ from pydantic import BaseModel
 DEMO_PREFIX = "/demo"
 DEMO_EMAIL = "demo@example.com"
 DEMO_PASSWORD = "demo-password"
+# A second reader, so access checks can try one reader's book with another's token.
+SECOND_EMAIL = "second@example.com"
+SECOND_PASSWORD = "second-password"
+MAX_TOKENS = 1000
 SLOW_REPORT_SECONDS = 1.5
 MAX_BOOKS = 200
 GENRES = ["fiction", "science", "history"]
@@ -39,6 +45,8 @@ ORDERS = {
     "ORD-1002": {"id": "ORD-1002", "book_id": 2, "quantity": 1, "status": "processing"},
 }
 USER = {"id": 7, "email": DEMO_EMAIL, "name": "Demo Reader"}
+SECOND_USER = {"id": 8, "email": SECOND_EMAIL, "name": "Second Reader"}
+ACCOUNTS = {DEMO_EMAIL: (DEMO_PASSWORD, USER), SECOND_EMAIL: (SECOND_PASSWORD, SECOND_USER)}
 
 
 class DemoStore:
@@ -46,21 +54,35 @@ class DemoStore:
 
     def __init__(self) -> None:
         self.lock = threading.Lock()
-        self.tokens: deque[str] = deque(maxlen=1000)
+        # Sign-in token -> the reader's email, the oldest dropped first.
+        self.tokens: OrderedDict[str, str] = OrderedDict()
         self.reset()
 
     def reset(self) -> None:
         with self.lock:
             self.books: dict[int, dict[str, Any]] = deepcopy(SEED_BOOKS)
+            # Who added each book; the sample books have no owner, so any reader may change them.
+            self.owners: dict[int, str] = {}
             self.next_id = max(self.books) + 1
 
-    def add(self, book: dict[str, Any]) -> dict[str, Any]:
+    def sign_in(self, email: str) -> str:
+        token = secrets.token_urlsafe(24)
+        with self.lock:
+            self.tokens[token] = email
+            while len(self.tokens) > MAX_TOKENS:
+                self.tokens.popitem(last=False)
+        return token
+
+    def add(self, book: dict[str, Any], owner: str) -> dict[str, Any]:
         with self.lock:
             # Keeps memory bounded however many books a bulk run creates.
             while len(self.books) >= MAX_BOOKS:
-                del self.books[min(key for key in self.books if key not in SEED_BOOKS)]
+                oldest = min(key for key in self.books if key not in SEED_BOOKS)
+                del self.books[oldest]
+                self.owners.pop(oldest, None)
             book = {"id": self.next_id, **book}
             self.books[self.next_id] = book
+            self.owners[self.next_id] = owner
             self.next_id += 1
             return book
 
@@ -87,9 +109,14 @@ def _error(status: int, detail: str) -> JSONResponse:
     return JSONResponse({"detail": detail}, status_code=status)
 
 
-def _signed_in(request: Request) -> bool:
+def _reader(request: Request) -> str | None:
+    """The signed-in reader's email, or None."""
     scheme, _, token = request.headers.get("authorization", "").partition(" ")
-    return scheme.lower() == "bearer" and token in store.tokens
+    return store.tokens.get(token) if scheme.lower() == "bearer" else None
+
+
+def _signed_in(request: Request) -> bool:
+    return _reader(request) is not None
 
 
 def _book_id(value: str) -> int | None:
@@ -148,18 +175,18 @@ async def login(request: Request) -> JSONResponse:
         return _error(422, "email and password are required.")
     if "@" not in body["email"]:
         return _error(422, "email must be an email address.")
-    if body["email"] != DEMO_EMAIL or body["password"] != DEMO_PASSWORD:
+    account = ACCOUNTS.get(body["email"])
+    if account is None or body["password"] != account[0]:
         return _error(401, "Wrong email or password.")
-    token = secrets.token_urlsafe(24)
-    store.tokens.append(token)
-    return JSONResponse({"access_token": token, "token_type": "bearer", "expires_in": 3600})
+    return JSONResponse({"access_token": store.sign_in(body["email"]), "token_type": "bearer", "expires_in": 3600})
 
 
 @router.get("/me")
 def me(request: Request) -> JSONResponse:
-    if not _signed_in(request):
+    reader = _reader(request)
+    if reader is None:
         return _error(401, "Sign in first.")
-    return JSONResponse(USER)
+    return JSONResponse(ACCOUNTS[reader][1])
 
 
 @router.get("/books")
@@ -176,12 +203,13 @@ def list_books(request: Request) -> JSONResponse:
 
 @router.post("/books")
 async def create_book(request: Request) -> JSONResponse:
-    if not _signed_in(request):
+    reader = _reader(request)
+    if reader is None:
         return _error(401, "Sign in first.")
     book, problem = _validate_book(await _json(request))
     if problem:
         return _error(422, problem)
-    created = store.add(book)
+    created = store.add(book, reader)
     return JSONResponse(created, status_code=201, headers={"Location": f"{DEMO_PREFIX}/books/{created['id']}"})
 
 
@@ -203,6 +231,7 @@ async def update_book(book_id: str, request: Request) -> JSONResponse:
         return _error(400, "bookId must be a whole number.")
     if key not in store.books:
         return _error(404, "No book with this id.")
+    # Deliberate: the owner is not checked, so any reader can replace another reader's book.
     book, problem = _validate_book(await _json(request))
     if problem:
         return _error(422, problem)
@@ -213,14 +242,20 @@ async def update_book(book_id: str, request: Request) -> JSONResponse:
 
 @router.delete("/books/{book_id}")
 def delete_book(book_id: str, request: Request) -> Response:
-    if not _signed_in(request):
+    reader = _reader(request)
+    if reader is None:
         return _error(401, "Sign in first.")
     key = _book_id(book_id)
     if key is None:
         return _error(400, "bookId must be a whole number.")
     with store.lock:
-        if store.books.pop(key, None) is None:
+        if key not in store.books:
             return _error(404, "No book with this id.")
+        owner = store.owners.get(key)
+        if owner is not None and owner != reader:
+            return _error(403, "Only the reader who added this book can delete it.")
+        del store.books[key]
+        store.owners.pop(key, None)
     return Response(status_code=204)
 
 
@@ -262,7 +297,8 @@ CONTRACT: dict[str, Any] = {
         "title": "Demo Bookstore",
         "version": "1.0.0",
         "description": "A bookstore API built into API QA Intelligence, with deliberate problems for the checks to find. "
-        f"Sign in with {DEMO_EMAIL} / {DEMO_PASSWORD}.",
+        f"Sign in with {DEMO_EMAIL} / {DEMO_PASSWORD}; a second reader, {SECOND_EMAIL} / {SECOND_PASSWORD}, "
+        "is there for access checks.",
     },
     "servers": [{"url": DEMO_PREFIX}],
     "tags": [{"name": "Books"}, {"name": "Orders"}, {"name": "Account"}, {"name": "Reports"}],
@@ -370,7 +406,7 @@ CONTRACT: dict[str, Any] = {
             "delete": {
                 "tags": ["Books"], "summary": "Delete a book", "operationId": "deleteBook", "security": AUTH,
                 "parameters": [{**BOOK_ID, "example": 2}],
-                "responses": {"204": _response("The book was deleted."), "400": _response("bookId is not a number.", ERROR), **SIGN_IN_PROBLEMS, "404": _response("No such book.", ERROR)},
+                "responses": {"204": _response("The book was deleted."), "400": _response("bookId is not a number.", ERROR), **SIGN_IN_PROBLEMS, "403": _response("Another reader added this book.", ERROR), "404": _response("No such book.", ERROR)},
             },
         },
         "/orders": {"get": {
