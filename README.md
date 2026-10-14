@@ -83,6 +83,7 @@ Open <http://127.0.0.1:8001>.
 | **What changed** | On Coverage & Risk, **Compare with…** lists what is newly failing, fixed, still failing, or slower since the previous run, 24 hours, or 7 days ago. **Export HTML** shares it with the coverage summary. |
 | **Trends** *(advanced view)* | Pass rate, response times, and the share of tested endpoints per day, plus the endpoints that got noticeably slower. |
 | **Contract quality** | A 0–100 score for how testable the contract is, with the fixes worth most points. |
+| **Postman & HAR** | **Fill from Postman or HAR** on the overview compares the requests you already send (a Postman collection, or a HAR file saved from the browser) with the contract: which endpoints they use, which they never call, and which go to paths the contract does not document. Their values fill in request details; tokens, cookies, and other secrets are left out. |
 
 ---
 
