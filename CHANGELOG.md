@@ -10,7 +10,7 @@ The version lives in the [`VERSION`](VERSION) file and follows [Semantic Version
 - The second user's credentials are typed in or taken from the contract's sign-in request (**Sign in as the second user**). They stay in the tab's memory only, are never saved, and are masked in evidence. Run history marks the second user's steps.
 - The demo bookstore has a second reader (`second@example.com` / `second-password`) and remembers who added each book: deleting another reader's book is refused with 403, while replacing it is deliberately not, so the access check finds it. The demo tour has a step for it.
 
-## Unreleased
+## 1.20.0 — 2026-10-14
 
 - **Run the app's saved checks in CI.** `api-qa run --workspace export.json` runs a workspace exported from Settings: the contract's checks plus your edited AI checks, and with `--flows` the flows the Flows page shows, including edited suggestions and flows you built. `--api` picks one API when the export holds several; the target saved in the app is used unless `--target` is given. Credentials still come from `--header`, since exports never contain them. A saved flow that cannot be read is reported as skipped instead of being dropped.
 
