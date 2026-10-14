@@ -9,7 +9,7 @@ API QA Intelligence reads an API's contract (an OpenAPI or Swagger file) and tes
 
 You give it a contract; it gives you a test plan, results with the full request and response, a coverage and risk view per endpoint, and multi-step tests that follow one record from create to delete. Everything runs on your own computer. The AI features are optional and use a local model, so no contract or API traffic leaves your machine.
 
-> **Note:** This is a learning and portfolio project. Only test APIs you own or are allowed to test.
+> **Note:** Built as a portfolio project. Only test APIs you own or are allowed to test.
 
 ---
 
