@@ -2,7 +2,7 @@
 
 The version lives in the [`VERSION`](VERSION) file and follows [Semantic Versioning](https://semver.org/). Before 1.0.0, a new feature raises the minor number (0.**x**.0) and a fix or visual change raises the patch number (0.x.**y**).
 
-## Unreleased
+## 1.20.0 — 2026-10-14
 
 - **Run the app's saved checks in CI.** `api-qa run --workspace export.json` runs a workspace exported from Settings: the contract's checks plus your edited AI checks, and with `--flows` the flows the Flows page shows, including edited suggestions and flows you built. `--api` picks one API when the export holds several; the target saved in the app is used unless `--target` is given. Credentials still come from `--header`, since exports never contain them. A saved flow that cannot be read is reported as skipped instead of being dropped.
 
