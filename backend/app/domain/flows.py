@@ -85,7 +85,8 @@ class ApiFlow(BaseModel):
     id: str
     title: str
     resource: str
-    source: Literal["openapi_link", "inferred"]
+    # "custom": a flow the user built in the app, read back from a workspace export.
+    source: Literal["openapi_link", "inferred", "custom"]
     rationale: str
     steps: list[FlowStep]
     # Path parameters the flow cannot fill itself, such as a parent resource's id.

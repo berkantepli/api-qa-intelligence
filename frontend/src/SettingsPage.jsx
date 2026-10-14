@@ -114,6 +114,7 @@ export default function SettingsPage({ aiStatus, onRefreshAiStatus, aiDiagnosis,
         <input ref={fileInput} type="file" accept="application/json,.json" hidden onChange={handleImport} />
       </div>
       <p className="settings-note">Imports merge with your saved data: APIs with the same id are replaced and runs already present are skipped. Credential-like values were redacted when runs were saved, but review an export before sharing it.</p>
+      <p className="settings-note">To run the saved checks and flows in CI, including edited AI checks and flows you built, pass the export to the command line: <code>api-qa run --workspace export.json</code>.</p>
       {importMessage && <div className={`alert ${importMessage.tone === "success" ? "success-alert" : "error-alert"}`} role="status"><Icon name={importMessage.tone === "success" ? "check" : "close"} size={16} />{importMessage.text}</div>}
     </section>
 

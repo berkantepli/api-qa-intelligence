@@ -2,6 +2,10 @@
 
 The version lives in the [`VERSION`](VERSION) file and follows [Semantic Versioning](https://semver.org/). Before 1.0.0, a new feature raises the minor number (0.**x**.0) and a fix or visual change raises the patch number (0.x.**y**).
 
+## 1.20.0 — 2026-10-14
+
+- **Run the app's saved checks in CI.** `api-qa run --workspace export.json` runs a workspace exported from Settings: the contract's checks plus your edited AI checks, and with `--flows` the flows the Flows page shows, including edited suggestions and flows you built. `--api` picks one API when the export holds several; the target saved in the app is used unless `--target` is given. Credentials still come from `--header`, since exports never contain them. A saved flow that cannot be read is reported as skipped instead of being dropped.
+
 ## 1.19.2 — 2026-10-14
 
 - **Slowed down** on Trends compares the range with the endpoint's usual speed, the median of the 90 days before the range, instead of only the same number of days just before. A slowdown that started before the range and has not recovered is no longer missed.

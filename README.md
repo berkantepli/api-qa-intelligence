@@ -85,6 +85,7 @@ The `api-qa` command runs the same checks without the web app, so a pipeline can
 
 ```bash
 api-qa run --spec openapi.yaml --target https://staging.example.com --junit report.xml
+api-qa run --workspace export.json --flows --include-writes   # the checks and flows saved in the app
 api-qa lint openapi.yaml --min-score 70          # fail when the contract is hard to test
 api-qa diff openapi-v1.yaml openapi-v2.yaml      # fail on breaking changes
 ```
