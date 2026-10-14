@@ -1,6 +1,9 @@
 # API QA Intelligence
 
 [![CI](https://github.com/berkantepli/api-qa-intelligence/actions/workflows/ci.yml/badge.svg)](https://github.com/berkantepli/api-qa-intelligence/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/berkantepli/api-qa-intelligence)](https://github.com/berkantepli/api-qa-intelligence/releases/latest)
+[![License: MIT](https://img.shields.io/github/license/berkantepli/api-qa-intelligence)](LICENSE)
+[![Docker image](https://img.shields.io/badge/docker-ghcr.io-2496ED?logo=docker&logoColor=white)](https://github.com/berkantepli/api-qa-intelligence/pkgs/container/api-qa-intelligence)
 
 API QA Intelligence reads an API's contract (an OpenAPI or Swagger file) and tests the API for you. It writes the checks itself, runs them against your API, and shows what passed, what failed and why, and which parts of the API were never tested.
 
