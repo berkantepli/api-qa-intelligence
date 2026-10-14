@@ -1,9 +1,11 @@
 import { useState } from "react";
+import { postJson } from "./apiClient.js";
+import { buildSignInRequest, credentialFromToken, signInBodyTemplate, signInCandidates } from "./apiCredentials.js";
 import ErrorAlert from "./ErrorAlert.jsx";
 import FlowEditor from "./FlowEditor.jsx";
 import { flowToDraft, isCustomFlow, newFlowDraft } from "./flowEditor.js";
 import Icon from "./Icon.jsx";
-import { credentialValue, dataChangingSteps, flowCredentials, missingFlowInputs, ROLE_LABELS } from "./flows.js";
+import { accessCheckFlow, accessCheckProblem, accessFinding, credentialValue, dataChangingSteps, flowCredentials, missingFlowInputs, ROLE_LABELS } from "./flows.js";
 import { SchemaDifferences } from "./RunDetail.jsx";
 import { outcomeSummary } from "./runDetail.js";
 
@@ -26,7 +28,91 @@ function StepResult({ result }) {
 
 const SOURCE_LABELS = { openapi_link: "From OpenAPI links", inferred: "Inferred from paths", custom: "Built by you" };
 
-function FlowCard({ overview, flow, state, pathValues, inputsByOperation, targetUrl, targetProblem, onPathValueChange, onCredentialChange, onRun, onOpenRun, onSaveFlow, onResetFlow, onDeleteFlow }) {
+const VERDICTS = {
+  fail: "The second user reached the first user's record: at least one request does not check who owns it.",
+  unknown: "Inconclusive: at least one attempt proves nothing. See below.",
+  pass: "The second user was refused every time.",
+};
+
+// Gets the second user's token from the contract's sign-in request, like Target & auth does for the
+// first user. The token only goes into this tab's memory.
+function SecondUserSignIn({ overview, credential, targetUrl, targetProblem, disabled, onToken }) {
+  const operationKey = signInCandidates(overview)[0];
+  const operation = (overview?.operations ?? []).find((item) => `${item.method} ${item.path}` === operationKey);
+  const [bodyText, setBodyText] = useState(() => signInBodyTemplate(operation));
+  const [status, setStatus] = useState({ loading: false, error: "", message: "" });
+  if (!operation || !credential) return null;
+  async function signIn() {
+    if (targetProblem) return setStatus({ loading: false, error: targetProblem, message: "" });
+    const built = buildSignInRequest(operation, { targetUrl, bodyText, tokenPointer: "" });
+    if (built.error) return setStatus({ loading: false, error: built.error, message: "" });
+    setStatus({ loading: true, error: "", message: "" });
+    try {
+      const result = await postJson("/api/v1/auth/sign-in", built.request, "The sign-in request could not be sent.");
+      if (!result.signed_in) return setStatus({ loading: false, error: result.error, message: "" });
+      onToken(credential.key, credentialFromToken(credential, result.token));
+      setStatus({ loading: false, error: "", message: `Signed in as the second user (HTTP ${result.status_code}); ${credential.name} is set for this check.` });
+    } catch (caught) {
+      setStatus({ loading: false, error: caught.message, message: "" });
+    }
+  }
+  return <details className="access-check-signin">
+    <summary>Sign in as the second user<small>{operationKey}</small></summary>
+    <label className="request-input"><span>Second user&apos;s sign-in body<small>JSON · use another test account</small></span>
+      <textarea rows="4" value={bodyText} disabled={disabled || status.loading} onChange={(event) => setBodyText(event.target.value)} />
+    </label>
+    <ErrorAlert message={status.error} />
+    {status.message && <p className="access-check-signed-in" role="status">{status.message}</p>}
+    <button className="secondary-button" type="button" disabled={disabled || status.loading} onClick={signIn}>{status.loading ? <><span className="spinner" /> Signing in…</> : "Sign in as the second user"}</button>
+  </details>;
+}
+
+// OWASP API1:2023 (Broken Object Level Authorization): the first user creates a record, a second
+// user tries to read, change, and delete it, and the first user checks it and cleans up.
+function AccessCheck({ overview, flow, state, pathValues, inputsByOperation, secondUser, targetUrl, targetProblem, onSecondUserChange, onRun, onOpenRun }) {
+  const [confirming, setConfirming] = useState(false);
+  const access = accessCheckFlow(flow, overview);
+  if (!access) return null;
+  const credentials = flowCredentials(overview, flow);
+  const missing = missingFlowInputs(flow, pathValues);
+  const problem = (missing.length ? `Fill in ${missing.join(", ")} first.` : null) || accessCheckProblem(overview, access, inputsByOperation, secondUser) || targetProblem;
+  const running = state?.running;
+  const findings = (state?.outcome?.steps ?? []).map((step, index) => accessFinding({
+    actor: access.steps[index]?.actor, role: step.role, result: step.status, response_status: step.check?.response_status ?? null,
+  })).filter(Boolean);
+  const verdict = findings.some((item) => item.tone === "fail") ? "fail" : findings.some((item) => item.tone === "unknown") ? "unknown" : findings.length ? "pass" : null;
+  const run = () => { setConfirming(false); onRun(flow); };
+
+  return <details className="access-check" open={Boolean(state) || undefined}>
+    <summary>Access check<small>Can another user reach this record? · OWASP API1:2023</small></summary>
+    <p className="access-check-lede">The first user (your credentials under Target &amp; auth) creates a record. A second user then tries to read, change, and delete it and must get 403 or 404; steps whose endpoint needs no credentials are skipped, since anyone may use them. The first user checks that the record is still there and deletes it.</p>
+    {credentials.length > 0 && <div className="request-inputs access-check-inputs">
+      {credentials.map((credential) => <label key={credential.key} className="request-input">
+        <span>Second user&apos;s {credential.name}<small>{credential.location} · kept only in this tab</small></span>
+        <input type="password" autoComplete="off" value={secondUser[credential.key] ?? ""} disabled={running} onChange={(event) => onSecondUserChange(credential.key, event.target.value)} placeholder="Another test account's value" />
+      </label>)}
+      <SecondUserSignIn overview={overview} credential={credentials.find((item) => item.location === "header") ?? credentials[0]} targetUrl={targetUrl} targetProblem={targetProblem} disabled={running} onToken={onSecondUserChange} />
+    </div>}
+    {verdict && <div className={`access-verdict access-verdict-${verdict}`} role="status">
+      <strong>{VERDICTS[verdict]}</strong>
+      <ul>{findings.map((item, index) => <li key={index} className={`access-finding-${item.tone}`}>{item.text}</li>)}</ul>
+    </div>}
+    {confirming && <div className="execution-confirmation" role="alert">
+      <div><strong>The access check changes data.</strong><p>It creates a record as the first user, lets the second user try to change and delete it, and deletes it at the end, all on {targetUrl}.</p></div>
+      <div className="execution-confirmation-actions"><button className="secondary-button" type="button" onClick={() => setConfirming(false)}>Cancel</button><button className="primary-button" type="button" onClick={run}>Confirm and run</button></div>
+    </div>}
+    <ErrorAlert message={state?.error} className="run-error" />
+    <div className="flow-footer">
+      {state?.runId && !running && <button className="text-button" type="button" onClick={() => onOpenRun(state.runId)}>View run details</button>}
+      {problem ? <span className="run-footer-warning" role="status">{problem}</span> : <span>{plural(access.steps.length, "step")} · requests go to <code>{targetUrl}</code></span>}
+      <button className="secondary-button" type="button" disabled={running || Boolean(problem)} onClick={() => setConfirming(true)}>
+        {running ? <><span className="spinner" /> Running…</> : <><Icon name="shield" size={15} /> Run access check</>}
+      </button>
+    </div>
+  </details>;
+}
+
+function FlowCard({ overview, flow, state, pathValues, inputsByOperation, targetUrl, targetProblem, onPathValueChange, onCredentialChange, onRun, onOpenRun, onSaveFlow, onResetFlow, onDeleteFlow, accessState, secondUser = {}, onSecondUserChange, onRunAccess }) {
   const [confirming, setConfirming] = useState(false);
   const [editing, setEditing] = useState(false);
   const [confirmingRemoval, setConfirmingRemoval] = useState(false);
@@ -110,6 +196,8 @@ function FlowCard({ overview, flow, state, pathValues, inputsByOperation, target
         {running ? <><span className="spinner" /> Running…</> : <><Icon name="run" size={15} /> Run flow</>}
       </button>
     </div>
+    <AccessCheck overview={overview} flow={flow} state={accessState} pathValues={pathValues} inputsByOperation={inputsByOperation} secondUser={secondUser}
+      targetUrl={targetUrl} targetProblem={targetProblem} onSecondUserChange={onSecondUserChange} onRun={onRunAccess} onOpenRun={onOpenRun} />
     </>}
   </article>;
 }
@@ -134,7 +222,7 @@ export default function FlowsPage({ overview, flows, suggestion, flowStates, pat
     <p className="page-lede">Each flow creates a record, passes its id to the next requests, and cleans up after itself. Steps are judged like single checks: status code, documented schema, and time limit.</p>
     {suggestion?.loading ? <div className="history-empty"><span className="spinner" /><span>Looking for flows in {overview.title}…</span></div>
       : suggestion?.error ? <div className="flows-suggestion-error"><ErrorAlert message={suggestion.error} /><button className="secondary-button" type="button" onClick={onRetrySuggestion}>Try again</button></div>
-      : flows.length ? <div className="flow-list">{flows.map((flow) => <FlowCard key={flow.id} overview={overview} flow={flow} state={flowStates[flow.id]} pathValues={pathValuesFor(flow.id)} {...cardProps} />)}</div>
+      : flows.length ? <div className="flow-list">{flows.map((flow) => <FlowCard key={flow.id} overview={overview} flow={flow} state={flowStates[flow.id]} accessState={flowStates[`${flow.id}:access`]} pathValues={pathValuesFor(flow.id)} {...cardProps} />)}</div>
       : <div className="history-empty"><Icon name="run" size={25} /><strong>No flows suggested for this contract</strong><span>Flows are suggested when a collection has a POST (such as <code>POST /pets</code>) and its records have a GET or DELETE (<code>/pets/{"{petId}"}</code>), with the new id in the create response, the request body, the Location header, or an OpenAPI link. You can also build one with <b>New flow</b>.</span></div>}
   </section>;
 }

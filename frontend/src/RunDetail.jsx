@@ -10,7 +10,7 @@ import {
   sortedHeaders,
   summarizeResults,
 } from "./runDetail.js";
-import { ROLE_LABELS } from "./flows.js";
+import { accessFinding, ROLE_LABELS } from "./flows.js";
 import { changeText } from "./responseChanges.js";
 import { isEditedScenario } from "./scenarioDraft.js";
 
@@ -80,6 +80,7 @@ function CheckDetail({ result, index, analysisStatus, onAnalyze, comparison = nu
           {result.category && <span className={`category-pill category-${result.category}`}>{result.category === "imported" ? "Imported test" : categoryLabels[result.category] || result.category}</span>}
           {isEditedScenario(result) && <span className="edited-pill">AI idea · edited</span>}
           {result.role && <span className="review-pill">{ROLE_LABELS[result.role] ?? result.role}</span>}
+          {result.actor === "second" && <span className="actor-pill">Second user</span>}
           {comparison?.changes.length > 0 && <span className="response-change-pill">Response changed</span>}
         </span>
       </span>
@@ -95,6 +96,7 @@ function CheckDetail({ result, index, analysisStatus, onAnalyze, comparison = nu
         <div><dt>Method</dt><dd>{result.method || "—"}</dd></div>
       </dl>
       <p className={`run-outcome run-outcome-${outcome.toLowerCase()}`}>{outcomeSummary(result)}</p>
+      {accessFinding(result) && <p className={`access-finding access-finding-${accessFinding(result).tone}`}>{accessFinding(result).text}</p>}
       {result.error && <p className="history-error">{result.error}</p>}
       {savedValues.length > 0 && <p className="flow-saved-values">Saved for later steps: {savedValues.map(([name, value]) => <code key={name} className="flow-saved">{name} = {String(value)}</code>)}</p>}
       <SchemaDifferences check={result.schema_check} />
