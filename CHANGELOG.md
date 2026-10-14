@@ -2,6 +2,14 @@
 
 The version lives in the [`VERSION`](VERSION) file and follows [Semantic Versioning](https://semver.org/). Before 1.0.0, a new feature raises the minor number (0.**x**.0) and a fix or visual change raises the patch number (0.x.**y**).
 
+## 1.21.0 — 2026-10-14
+
+### Access check
+- **Access check** under each lifecycle flow tests object-level authorization (OWASP API1:2023): the first user creates a record, a second user tries to read, change, and delete it and must get 403 or 404, and the first user checks the record is still there and cleans up. Each attempt gets its own answer in plain words; a 401 for the second user is reported as inconclusive, not as a pass.
+- Only steps whose endpoint documents a credential are tried, so reading a public record is not a finding.
+- The second user's credentials are typed in or taken from the contract's sign-in request (**Sign in as the second user**). They stay in the tab's memory only, are never saved, and are masked in evidence. Run history marks the second user's steps.
+- The demo bookstore has a second reader (`second@example.com` / `second-password`) and remembers who added each book: deleting another reader's book is refused with 403, while replacing it is deliberately not, so the access check finds it. The demo tour has a step for it.
+
 ## Unreleased
 
 - **Run the app's saved checks in CI.** `api-qa run --workspace export.json` runs a workspace exported from Settings: the contract's checks plus your edited AI checks, and with `--flows` the flows the Flows page shows, including edited suggestions and flows you built. `--api` picks one API when the export holds several; the target saved in the app is used unless `--target` is given. Credentials still come from `--header`, since exports never contain them. A saved flow that cannot be read is reported as skipped instead of being dropped.
