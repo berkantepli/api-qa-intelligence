@@ -20,6 +20,8 @@ STABLE_ROUTES = {
     ("POST", "/api/v1/flows/suggest"),
     ("POST", "/api/v1/requests/parse"),
     ("POST", "/api/v1/runs/analyze-failure"),
+    ("POST", "/api/v1/runs/compare"),
+    ("POST", "/api/v1/reports/html"),
     ("POST", "/api/v1/runs/execute"),
     ("POST", "/api/v1/runs/execute-batch"),
     ("POST", "/api/v1/specs/diff"),

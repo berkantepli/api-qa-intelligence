@@ -12,6 +12,7 @@ from app.api.demo import info_router as demo_info_router
 from app.api.demo import router as demo_router
 from app.api.failure_analysis import router as failure_analysis_router
 from app.api.flows import router as flows_router
+from app.api.reports import router as reports_router
 from app.api.request_import import router as request_import_router
 from app.api.results import router as results_router
 from app.api.runs import router as runs_router
@@ -46,6 +47,7 @@ async def health() -> dict[str, str]:
 
 app.include_router(specs_router)
 app.include_router(runs_router)
+app.include_router(reports_router)
 app.include_router(results_router)
 app.include_router(request_import_router)
 app.include_router(flows_router)
