@@ -10,7 +10,7 @@ import { RISK_LEVELS, RISK_RULES } from "./riskScore.js";
 import Sparkline from "./Sparkline.jsx";
 import TrendsPanel from "./TrendsPanel.jsx";
 import { recentRunsByEndpoint, trendSamples } from "./trends.js";
-import { changeText, responseChanges, responseSchema } from "./responseChanges.js";
+import { latestChangesByEndpoint } from "./responseChanges.js";
 
 const statusLabels = { failing: "Failing", untested: "Not tested", passing: "Passing" };
 const filters = [
@@ -154,13 +154,8 @@ export default function CoveragePage({
 
   const { endpoints, totals } = computeCoverage(overview, apiRuns, Date.now(), contractChanges, lifecycle, criticality);
   const recentRuns = recentRunsByEndpoint(trendSamples(overview, trendRuns));
-  // Per endpoint, the structure changes in its latest run against the last pass of each check.
-  const changedResponses = {};
-  for (const run of [...apiRuns].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))) {
-    if (run.endpoint in changedResponses) continue;
-    changedResponses[run.endpoint] = (run.results ?? []).flatMap((result) => (responseChanges(trendRuns, run, result, responseSchema(overview, run, result))?.changes ?? [])
-      .map((change) => `${result.title}: ${changeText(change)}`));
-  }
+  // Per endpoint, the structure changes in the latest run that called it (its own checks or a flow step).
+  const changedResponses = latestChangesByEndpoint(overview, trendRuns);
   const flowTotals = lifecycle?.totals;
   // The advanced view adds the risk score, criticality, trends, and imported test results.
   const shownFilters = filters.filter((item) => advanced || item.id !== "high");
