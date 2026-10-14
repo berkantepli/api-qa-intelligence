@@ -2,7 +2,7 @@
 
 The version lives in the [`VERSION`](VERSION) file and follows [Semantic Versioning](https://semver.org/). Before 1.0.0, a new feature raises the minor number (0.**x**.0) and a fix or visual change raises the patch number (0.x.**y**).
 
-## Unreleased
+## 1.22.0 — 2026-10-14
 
 ### What changed
 - **Compare with…** on Coverage & Risk lists each check that is newly failing, fixed, still failing, or slower (50% and 50 ms) against an earlier moment: before the latest run, 24 hours ago, or 7 days ago. A whole bulk run counts as one run. Each row opens its run.
