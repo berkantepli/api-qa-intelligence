@@ -1,4 +1,6 @@
+import { useState } from "react";
 import { categoryLabels } from "./categories.js";
+import { ComparisonResult, compareRecords } from "./Comparison.jsx";
 import ErrorAlert from "./ErrorAlert.jsx";
 import Icon from "./Icon.jsx";
 import {
@@ -10,6 +12,7 @@ import {
   sortedHeaders,
   summarizeResults,
 } from "./runDetail.js";
+import { checkRecords, downloadHtmlReport, previousRunOf, reportCheck, reportFileName } from "./runCompare.js";
 import { accessFinding, ROLE_LABELS } from "./flows.js";
 import { changeText } from "./responseChanges.js";
 import { isEditedScenario } from "./scenarioDraft.js";
@@ -135,7 +138,69 @@ function CheckDetail({ result, index, analysisStatus, onAnalyze, comparison = nu
   </details>;
 }
 
-export default function RunDetail({ run, analysisState, onAnalyze, onBack, onRerun, canRerun, responseChangesFor = () => null }) {
+// The run against the previous run of the same endpoint or flow, and its HTML report.
+function RunReportTools({ run, runs, onOpenRun }) {
+  const previous = previousRunOf(run, runs);
+  const [state, setState] = useState({ loading: false, error: "", comparison: null, shown: false });
+  const [includePassing, setIncludePassing] = useState(false);
+  const [download, setDownload] = useState({ loading: false, error: "" });
+  const label = previous ? `the previous run of ${new Date(previous.createdAt).toLocaleString()}` : "";
+
+  async function loadComparison() {
+    if (state.comparison) return state.comparison;
+    const comparison = await compareRecords(checkRecords([previous]), checkRecords([run]));
+    setState((current) => ({ ...current, comparison }));
+    return comparison;
+  }
+
+  async function showComparison() {
+    if (state.shown) {
+      setState((current) => ({ ...current, shown: false }));
+      return;
+    }
+    setState((current) => ({ ...current, loading: true, error: "" }));
+    try {
+      await loadComparison();
+      setState((current) => ({ ...current, loading: false, shown: true }));
+    } catch (caught) {
+      setState((current) => ({ ...current, loading: false, error: caught.message }));
+    }
+  }
+
+  async function downloadReport() {
+    setDownload({ loading: true, error: "" });
+    try {
+      const comparison = previous ? await loadComparison() : null;
+      await downloadHtmlReport({
+        title: run.endpoint,
+        api: run.api,
+        target: run.target ?? "",
+        run_at: run.createdAt,
+        checks: run.results.map((result, index) => reportCheck(result, run.endpoint, index)),
+        include_passing_evidence: includePassing,
+        ...(comparison ? { comparison, comparison_label: label } : {}),
+      }, reportFileName(run.api, run.endpoint, new Date(run.createdAt).toISOString().slice(0, 16)));
+      setDownload({ loading: false, error: "" });
+    } catch (caught) {
+      setDownload({ loading: false, error: caught.message });
+    }
+  }
+
+  return <div className="run-report-tools">
+    <div className="run-report-actions">
+      {previous && <button className="secondary-button" type="button" disabled={state.loading} aria-expanded={state.shown} onClick={showComparison}>{state.loading ? <><span className="spinner" /> Comparing…</> : <><Icon name="clock" size={14} /> {state.shown ? "Hide comparison" : "Compare with the previous run"}</>}</button>}
+      <button className="secondary-button" type="button" disabled={download.loading} onClick={downloadReport} title="One HTML file to share: opens anywhere, with no scripts">{download.loading ? <><span className="spinner" /> Creating…</> : <><Icon name="arrow" size={14} /> Download HTML report</>}</button>
+      <label className="run-report-option"><input type="checkbox" checked={includePassing} onChange={(event) => setIncludePassing(event.target.checked)} /> Include evidence of passed checks</label>
+    </div>
+    <ErrorAlert message={state.error || download.error} />
+    {state.shown && state.comparison && <div className="run-comparison">
+      <p className="compare-note">Compared with {label}.</p>
+      <ComparisonResult comparison={state.comparison} onOpenRun={onOpenRun} />
+    </div>}
+  </div>;
+}
+
+export default function RunDetail({ run, runs = [], onOpenRun, analysisState, onAnalyze, onBack, onRerun, canRerun, responseChangesFor = () => null }) {
   const summary = summarizeResults(run.results);
   const flow = run.kind === "flow";
   return <section className="history-page run-detail">
@@ -157,6 +222,7 @@ export default function RunDetail({ run, analysisState, onAnalyze, onBack, onRer
       <div><span>Errors</span><strong className={summary.errors ? "history-fail" : undefined}>{summary.errors}</strong></div>
       {summary.skipped > 0 && <div><span>Skipped</span><strong>{summary.skipped}</strong></div>}
     </div>
+    <RunReportTools key={run.id} run={run} runs={runs} onOpenRun={onOpenRun} />
     <p className="run-redaction-note"><Icon name="shield" size={14} /> Credential-like headers, query values, and body fields were redacted before this run was saved. Uploaded file contents are not stored.</p>
 
     <div className="run-checks">

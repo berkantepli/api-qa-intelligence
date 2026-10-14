@@ -27,6 +27,7 @@ from app.domain.documents import UNEXPECTED_SHAPE, DocumentTooComplexError, pars
 from app.domain.evidence import hide_secret_values
 from app.domain.execution import ScenarioExecutionRequest, execute_scenario
 from app.domain.flows import UNFILLED_PATH_PARAMETER, ApiFlow, FlowExecutionRequest, execute_flow
+from app.domain.html_report import html_request_from_report, render_html_report
 from app.domain.network import request_error_reason
 from app.domain.openapi import ApiOverview, OpenApiDocumentError, summarize_openapi
 from app.domain.reports import CheckOutcome, EndpointOutcome, FlowOutcome, RunReport, junit_xml
@@ -37,6 +38,7 @@ from app.domain.request_builder import (
     request_readiness,
     secret_parameter_names,
 )
+from app.domain.run_compare import RunComparison, compare_runs, records_from_report
 from app.domain.workspace_file import WorkspaceFileError, load_workspace_api
 from app.version import APP_VERSION
 
@@ -82,6 +84,11 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--fail-on-skipped", action="store_true", help="Exit 1 when an endpoint is skipped for missing inputs.")
     run.add_argument("--junit", type=Path, metavar="FILE", help="Write a JUnit XML report.")
     run.add_argument("--json", type=Path, metavar="FILE", help="Write a JSON report.")
+    run.add_argument("--html", type=Path, metavar="FILE", help="Write a self-contained HTML report to share or keep.")
+    run.add_argument("--baseline", type=Path, metavar="FILE",
+                     help="An earlier --json report: list what is newly failing, fixed, still failing, or slower since then.")
+    run.add_argument("--fail-on", choices=["any", "new"], default="any",
+                     help="Exit 1 when any check fails (default), or only when a check fails that passed in --baseline.")
 
     diff = commands.add_parser("diff", help="Compare two versions of a contract and classify every change.")
     diff.add_argument("base", help="The earlier contract: a file path or an http(s) URL.")
@@ -451,6 +458,29 @@ def lint_contract(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def load_baseline(path: Path | None) -> RunReport | None:
+    """An earlier `api-qa run --json` report, read before any check runs."""
+    if path is None:
+        return None
+    try:
+        return RunReport.model_validate_json(path.read_text(encoding="utf-8"))
+    except OSError as error:
+        raise UsageError(f"--baseline could not be read: {error.strerror or error}.") from error
+    except ValidationError as error:
+        raise UsageError(f"--baseline {str(path)!r} is not an api-qa run --json report.") from error
+
+
+def print_comparison(comparison: RunComparison, baseline: RunReport) -> None:
+    totals = comparison.totals
+    print(
+        f"Since the baseline of {baseline.generated_at}: {totals['newly_failing']} newly failing, {totals['fixed']} fixed, "
+        f"{totals['still_failing']} still failing, {totals['slower']} slower.",
+        file=sys.stderr,
+    )
+    for item in comparison.newly_failing:
+        print(f"  NEW   {item.endpoint} · {item.title}", file=sys.stderr)
+
+
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     if args.command == "diff":
@@ -458,21 +488,36 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "lint":
         return lint_contract(args)
     try:
+        if args.fail_on == "new" and args.baseline is None:
+            raise UsageError("--fail-on new needs --baseline, an earlier --json report to compare with.")
+        baseline = load_baseline(args.baseline)
         report = asyncio.run(run_checks(args))
     except UsageError as error:
         print(f"api-qa: {error}", file=sys.stderr)
         return EXIT_USAGE
     print_summary(report)
+    comparison = compare_runs(records_from_report(baseline), records_from_report(report)) if baseline else None
+    if comparison and baseline:
+        print_comparison(comparison, baseline)
     try:
         secrets = [value for value in parse_headers(args.header).values() if len(value) >= 4]
         if args.junit:
             args.junit.write_text(redact_secrets(junit_xml(report), secrets), encoding="utf-8")
         if args.json:
-            args.json.write_text(redact_secrets(report.model_dump_json(indent=2), secrets), encoding="utf-8")
+            document = report.model_dump(mode="json")
+            if comparison:
+                document["comparison"] = comparison.model_dump(mode="json")
+            args.json.write_text(redact_secrets(json.dumps(document, indent=2), secrets), encoding="utf-8")
+        if args.html:
+            label = f"the baseline of {baseline.generated_at}" if baseline else ""
+            html = render_html_report(html_request_from_report(report, comparison, label), APP_VERSION)
+            args.html.write_text(redact_secrets(html, secrets), encoding="utf-8")
     except OSError as error:
         print(f"api-qa: {report_write_problem(error)}", file=sys.stderr)
         return EXIT_USAGE
     totals = report.totals
+    if args.fail_on == "new" and comparison:
+        return EXIT_FAILED if comparison.newly_failing else EXIT_OK
     failed = totals["failed"] + totals["errors"] + totals["flows_failed"] > 0
     skipped = args.fail_on_skipped and (
         any(endpoint.skipped_checks for endpoint in report.endpoints) or totals["flows_skipped"] > 0
