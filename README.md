@@ -61,7 +61,8 @@ Open <http://127.0.0.1:8001>.
 | **Overview** | Every endpoint with ready-made checks: a valid request, a missing required input, values at and past documented limits, wrong types, and a call without credentials. Each response is checked for its status code, the documented schema, and an optional time limit. |
 | **Coverage & Risk** | Which endpoints are tested, failing, or never tested, what each one's checks still miss (inputs and response codes), and a risk score that says where to look first. **Run checks** runs a whole filter at once. |
 | **Flows** | Multi-step tests built from the contract: create a record, read it, update it, delete it, and confirm it is gone, passing the new id from step to step. |
-| **Run history** | Every run with its request, response, and the reason for each result. Secrets are hidden before anything is saved. |
+| **Run history** | Every run with its request, response, and the reason for each result. Secrets are hidden before anything is saved. **Compare with the previous run** shows what broke or got fixed, and **Download HTML report** gives a one-file report to send. |
+| **What changed** | On Coverage & Risk, **Compare with…** lists what is newly failing, fixed, still failing, or slower since the previous run, 24 hours, or 7 days ago. **Export HTML** shares it with the coverage summary. |
 | **Trends** *(advanced view)* | Pass rate, response times, and the share of tested endpoints per day, plus the endpoints that got noticeably slower. |
 | **Contract quality** | A 0–100 score for how testable the contract is, with the fixes worth most points. |
 
@@ -88,6 +89,7 @@ api-qa run --spec openapi.yaml --target https://staging.example.com --junit repo
 api-qa run --workspace export.json --flows --include-writes   # the checks and flows saved in the app
 api-qa lint openapi.yaml --min-score 70          # fail when the contract is hard to test
 api-qa diff openapi-v1.yaml openapi-v2.yaml      # fail on breaking changes
+api-qa run --spec openapi.yaml --baseline last.json --fail-on new --html report.html   # fail only on new failures
 ```
 
 Ready-to-copy GitHub Actions jobs are in [`docs/examples`](docs/examples). Results from Newman (Postman) and other JUnit test suites can also be imported, so they count on Coverage.

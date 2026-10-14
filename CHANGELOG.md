@@ -2,6 +2,18 @@
 
 The version lives in the [`VERSION`](VERSION) file and follows [Semantic Versioning](https://semver.org/). Before 1.0.0, a new feature raises the minor number (0.**x**.0) and a fix or visual change raises the patch number (0.x.**y**).
 
+## Unreleased
+
+### What changed
+- **Compare with…** on Coverage & Risk lists each check that is newly failing, fixed, still failing, or slower (50% and 50 ms) against an earlier moment: before the latest run, 24 hours ago, or 7 days ago. A whole bulk run counts as one run. Each row opens its run.
+- **Compare with the previous run** in run details does the same for one endpoint or flow.
+- `api-qa run --baseline last.json` compares the run with an earlier `--json` report, prints the changes, and adds them to the JSON report; `--fail-on new` fails the pipeline only on checks that passed in the baseline.
+
+### HTML reports
+- **Download HTML report** in run details and **Export HTML** on Coverage & Risk save one self-contained file to send: a summary, the changes since the earlier results, coverage, and each check with the reason it failed and its masked evidence (passed checks' evidence on request). No scripts or external resources; every value is escaped.
+- `api-qa run --html report.html` writes the same report from CI.
+- New routes: `POST /api/v1/runs/compare` and `POST /api/v1/reports/html`.
+
 ## 1.20.0 — 2026-10-14
 
 - **Run the app's saved checks in CI.** `api-qa run --workspace export.json` runs a workspace exported from Settings: the contract's checks plus your edited AI checks, and with `--flows` the flows the Flows page shows, including edited suggestions and flows you built. `--api` picks one API when the export holds several; the target saved in the app is used unless `--target` is given. Credentials still come from `--header`, since exports never contain them. A saved flow that cannot be read is reported as skipped instead of being dropped.
