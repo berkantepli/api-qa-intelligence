@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "api-qa-intelligence"
-version = "1.19.1"
+version = "1.19.2"
 description = "Reads an OpenAPI or Swagger contract, writes and runs the API checks for you, and shows what failed and what was never tested."
 readme = "README.md"
 license = "MIT"

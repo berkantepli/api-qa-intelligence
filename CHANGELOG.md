@@ -2,6 +2,11 @@
 
 The version lives in the [`VERSION`](VERSION) file and follows [Semantic Versioning](https://semver.org/). Before 1.0.0, a new feature raises the minor number (0.**x**.0) and a fix or visual change raises the patch number (0.x.**y**).
 
+## 1.19.2 — 2026-10-14
+
+- **Slowed down** on Trends compares the range with the endpoint's usual speed, the median of the 90 days before the range, instead of only the same number of days just before. A slowdown that started before the range and has not recovered is no longer missed.
+- The *Response changed* tag on Coverage & Risk also covers flow steps: an endpoint shows it when the latest run that called it changed, whether that was one of its own checks or a flow step.
+
 ## 1.19.1 — 2026-10-14
 
 ### Masked evidence
