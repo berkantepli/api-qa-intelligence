@@ -34,8 +34,8 @@ def demo_http(monkeypatch):
     monkeypatch.setattr(httpx, "AsyncClient", InProcessClient)
 
 
-def sign_in(client) -> str:
-    response = client.post("/demo/auth/login", json={"email": demo.DEMO_EMAIL, "password": demo.DEMO_PASSWORD})
+def sign_in(client, email: str = demo.DEMO_EMAIL, password: str = demo.DEMO_PASSWORD) -> str:
+    response = client.post("/demo/auth/login", json={"email": email, "password": password})
     assert response.status_code == 200
     return response.json()["access_token"]
 
@@ -77,6 +77,21 @@ def test_books_can_be_created_read_and_deleted_then_reset(client):
     assert client.post("/demo/__reset").status_code == 204
     assert client.get("/demo/books/2").status_code == 200
     assert client.get(f"/demo/books/{created.json()['id']}").status_code == 404
+
+
+def test_only_the_owner_deletes_a_book_but_anyone_signed_in_replaces_it(client):
+    owner = {"Authorization": f"Bearer {sign_in(client)}"}
+    second = {"Authorization": f"Bearer {sign_in(client, demo.SECOND_EMAIL, demo.SECOND_PASSWORD)}"}
+    book = {"title": "Dune", "author": "Frank Herbert", "year": 1965, "genre": "fiction", "price": 9.99}
+    book_id = client.post("/demo/books", json=book, headers=owner).json()["id"]
+
+    assert client.get("/demo/me", headers=second).json()["email"] == demo.SECOND_EMAIL
+    assert client.delete(f"/demo/books/{book_id}", headers=second).status_code == 403
+    # Deliberate: replacing another reader's book is not refused.
+    assert client.put(f"/demo/books/{book_id}", json={**book, "title": "Changed"}, headers=second).status_code == 200
+    assert client.delete(f"/demo/books/{book_id}", headers=owner).status_code == 204
+    # The sample books have no owner, so any signed-in reader may still delete them.
+    assert client.delete("/demo/books/1", headers=second).status_code == 204
 
 
 def test_memory_stays_bounded(client, monkeypatch):
